@@ -1,0 +1,30 @@
+# Copyright © 2026 Mindclade, LLC. All Rights Reserved.
+# Mindclade Proprietary and Confidential.
+# SPDX-License-Identifier: LicenseRef-Mindclade-Proprietary
+
+---
+apiVersion: mindclade.dev/v1
+kind: VendoredUpstreamLock
+metadata: {name: cert-manager-v1.19.1}
+spec:
+  upstream:
+    url: https://github.com/cert-manager/cert-manager/releases/download/v1.19.1/cert-manager.yaml
+    bytes: 1007958
+    sha256: 876a41a57e36b85619f4124b24b3deb80912b5ffed515f90e2f160b6e6338e81
+    objects: 49
+    normalizedSha256: bfed2738c90092d611ddbad9ba4ae5e1a4af3a291c45f1fd3cddfe9f5914f677
+  phases:
+    crds:
+      payload: vendor/cert-manager/v1.19.1/crds/upstream.yaml.gz.b64
+      expandedBytes: 969489
+      expandedSha256: 1c3d0aa45351c8480a6ce7d4e7d01a1d84cf8d59e0475fd92a8b00f2428e7b1a
+      objects: 6
+    controllers:
+      payload: vendor/cert-manager/v1.19.1/controllers/upstream.yaml.gz.b64
+      expandedBytes: 36125
+      expandedSha256: d2b2b330f1975b205bbbc44338dce91293b0171d2cf2d5759b196033dc15b78e
+      objects: 43
+  controllerImages:
+    quay.io/jetstack/cert-manager-cainjector: sha256:c7898aece8fb08102fca0b37683e37cb94e0a77c0d15b8e3c9128f6c04c868e0
+    quay.io/jetstack/cert-manager-controller: sha256:cd49e769e18ada1fd7b9a9bacc87c90db24c65cbfd4bf71694dda7ed40e91187
+    quay.io/jetstack/cert-manager-webhook: sha256:f5bfe77541e38978aec53cc6eb924d190e1fe923c98b2582e6ccf5edf6c02cce
