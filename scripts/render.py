@@ -30,10 +30,11 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser()
     parser.add_argument("--monorepo", type=Path, required=True)
     parser.add_argument("--env", dest="environment", choices=sorted(ENVIRONMENTS))
-    parser.add_argument(
+    mode = parser.add_mutually_exclusive_group()
+    mode.add_argument(
         "--write", action="store_true", help="atomically update rendered output"
     )
-    parser.add_argument(
+    mode.add_argument(
         "--check", action="store_true", help="deprecated; check is the default"
     )
     parser.add_argument("--skip-lock-verification", action="store_true")

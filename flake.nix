@@ -64,8 +64,8 @@
         };
 
         devShells.default = pkgs.mkShell {
-          # OPA is pinned to match build/toolchains/versions.yaml in the monorepo (1.15.2),
-          # so a policy that passes locally passes in the monorepo's gates too.
+          # OPA 1.6.0 is pinned by this repository's flake.lock. Keep the monorepo policy
+          # toolchain on the same release when its version catalog is updated.
           #
           # Every version here is fixed by flake.lock, which is committed. Without it
           # `nixos-25.05` is a BRANCH resolved at evaluation time, and the toolchain would
