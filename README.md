@@ -10,12 +10,6 @@
   </picture>
 </p>
 
-<picture>
-  <source media="(prefers-color-scheme: dark)" srcset="../mindclade-brand-assets/png/mc-lockup-horizontal-dark-1080w.png">
-  <source media="(prefers-color-scheme: light)" srcset="../mindclade-brand-assets/png/mc-lockup-horizontal-1080w.png">
-  <img alt="Mindclade — frontier models for programmable biology" src="../mindclade-brand-assets/png/mc-lockup-horizontal-1080w.png" width="540">
-</picture>
-
 # Mindclade · GitOps
 
 > **Platform Foundation · Kubernetes desired state**
