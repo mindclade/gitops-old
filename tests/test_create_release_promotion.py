@@ -28,19 +28,23 @@ class PromotionTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             digest = "sha256:" + "1" * 64
-            rollback = "sha256:" + "2" * 64
+            previous_subject = "sha256:" + "2" * 64
             self.assertEqual(
                 self.run_main(
                     root,
                     "--release-id", "v1.2.3",
                     "--image-ref", f"us-central1-docker.pkg.dev/mc-common-ci/releases/go-vanity@{digest}",
                     "--source-sha", "a" * 40,
-                    "--rollback-digest", rollback,
+                    "--previous-release-id", "v1.2.2",
+                    "--previous-subject-digest", previous_subject,
                 ),
                 0,
             )
             text = (root / "deployments/proposals/v1.2.3.yaml").read_text()
+            self.assertIn("apiVersion: release.mindclade.dev/v1beta1", text)
             self.assertIn("application: platform-go-vanity", text)
+            self.assertIn("releaseId: v1.2.2", text)
+            self.assertIn(f"subjectDigest: {previous_subject}", text)
             self.assertIn(f"imageRef: us-central1-docker.pkg.dev/mc-common-ci/releases/go-vanity@{digest}", text)
 
     def test_rejects_unknown_package(self) -> None:
@@ -51,7 +55,8 @@ class PromotionTest(unittest.TestCase):
                     "--release-id", "v1.2.3",
                     "--image-ref", "us-central1-docker.pkg.dev/mc-common-ci/releases/injected@sha256:" + "1" * 64,
                     "--source-sha", "a" * 40,
-                    "--rollback-digest", "sha256:" + "2" * 64,
+                    "--previous-release-id", "v1.2.2",
+                    "--previous-subject-digest", "sha256:" + "2" * 64,
                 )
 
     def test_refuses_overwrite(self) -> None:
@@ -66,10 +71,22 @@ class PromotionTest(unittest.TestCase):
                     "--release-id", "v1.2.3",
                     "--image-ref", "us-central1-docker.pkg.dev/mc-common-ci/releases/go-vanity@sha256:" + "1" * 64,
                     "--source-sha", "a" * 40,
-                    "--rollback-digest", "sha256:" + "2" * 64,
+                    "--previous-release-id", "v1.2.2",
+                    "--previous-subject-digest", "sha256:" + "2" * 64,
+                )
+
+    def test_rejects_missing_rollback_lineage(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            with self.assertRaisesRegex(ValueError, "previous-release-id must differ"):
+                self.run_main(
+                    Path(directory),
+                    "--release-id", "v1.2.3",
+                    "--image-ref", "us-central1-docker.pkg.dev/mc-common-ci/releases/go-vanity@sha256:" + "1" * 64,
+                    "--source-sha", "a" * 40,
+                    "--previous-release-id", "v1.2.3",
+                    "--previous-subject-digest", "sha256:" + "2" * 64,
                 )
 
 
 if __name__ == "__main__":
     unittest.main()
-

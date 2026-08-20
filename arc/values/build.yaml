@@ -2,6 +2,7 @@
 # Mindclade Proprietary and Confidential.
 # SPDX-License-Identifier: LicenseRef-Mindclade-Proprietary
 
+---
 githubConfigUrl: https://github.com/mindclade
 githubConfigSecret: arc-github-app
 runnerGroup: mindclade-arc-artifact-authority
@@ -28,4 +29,3 @@ template:
           allowPrivilegeEscalation: false
           capabilities: {drop: [ALL]}
           runAsNonRoot: true
-

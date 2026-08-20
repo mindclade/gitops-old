@@ -321,8 +321,10 @@ for forbidden in (
     if forbidden in provenance_workflow or forbidden in release_verifier:
         error(f"GitOps depends on the wrong artifact authority: {forbidden}")
 for required in (
-    '"const": "3.0.0"',
-    '"supply_chain_attestations"',
+    '"const": "4.0.0"',
+    '"attestations"',
+    '"qualification_epoch"',
+    '"previous_subject_digest"',
     "reusable-binauthz-sign.yml@refs/tags/v4.0.0",
 ):
     if required not in release_schema and required not in release_validator:

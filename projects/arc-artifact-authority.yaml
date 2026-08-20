@@ -34,4 +34,3 @@ spec:
     - {group: secrets-store.csi.x-k8s.io, kind: SecretProviderClass}
   orphanedResources:
     warn: true
-

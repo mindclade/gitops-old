@@ -3,7 +3,7 @@
 # SPDX-License-Identifier: LicenseRef-Mindclade-Proprietary
 
 ---
-apiVersion: mindclade.dev/v1
+apiVersion: mindclade.dev/v2
 kind: ArtifactDeploymentSet
 metadata:
   name: development

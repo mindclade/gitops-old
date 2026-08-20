@@ -12,4 +12,3 @@ resources:
   - ../../projects/arc-artifact-authority.yaml
   - ../../applications/ci/argocd.yaml
   - ../../applications/ci/arc.yaml
-

@@ -55,4 +55,3 @@ data:
     g, mindclade:platform, role:platform-admin
     g, mindclade:incident-command, role:platform-admin
     g, mindclade:security, role:security-readonly
-

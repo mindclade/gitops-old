@@ -2,6 +2,7 @@
 # Mindclade Proprietary and Confidential.
 # SPDX-License-Identifier: LicenseRef-Mindclade-Proprietary
 
+---
 replicaCount: 2
 fullnameOverride: arc-controller
 image:
@@ -35,4 +36,3 @@ flags:
   logLevel: info
   logFormat: json
   updateStrategy: eventual
-

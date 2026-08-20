@@ -32,23 +32,68 @@ IMAGE = (
 
 
 def valid_record() -> dict:
-    artifact = {
-        "uri": "gs://mindclade-release-evidence/object",
-        "digest": "sha256:" + "c" * 64,
-    }
+    subject_digest = "sha256:" + "f" * 64
+    def artifact(name: str, artifact_type: str) -> dict:
+        return {
+            "name": name,
+            "type": artifact_type,
+            "uri": f"gs://mindclade-release-evidence/{name}",
+            "digest": "sha256:" + "c" * 64,
+            "media_type": "application/json",
+        }
     return {
-        "contract_version": "3.0.0",
-        "release_id": "release-1",
+        "contract_version": "4.0.0",
+        "release_id": "v1.2.3",
+        "release_kind": "application",
+        "subject": {"name": "serving-api", "digest": subject_digest},
         "source_repository": "mindclade/mindclade-internal-monorepo",
         "source_revision": "a" * 40,
         "builder_identity": "mindclade-oci-builder",
         "build_invocation_id": "build-123",
-        "image": IMAGE,
-        "sbom": artifact,
-        "provenance": artifact,
-        "vulnerability": {"result": "pass", "scanner": "osv", "evidence": artifact},
-        "qualification": {"result": "pass", "evidence": artifact},
-        "supply_chain_attestations": {
+        "images": {"api": IMAGE},
+        "artifacts": [
+            artifact("build-provenance", "provenance"),
+            artifact("qualification-results", "qualification"),
+            artifact("rollback-plan", "rollback"),
+            artifact("sbom", "sbom"),
+            artifact("vulnerability-report", "vulnerability-scan"),
+        ],
+        "evidence": {
+            "result": "pass",
+            "policy": {
+                "id": "release-policy",
+                "version": "4.0.0",
+                "digest": "sha256:" + "9" * 64,
+            },
+            "qualification_epoch": "2026-08-19T23:00:00Z",
+            "graph": [
+                {
+                    "subject_digest": subject_digest,
+                    "predicate_type": "build-provenance",
+                    "artifact": "build-provenance",
+                    "result": "pass",
+                },
+                {
+                    "subject_digest": subject_digest,
+                    "predicate_type": "qualification",
+                    "artifact": "qualification-results",
+                    "result": "pass",
+                },
+                {
+                    "subject_digest": subject_digest,
+                    "predicate_type": "sbom",
+                    "artifact": "sbom",
+                    "result": "pass",
+                },
+                {
+                    "subject_digest": subject_digest,
+                    "predicate_type": "vulnerability-scan",
+                    "artifact": "vulnerability-report",
+                    "result": "pass",
+                },
+            ],
+        },
+        "attestations": {
             "build": {"project": ATTESTOR_PROJECT, "attestor": BUILD_ATTESTOR},
             "qualification": {
                 "project": ATTESTOR_PROJECT,
@@ -59,6 +104,18 @@ def valid_record() -> dict:
                 "attestor": DEPLOYMENT_ATTESTOR,
                 "signer_workflow_ref": SIGNER_WORKFLOW_REF,
             },
+        },
+        "compatibility": {
+            "kubernetes": ">=1.36.0 <1.37.0",
+            "platform_api": "1.0.0",
+            "required_capabilities": ["gateway-api", "workload-identity"],
+        },
+        "migration": {"required": False, "artifact": None},
+        "rollback": {
+            "strategy": "bootstrap",
+            "previous_release_id": None,
+            "previous_subject_digest": None,
+            "artifact": "rollback-plan",
         },
         "created_at": "2026-08-20T00:00:00Z",
     }
@@ -127,7 +184,7 @@ class ReleaseMetadataContractTest(unittest.TestCase):
 
     def test_untrusted_signer_fails(self) -> None:
         record = valid_record()
-        record["supply_chain_attestations"]["deployment"]["signer_workflow_ref"] = (
+        record["attestations"]["deployment"]["signer_workflow_ref"] = (
             "mindclade/.github/.github/workflows/reusable-binauthz-sign.yml@refs/tags/v2.9.0"
         )
         result = self.run_validator(record)
@@ -136,7 +193,7 @@ class ReleaseMetadataContractTest(unittest.TestCase):
 
     def test_untrusted_binauthz_project_fails(self) -> None:
         record = valid_record()
-        record["supply_chain_attestations"]["deployment"]["project"] = (
+        record["attestations"]["deployment"]["project"] = (
             "mindclade-development"
         )
         result = self.run_validator(record)
@@ -145,7 +202,7 @@ class ReleaseMetadataContractTest(unittest.TestCase):
 
     def test_builder_cannot_be_the_deployment_authority(self) -> None:
         record = valid_record()
-        record["supply_chain_attestations"]["deployment"]["attestor"] = BUILD_ATTESTOR
+        record["attestations"]["deployment"]["attestor"] = BUILD_ATTESTOR
         result = self.run_validator(record)
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("attestor roots must be distinct", result.stderr)
@@ -187,6 +244,20 @@ class ReleaseMetadataContractTest(unittest.TestCase):
         )
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("is expired", result.stderr)
+
+    def test_evidence_edge_cannot_bind_another_subject(self) -> None:
+        record = valid_record()
+        record["evidence"]["graph"][0]["subject_digest"] = "sha256:" + "1" * 64
+        result = self.run_validator(record)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("does not bind the subject", result.stderr)
+
+    def test_previous_release_rollback_requires_exact_lineage(self) -> None:
+        record = valid_record()
+        record["rollback"]["strategy"] = "previous-release"
+        result = self.run_validator(record)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("exact prior release ID and subject digest", result.stderr)
 
 
 if __name__ == "__main__":

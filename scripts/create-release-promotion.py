@@ -42,38 +42,52 @@ def main() -> int:
     parser.add_argument("--release-id", required=True)
     parser.add_argument("--image-ref", required=True)
     parser.add_argument("--source-sha", required=True)
-    parser.add_argument("--rollback-digest", required=True)
+    parser.add_argument("--previous-release-id", required=True)
+    parser.add_argument("--previous-subject-digest", required=True)
     args = parser.parse_args()
 
     if not RELEASE.fullmatch(args.release_id):
         raise ValueError("release-id must be vX.Y.Z")
     if not SHA.fullmatch(args.source_sha):
         raise ValueError("source-sha must be a full lowercase commit SHA")
-    if not DIGEST.fullmatch(args.rollback_digest) or args.rollback_digest == "sha256:" + "0" * 64:
-        raise ValueError("rollback-digest must be a nonzero canonical SHA-256 digest")
+    if not RELEASE.fullmatch(args.previous_release_id):
+        raise ValueError("previous-release-id must be vX.Y.Z")
+    if args.previous_release_id == args.release_id:
+        raise ValueError("previous-release-id must differ from release-id")
+    if (
+        not DIGEST.fullmatch(args.previous_subject_digest)
+        or args.previous_subject_digest == "sha256:" + "0" * 64
+    ):
+        raise ValueError(
+            "previous-subject-digest must be a nonzero canonical SHA-256 digest"
+        )
     match = IMAGE.fullmatch(args.image_ref)
     if match is None:
         raise ValueError("image-ref must identify one digest in the CI releases repository")
     package = match.group("package")
     if package not in TARGETS:
         raise ValueError(f"image package is outside the closed promotion catalog: {package}")
-    if match.group("digest") == args.rollback_digest:
-        raise ValueError("release digest and rollback digest must differ")
-
     output = PROPOSALS / f"{args.release_id}.yaml"
     if output.exists():
         raise ValueError(f"refusing to replace an existing promotion proposal: {output.name}")
     output.parent.mkdir(parents=True, exist_ok=True)
     proposal = {
-        "apiVersion": "release.mindclade.dev/v1alpha1",
+        "apiVersion": "release.mindclade.dev/v1beta1",
         "kind": "PromotionProposal",
         "metadata": {"name": args.release_id},
         "spec": {
-            "application": TARGETS[package],
-            "imageRef": args.image_ref,
+            "target": {
+                "application": TARGETS[package],
+                "releaseKind": "application",
+                "imageRef": args.image_ref,
+                "subjectDigest": match.group("digest"),
+            },
             "sourceRepository": "mindclade/mindclade-internal-monorepo",
             "sourceRevision": args.source_sha,
-            "rollbackDigest": args.rollback_digest,
+            "previousRelease": {
+                "releaseId": args.previous_release_id,
+                "subjectDigest": args.previous_subject_digest,
+            },
             "targetEnvironment": "development",
             "requiredEvidence": [
                 "build-attestation",
@@ -82,6 +96,7 @@ def main() -> int:
                 "provenance",
                 "sbom",
                 "vulnerability-scan",
+                "release-metadata-4.0.0",
             ],
         },
     }
