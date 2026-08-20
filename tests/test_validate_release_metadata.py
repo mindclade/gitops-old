@@ -84,6 +84,27 @@ def valid_exception(image: str) -> dict:
 
 
 class ReleaseMetadataContractTest(unittest.TestCase):
+    def run_schema_validator(
+        self, schema: dict, record: dict | None = None
+    ) -> subprocess.CompletedProcess[str]:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "contracts").mkdir()
+            (root / "releases").mkdir()
+            (root / "contracts/release-metadata.schema.json").write_text(
+                json.dumps(schema), encoding="utf-8"
+            )
+            if record is not None:
+                (root / "releases/release.json").write_text(
+                    json.dumps(record), encoding="utf-8"
+                )
+            return subprocess.run(
+                [sys.executable, str(VALIDATOR), "--root", str(root)],
+                capture_output=True,
+                check=False,
+                text=True,
+            )
+
     def run_validator(
         self,
         record: dict,
@@ -124,6 +145,38 @@ class ReleaseMetadataContractTest(unittest.TestCase):
     def test_trusted_complete_record_passes(self) -> None:
         result = self.run_validator(valid_record(), active_image=IMAGE)
         self.assertEqual(result.returncode, 0, result.stderr)
+
+    def test_empty_v4_schema_migration_is_trusted(self) -> None:
+        required = {
+            "contract_version",
+            "release_id",
+            "release_kind",
+            "subject",
+            "source_repository",
+            "source_revision",
+            "builder_identity",
+            "build_invocation_id",
+            "images",
+            "artifacts",
+            "evidence",
+            "attestations",
+            "compatibility",
+            "migration",
+            "rollback",
+            "created_at",
+        }
+        schema = {
+            "$schema": "https://json-schema.org/draft/2020-12/schema",
+            "type": "object",
+            "required": sorted(required),
+            "properties": {"contract_version": {"const": "4.0.0"}},
+        }
+        result = self.run_schema_validator(schema)
+        self.assertEqual(result.returncode, 0, result.stderr)
+
+        result = self.run_schema_validator(schema, {"contract_version": "4.0.0"})
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("require the promoted v4 semantic validator", result.stderr)
 
     def test_untrusted_signer_fails(self) -> None:
         record = valid_record()

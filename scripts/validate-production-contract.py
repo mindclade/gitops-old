@@ -240,6 +240,12 @@ for name, workflow in (
 ):
     if 'test "$GITHUB_REF" = refs/heads/main' not in workflow:
         error(f"{name} manual cloud path does not fail before auth off main")
+    if "GITOPS_CONNECTED_VALIDATION" not in workflow:
+        error(f"{name} workflow lacks the governed connected-validation boundary")
+    if "steps.connected.outputs.enabled == 'true'" not in workflow:
+        error(f"{name} workflow does not gate cloud access on connected activation")
+if "pull_request_target:\n    paths:" not in render_workflow:
+    error("render workflow runs connected candidate processing for unrelated pull requests")
 if "merge_group:" not in validate_workflow or "merge_group:" not in contract_workflow:
     error("required GitOps checks do not run for merge-queue groups")
 for context in (
@@ -269,6 +275,9 @@ secret_patterns = [
 ]
 for path in TRACKED_PATHS:
     if not path.is_file() or path.stat().st_size > 2_000_000:
+        continue
+    relative = path.relative_to(ROOT)
+    if relative.parts and relative.parts[0] == "vendor":
         continue
     text = path.read_text(encoding="utf-8", errors="ignore")
     for pattern in secret_patterns:
@@ -305,7 +314,11 @@ image_field = re.compile(r"^\s*(?:-\s*)?image:\s*[\"']?([^\"'\s#]+)")
 new_tag_field = re.compile(r"^\s*newTag:\s*[\"']?([^\"'\s#]+)")
 for path in ROOT.rglob("*.y*ml"):
     relative = path.relative_to(ROOT)
-    if "tests" in relative.parts or "testdata" in relative.parts:
+    if (
+        "tests" in relative.parts
+        or "testdata" in relative.parts
+        or (relative.parts and relative.parts[0] == "vendor")
+    ):
         continue
     text = path.read_text(encoding="utf-8", errors="ignore")
     for line_number, line in enumerate(text.splitlines(), start=1):

@@ -255,9 +255,13 @@ for env in ["development", "staging", "production"]:
             errors.append(f"Argo CD GitHub group mappings are not canonical: {env}")
     except Exception as e:
         errors.append(f"Argo SSO/RBAC validation failed for {env}: {e}")
-# Parse authored YAML; the two vendored upstream manifests are protected by checksums and huge.
+# Parse authored YAML; vendored upstream content has dedicated byte/provenance validators.
 for p in root.rglob("*.yaml"):
-    if p.name.startswith("argocd-install") or "rendered" in p.parts:
+    if (
+        p.name.startswith("argocd-install")
+        or "rendered" in p.parts
+        or "vendor" in p.parts
+    ):
         continue
     try:
         list(yaml.safe_load_all(p.read_text()))
@@ -548,6 +552,7 @@ text = "\n".join(
     and ".git" not in p.parts
     and "__pycache__" not in p.parts
     and p.suffix != ".pyc"
+    and "vendor" not in p.parts
     and not p.name.startswith("argocd-install")
     and p.name not in {"BLUEPRINT.md", "validate-repository.py"}
 )

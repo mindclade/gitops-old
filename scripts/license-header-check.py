@@ -14,7 +14,7 @@ from pathlib import Path
 
 
 SUPPORTED_SUFFIXES = {".example", ".hcl", ".nix", ".py", ".sh", ".tf", ".yaml", ".yml"}
-EXCLUDED_PARTS = {".git", ".terraform", ".terragrunt-cache", "rendered"}
+EXCLUDED_PARTS = {".git", ".terraform", ".terragrunt-cache", "rendered", "vendor"}
 EXCLUDED_PATHS = {"bootstrap/argocd-install-ha.yaml", "bootstrap/argocd-install.yaml"}
 
 
