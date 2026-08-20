@@ -1,7 +1,7 @@
 # Contributing to `gitops`
 
 Org-wide conventions are the canonical
-[`CONTRIBUTING.md`](https://github.com/Mindclade/.github/blob/main/CONTRIBUTING.md).
+[`CONTRIBUTING.md`](https://github.com/mindclade/.github/blob/main/CONTRIBUTING.md).
 This file covers what is different here.
 
 *(This exists because `.github` is internal, so nothing inherits. See `SECURITY.md`.)*
@@ -29,21 +29,21 @@ The output directory prefix matters: it decides which ApplicationSet claims it. 
 `serving-*`, `research-*`, `data-*`, `partner-*`. A directory matching no glob renders fine
 and is then ignored by Argo, which is a confusing way to discover a typo.
 
-## Promotion is bit-identical
+## Promotion preserves the immutable artifact
 
-`promote.yml` copies manifests between environments and applies **only** a namespace overlay.
-It does not re-render.
+`promote.yml` copies only the selected Artifact Registry repository, digest, and release record
+between adjacent environments. CI then renders the target from that environment's own reviewed
+configuration.
 
-That is what makes "staging runs the same thing as production" checkable rather than asserted.
-A re-render at promotion could pick up a different chart version or base image and nothing in
-the diff would say so. CI fails a promotion PR whose diff contains anything beyond namespace
-changes.
+Do not copy rendered manifests across environments: their replicas, quotas, endpoints, and policy
+are intentionally different. CI instead fails when a changed target selection is not exactly the
+one currently qualified in its adjacent source environment.
 
-## Policy changes ship at `dryrun` first
+## Policy changes use a staged rollout
 
-Never straight to `deny`. A constraint that is right in principle and slightly wrong in
-practice blocks deployments that were working an hour ago, and the first response is a
-permanent exemption — worse than not shipping it.
+Use `dryrun` first for existing clusters. A greenfield baseline can start at `deny` before
+workload activation only when positive and negative behavior fixtures pass, rendered state has
+zero violations, and the change still promotes through development and staging.
 
 The process is in [`policy/README.md`](policy/README.md). Roughly: `dryrun`, wait a full
 deployment cycle, read the violations, fix the workloads, then promote.

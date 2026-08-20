@@ -2,7 +2,7 @@
 # Copyright © 2026 Mindclade, LLC. All Rights Reserved.
 # Mindclade Proprietary and Confidential.
 # SPDX-License-Identifier: LicenseRef-Mindclade-Proprietary
-#
+
 # Digest-pinned, from an allowed registry, fully resourced, non-root. Every constraint must
 # pass this — a rule that only ever fires is indistinguishable from one that always fires.
 apiVersion: apps/v1
@@ -17,6 +17,7 @@ spec:
     metadata:
       labels: {app: x}
     spec:
+      serviceAccountName: app
       securityContext:
         runAsNonRoot: true
         runAsGroup: 1000

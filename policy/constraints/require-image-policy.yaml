@@ -1,10 +1,10 @@
 # Copyright © 2026 Mindclade, LLC. All Rights Reserved.
 # Mindclade Proprietary and Confidential.
 # SPDX-License-Identifier: LicenseRef-Mindclade-Proprietary
-#
+
 ---
-# Enforcement point for the entire supply chain. Everything reusable-oci-build.yml does —
-# SBOM, cosign signature, BinAuthz attestation — is inert without this.
+# Structural prerequisite for the supply chain: only approved registries and immutable digests
+# reach GKE's separate Binary Authorization deployment-attestation gate.
 apiVersion: constraints.gatekeeper.sh/v1beta1
 kind: MindcladeRequireImagePolicy
 metadata:

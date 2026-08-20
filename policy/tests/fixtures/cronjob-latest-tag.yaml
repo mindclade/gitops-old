@@ -2,7 +2,7 @@
 # Copyright © 2026 Mindclade, LLC. All Rights Reserved.
 # Mindclade Proprietary and Confidential.
 # SPDX-License-Identifier: LicenseRef-Mindclade-Proprietary
-#
+
 # CronJob nests its pod spec one level deeper than everything else
 # (spec.jobTemplate.spec.template.spec), which is the nesting most templates forget.
 apiVersion: batch/v1

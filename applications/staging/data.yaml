@@ -1,7 +1,7 @@
 # Copyright © 2026 Mindclade, LLC. All Rights Reserved.
 # Mindclade Proprietary and Confidential.
 # SPDX-License-Identifier: LicenseRef-Mindclade-Proprietary
-#
+
 ---
 apiVersion: argoproj.io/v1alpha1
 kind: ApplicationSet
@@ -15,7 +15,7 @@ spec:
   goTemplateOptions: ["missingkey=error"]
   generators:
     - git:
-        repoURL: https://github.com/Mindclade/gitops.git
+        repoURL: https://github.com/mindclade/gitops.git
         revision: main
         directories:
           - path: rendered/staging/data-*
@@ -30,7 +30,7 @@ spec:
     spec:
       project: data
       source:
-        repoURL: https://github.com/Mindclade/gitops.git
+        repoURL: https://github.com/mindclade/gitops.git
         targetRevision: main
         path: '{{.path.path}}'
         directory:

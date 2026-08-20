@@ -31,22 +31,23 @@ signature admission controllers:
 |---|---|---|
 | `require-image-policy` | Gatekeeper, admission | Image is pinned by digest, from an evaluated registry |
 | Release verification | GitHub Actions, before merge | Provenance, SBOM, qualification, and attestation evidence resolve for the exact digest |
-| Binary Authorization | GKE, admission | A valid attestation exists from every required production attestor |
+| Binary Authorization | GKE, admission | The protected deployment attestation exists for the exact digest |
 
 GitHub Actions verifies the producer identity and evidence before merge. Binary Authorization
 is the single runtime cryptographic gate. A second Sigstore admission controller is prohibited
 unless Mindclade approves a distinct requirement and failure model in a new architecture decision.
 
-## dryrun → deny
+## Policy rollout: dryrun → deny
 
-**Never ship a new constraint at `deny`.** A constraint that is correct in principle and
-slightly wrong in practice blocks deployments that were working fine an hour ago, and the
-first thing anyone does is grant it a permanent exemption. That is worse than not having
-shipped it.
+For an existing cluster, introduce a new constraint at `dryrun` in development and promote
+it through staging before production. A greenfield baseline may start at `deny` only when the
+repository contains no active workloads that violate it, positive and negative behavior tests
+pass, and the deployment change still follows the development → staging → production order.
+This keeps the target secure without pretending an unobserved live rollout has occurred.
 
 The process:
 
-**1. Ship at `dryrun`.**
+**1. Ship to development at `dryrun`.**
 
 ```yaml
 spec:
@@ -69,7 +70,8 @@ common, and assuming the first is how a bad constraint ships.
 
 **4. Fix the workloads.** Not the constraint, unless the constraint is genuinely wrong.
 
-**5. Promote to `deny`** once violations are zero for a week.
+**5. Promote to `deny`** once violations are zero for a week, or before first workload
+activation for a tested greenfield baseline.
 
 ```yaml
 spec:
@@ -93,7 +95,7 @@ one should require someone to look at it again.
 
 ## The two constraints that matter most
 
-**`require-image-policy`** — an image must be pinned by digest and come from an approved registry. Binary Authorization separately requires the build, vulnerability, qualification, and any required biosecurity attestations. The two controls have deliberately distinct responsibilities.
+**`require-image-policy`** — an image must be pinned by digest and come from an approved registry. Binary Authorization separately requires the deployment attestation issued only after the signer verifies independent Buildkite build/provenance and qualification evidence. Restricted biological workloads may have an additional explicitly scoped biosecurity policy; it is not a global platform-image prerequisite. The structural and cryptographic controls have deliberately distinct responsibilities.
 
 **`deny-holdout-bucket-mount`** — no training workload may mount the held-out evaluation
 bucket. Benchmark numbers are worthless if the holdout set leaked into training, and the leak

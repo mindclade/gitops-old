@@ -2,7 +2,7 @@
 # Copyright © 2026 Mindclade, LLC. All Rights Reserved.
 # Mindclade Proprietary and Confidential.
 # SPDX-License-Identifier: LicenseRef-Mindclade-Proprietary
-#
+
 # MINDCLADE CONFIDENTIAL - PROPRIETARY AND TRADE SECRET
 # Copyright (c) 2026 Mindclade. All rights reserved.
 """Validate the Mindclade GitOps production repository contract.
@@ -10,6 +10,7 @@
 This validator intentionally uses only the Python standard library so the
 repository's most important boundary checks run before cluster tooling exists.
 """
+
 from __future__ import annotations
 
 import json
@@ -27,8 +28,10 @@ CONTRACT = json.loads(
     '"application-source","plaintext-secrets"],'
     '"forbidden_paths":[".terraform",".terragrunt-cache"],'
     '"repository_class":"production-control",'
-    '"required_paths":["bootstrap/argocd-install.yaml","bootstrap/argocd-install.provenance.json","bootstrap/root-app.yaml",'
-    '"applications","projects","policy","overlays/production.yaml"],'
+    '"required_paths":[".kubernetes-version","bootstrap/argocd-install.yaml","bootstrap/argocd-install.provenance.json","bootstrap/profiles/standard/kustomization.yaml",'
+    '"bootstrap/profiles/ha/kustomization.yaml","bootstrap/root-app.yaml",'
+    '"applications","deployments","projects","projects/argocd-administration.yaml","policy","overlays/production.yaml",'
+    '"docs/disaster-recovery.md","docs/argocd-upgrade.md","docs/failed-sync.md","docs/rollback.md"],'
     '"visibility":"internal"}'
 )
 ERRORS: list[str] = []
@@ -42,21 +45,62 @@ def repository_paths() -> list[Path]:
     """Return version-controlled paths in a checkout, or all paths in an exported tree."""
     if (ROOT / ".git").exists():
         result = subprocess.run(
-            ["git", "-C", str(ROOT), "ls-files", "-z"],
+            [
+                "git",
+                "-C",
+                str(ROOT),
+                "ls-files",
+                "--cached",
+                "--others",
+                "--exclude-standard",
+                "-z",
+            ],
             check=True,
             capture_output=True,
         )
-        return [ROOT / raw.decode("utf-8", errors="surrogateescape") for raw in result.stdout.split(b"\0") if raw]
+        return [
+            ROOT / raw.decode("utf-8", errors="surrogateescape")
+            for raw in result.stdout.split(b"\0")
+            if raw
+        ]
     return list(ROOT.rglob("*"))
 
 
 TRACKED_PATHS = repository_paths()
 TRACKED_RELATIVE = {path.relative_to(ROOT).as_posix() for path in TRACKED_PATHS}
+LEGACY_GITHUB_IDENTITIES = (
+    "Mind" + "clade/",
+    "github.com/" + "Mind" + "clade",
+    "/orgs/" + "Mind" + "clade",
+)
 
 
 def tracked_prefix_exists(relative: str) -> bool:
     prefix = relative.rstrip("/")
-    return prefix in TRACKED_RELATIVE or any(path.startswith(prefix + "/") for path in TRACKED_RELATIVE)
+    return prefix in TRACKED_RELATIVE or any(
+        path.startswith(prefix + "/") for path in TRACKED_RELATIVE
+    )
+
+
+repository_contract = (ROOT / "contracts/repository.yaml").read_text(
+    "utf-8", errors="ignore"
+)
+for canonical_url in (
+    "https://github.com/enterprises/mindclade",
+    "https://github.com/mindclade",
+    "https://github.com/orgs/mindclade/repositories",
+    f"https://github.com/mindclade/{REPOSITORY}",
+):
+    if canonical_url not in repository_contract:
+        error(f"repository contract omits canonical GitHub URL: {canonical_url}")
+
+
+for path in TRACKED_PATHS:
+    if not path.is_file() or path.stat().st_size > 2_000_000:
+        continue
+    text = path.read_text("utf-8", errors="ignore")
+    if any(legacy in text for legacy in LEGACY_GITHUB_IDENTITIES):
+        error(f"noncanonical GitHub organization identity in {path.relative_to(ROOT)}")
 
 
 def workflow_uses(text: str) -> list[str]:
@@ -91,7 +135,6 @@ def secret_document_has_payload(document: str) -> bool:
     return False
 
 
-
 for rel in CONTRACT["required_paths"]:
     if not (ROOT / rel).exists():
         error(f"missing required path: {rel}")
@@ -106,7 +149,11 @@ for path in TRACKED_PATHS:
         for part in relative.parts
     ):
         error(f"local/cache artifact is tracked: {relative}")
-    if path.name.startswith("._") or ".tfstate" in path.name or path.suffix in {".pyc", ".tfplan"}:
+    if (
+        path.name.startswith("._")
+        or ".tfstate" in path.name
+        or path.suffix in {".pyc", ".tfplan"}
+    ):
         error(f"generated/sensitive artifact is tracked: {relative}")
     if path.is_symlink():
         error(f"symlink forbidden in delivery: {relative}")
@@ -120,12 +167,89 @@ for path in workflow_root.glob("*.y*ml") if workflow_root.exists() else []:
         immutable = (
             re.search(r"@[0-9a-f]{40}$", use)
             or re.search(r"@sha256:[0-9a-f]{64}$", use)
-            or re.fullmatch(r"Mindclade/\.github/\.github/workflows/[^@]+@v[0-9]+\.[0-9]+\.[0-9]+", use)
+            or re.fullmatch(
+                r"mindclade/\.github/\.github/workflows/[^@]+@v[0-9]+\.[0-9]+\.[0-9]+",
+                use,
+            )
         )
         if not immutable:
-            error(f"workflow action is not immutable-pinned in {path.relative_to(ROOT)}: {use}")
+            error(
+                f"workflow action is not immutable-pinned in {path.relative_to(ROOT)}: {use}"
+            )
     if "permissions:" not in text:
         error(f"workflow lacks explicit permissions: {path.relative_to(ROOT)}")
+
+render_workflow = (workflow_root / "render.yml").read_text(encoding="utf-8")
+provenance_workflow = (workflow_root / "provenance.yml").read_text(encoding="utf-8")
+validate_workflow = (workflow_root / "validate.yml").read_text(encoding="utf-8")
+contract_workflow = (workflow_root / "production-contract.yml").read_text(
+    encoding="utf-8"
+)
+release_validator = (ROOT / "scripts/validate-release-metadata.py").read_text(
+    encoding="utf-8"
+)
+release_verifier = (ROOT / "scripts/verify-release-evidence.py").read_text(
+    encoding="utf-8"
+)
+release_schema = (ROOT / "contracts/release-metadata.schema.json").read_text(
+    encoding="utf-8"
+)
+for required in (
+    "BINAUTHZ_DEPLOYMENT_ATTESTOR_PROJECT",
+    "BINAUTHZ_DEPLOYMENT_ATTESTOR",
+):
+    if required not in provenance_workflow or required not in release_verifier:
+        error(f"deployment trust root is not enforced end-to-end: {required}")
+if "scripts/verify-release-evidence.py" not in provenance_workflow:
+    error("provenance workflow does not delegate to the cryptographic release verifier")
+for required in (":validateAttestationOccurrence", 'value.get("result") == "VERIFIED"'):
+    if required not in release_verifier:
+        error(
+            f"release verifier omits cryptographic attestation validation: {required}"
+        )
+for forbidden in (
+    "BINAUTHZ_ATTESTOR_PROJECT",
+    "BINAUTHZ_BUILD_ATTESTOR",
+    "reusable-oci-build.yml",
+    "gh attestation verify",
+):
+    if forbidden in provenance_workflow or forbidden in release_verifier:
+        error(f"GitOps depends on the wrong artifact authority: {forbidden}")
+for required in (
+    '"const": "3.0.0"',
+    '"supply_chain_attestations"',
+    "reusable-binauthz-sign.yml@refs/tags/v3.0.0",
+):
+    if required not in release_schema and required not in release_validator:
+        error(f"release contract omits governed supply-chain binding: {required}")
+
+for name, workflow in (
+    ("render", render_workflow),
+    ("provenance", provenance_workflow),
+):
+    if 'test "$GITHUB_REF" = refs/heads/main' not in workflow:
+        error(f"{name} manual cloud path does not fail before auth off main")
+if "merge_group:" not in validate_workflow or "merge_group:" not in contract_workflow:
+    error("required GitOps checks do not run for merge-queue groups")
+for context in (
+    "lint",
+    "schema",
+    "policy",
+    "exemptions",
+    "promotion-integrity",
+    "repository-invariants",
+):
+    if not re.search(
+        rf"(?m)^  {re.escape(context)}:\n    name: {re.escape(context)}$",
+        validate_workflow,
+    ):
+        error(
+            f"required GitOps job does not emit its governed check context: {context}"
+        )
+if not re.search(r"(?m)^  contract:\n    name: contract$", contract_workflow):
+    error("production-contract workflow does not emit the governed contract context")
+if render_workflow.count('rm -f -- "$GOOGLE_GHA_CREDS_PATH"') < 2:
+    error("render workflow retains GCP credentials while processing desired-state data")
 
 secret_patterns = [
     re.compile(r"-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----"),
@@ -140,7 +264,9 @@ for path in TRACKED_PATHS:
         if pattern.search(text):
             error(f"possible credential in {path.relative_to(ROOT)}")
 
-for path in list((ROOT / "applications").glob("*.yaml")) + list((ROOT / "projects").glob("*.yaml")):
+for path in list((ROOT / "applications").rglob("*.yaml")) + list(
+    (ROOT / "projects").rglob("*.yaml")
+):
     text = path.read_text(encoding="utf-8", errors="ignore")
     if re.search(r"(?m)^\s*(?:sourceRepos|destinations):\s*\[?\s*[\"']?\*[\"']?", text):
         error(f"wildcard Argo authority in {path.relative_to(ROOT)}")
@@ -152,12 +278,17 @@ if render_manifest.exists():
     text = render_manifest.read_text(encoding="utf-8")
     repo_match = re.search(r"(?m)^\s*repo:\s*([^#\s]+)", text)
     ref_match = re.search(r"(?m)^\s*ref:\s*([^#\s]+)", text)
-    repo = repo_match.group(1).strip('"\'') if repo_match else ""
-    ref = ref_match.group(1).strip('"\'') if ref_match else ""
-    if repo != "Mindclade/mindclade-internal-monorepo":
+    repo = repo_match.group(1).strip("\"'") if repo_match else ""
+    ref = ref_match.group(1).strip("\"'") if ref_match else ""
+    if repo != "mindclade/mindclade-internal-monorepo":
         error(f"unauthorized render source repository: {repo or '<missing>'}")
-    if not (re.fullmatch(r"v[0-9]+\.[0-9]+\.[0-9]+", ref) or re.fullmatch(r"[0-9a-f]{40}", ref)):
-        error(f"render source ref is not a protected full semver tag or commit SHA: {ref or '<missing>'}")
+    if not (
+        re.fullmatch(r"v[0-9]+\.[0-9]+\.[0-9]+", ref)
+        or re.fullmatch(r"[0-9a-f]{40}", ref)
+    ):
+        error(
+            f"render source ref is not a protected full semver tag or commit SHA: {ref or '<missing>'}"
+        )
 
 image_field = re.compile(r"^\s*(?:-\s*)?image:\s*[\"']?([^\"'\s#]+)")
 new_tag_field = re.compile(r"^\s*newTag:\s*[\"']?([^\"'\s#]+)")
@@ -173,8 +304,13 @@ for path in ROOT.rglob("*.y*ml"):
             reference = image_match.group(1)
             if reference.endswith(":latest"):
                 error(f"mutable image tag in {relative}:{line_number}")
-            if relative.parts[:2] == ("rendered", "production") and "@sha256:" not in reference:
-                error(f"production image is not digest-pinned in {relative}:{line_number}")
+            if (
+                relative.parts[:2] == ("rendered", "production")
+                and "@sha256:" not in reference
+            ):
+                error(
+                    f"production image is not digest-pinned in {relative}:{line_number}"
+                )
         elif tag_match and tag_match.group(1) == "latest":
             error(f"mutable Kustomize image tag in {relative}:{line_number}")
     for document in yaml_documents(text):

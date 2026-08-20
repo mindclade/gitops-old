@@ -2,13 +2,14 @@
 # Copyright © 2026 Mindclade, LLC. All Rights Reserved.
 # Mindclade Proprietary and Confidential.
 # SPDX-License-Identifier: LicenseRef-Mindclade-Proprietary
-#
+
 name: freeze
 
 on:
   pull_request:
     paths:
       - 'rendered/production/**'
+      - 'deployments/production.yaml'
       - 'applications/production/**'
       - 'roots/production/**'
       - 'bootstrap/argocd-config-production.yaml'

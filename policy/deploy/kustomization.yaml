@@ -1,7 +1,7 @@
 # Copyright © 2026 Mindclade, LLC. All Rights Reserved.
 # Mindclade Proprietary and Confidential.
 # SPDX-License-Identifier: LicenseRef-Mindclade-Proprietary
-#
+
 ---
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
@@ -12,6 +12,7 @@ resources:
   - ../templates/partner-allowed-users.yaml
   - ../templates/require-image-policy.yaml
   - ../templates/require-resource-limits.yaml
+  - ../templates/require-workload-identity.yaml
   - ../constraints/deny-holdout-bucket-mount.yaml
   - ../constraints/deny-latest-tag.yaml
   - ../constraints/deny-privileged.yaml

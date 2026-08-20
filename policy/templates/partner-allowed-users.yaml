@@ -1,7 +1,7 @@
 # Copyright © 2026 Mindclade, LLC. All Rights Reserved.
 # Mindclade Proprietary and Confidential.
 # SPDX-License-Identifier: LicenseRef-Mindclade-Proprietary
-#
+
 ---
 # Replaces the vendored K8sPSPAllowedUsers — the fourth and last constraint that was pointed
 # at an upstream template reading only `spec.containers`. See deny-privileged.yaml for the

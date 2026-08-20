@@ -2,7 +2,7 @@
 # Copyright © 2026 Mindclade, LLC. All Rights Reserved.
 # Mindclade Proprietary and Confidential.
 # SPDX-License-Identifier: LicenseRef-Mindclade-Proprietary
-#
+
 # A Deployment using a mutable tag. THE fixture this whole suite exists for: the vendored
 # template passed this object because it only read `spec.containers`.
 apiVersion: apps/v1

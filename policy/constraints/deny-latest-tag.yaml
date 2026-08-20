@@ -1,7 +1,7 @@
 # Copyright © 2026 Mindclade, LLC. All Rights Reserved.
 # Mindclade Proprietary and Confidential.
 # SPDX-License-Identifier: LicenseRef-Mindclade-Proprietary
-#
+
 ---
 # Subsumed by require-image-policy's digest requirement, and kept anyway because it produces a
 # far clearer error. "must not use :latest" tells someone what to fix; "must be referenced by

@@ -20,16 +20,27 @@ command-line literals. The GitHub OAuth app provides Argo CD login through the g
 Mindclade organization and teams. The GitHub App has read-only access to the private `gitops`
 repository.
 
+The selected command profile must match `applications/<environment>/argocd.yaml`. The script
+fails when cold-start intent and ongoing Git desired state disagree, preventing an HA bootstrap
+from immediately reconciling into a standard/hybrid installation (or the reverse).
+
 Run:
 
 ```bash
-./bootstrap/bootstrap.sh development standard mindclade-development
-./bootstrap/bootstrap.sh staging standard mindclade-staging
+./bootstrap/bootstrap.sh --apply --environment development --profile standard --context mindclade-development
+./bootstrap/bootstrap.sh --apply --environment staging --profile standard --context mindclade-staging
 MINDCLADE_PRODUCTION_BOOTSTRAP_CONFIRM=production \
-  ./bootstrap/bootstrap.sh production ha mindclade-production
+  ./bootstrap/bootstrap.sh --apply --environment production --profile standard --context mindclade-production
 ```
 
-The script verifies the exact kube context and upstream checksum, requires restrictive credential-file permissions, waits for CRDs and core Argo workloads, merges OAuth and GitHub App credentials without committing them, applies the least-privilege bootstrap AppProject, disables local admin through the hardened environment configuration, and creates the environment-specific root Application. Production additionally requires an explicit confirmation value. Terraform never installs Argo CD.
+The script verifies the exact kube context and upstream checksum, requires restrictive credential-file permissions, waits for CRDs and core Argo workloads, merges OAuth and GitHub App credentials without committing them, applies the least-privilege bootstrap AppProject, disables local admin through the hardened environment configuration, removes the upstream one-time local-admin Secret, and creates the environment-specific root Application. Production additionally requires an explicit confirmation value. Terraform never installs Argo CD.
+
+After cold start, the root creates `argocd-self-management` in the tightly scoped
+`argocd-administration` AppProject. That Application reconciles either
+`bootstrap/profiles/standard` or `bootstrap/profiles/ha`; it excludes the SSO/RBAC ConfigMaps and
+credential-bearing Secrets because those objects have separate owners. The administration project
+has no Secret authority. Upgrades are protected Git changes, not repeated ad hoc applies of the
+bootstrap payload.
 
 ## Standard versus HA
 
@@ -37,4 +48,5 @@ The production bootstrap does **not** force the upstream HA manifest onto a clus
 cannot support it. Use `standard` for a small startup production cluster. Use `ha` only after
 the cluster has at least three schedulable nodes across three zones; `bootstrap.sh` verifies
 that topology and fails closed when it is absent. Promotion from standard to HA is a reviewed
-GitOps/operations change and should be rehearsed in staging first.
+GitOps/operations change to the environment's self-management Application and must be rehearsed
+in staging first. See `docs/argocd-upgrade.md`.

@@ -1,35 +1,49 @@
 # Copyright © 2026 Mindclade, LLC. All Rights Reserved.
 # Mindclade Proprietary and Confidential.
 # SPDX-License-Identifier: LicenseRef-Mindclade-Proprietary
-#
-* @Mindclade/platform
+
+* @mindclade/platform
 
 # Production manifests. Two teams, and the ruleset in github-config additionally requires
 # two approvals plus code-owner review on this path.
-/rendered/production/   @Mindclade/platform @Mindclade/security
+/rendered/production/   @mindclade/platform @mindclade/security
+/deployments/production.yaml @mindclade/platform @mindclade/security
+
+# Evidence and trust roots that decide whether an artifact is deployable.
+/releases/              @mindclade/platform @mindclade/security
+/contracts/             @mindclade/platform @mindclade/security
+/image-policy.yaml      @mindclade/platform @mindclade/security
+/render-manifest.yaml   @mindclade/platform @mindclade/security
 
 # Admission policy. A constraint change alters what the cluster will accept, which is a
 # security decision regardless of who is making it.
-/policy/                @Mindclade/security
+/policy/                @mindclade/security
 
 # Exemptions especially. Every one is a hole in a control, and they expire.
-/policy/exemptions.yaml @Mindclade/security
+/policy/exemptions.yaml @mindclade/security
 
 # AppProjects define which repos, clusters, and namespaces an Application may touch. They
 # are the isolation boundary between tenants.
-/projects/              @Mindclade/platform @Mindclade/security
+/projects/              @mindclade/platform @mindclade/security
 
 # Partner isolation.
-/projects/partner-isolated.yaml @Mindclade/security
+/projects/partner-isolated.yaml @mindclade/security
 
 # Argo's own installation and the app-of-apps entrypoint.
-/bootstrap/             @Mindclade/platform @Mindclade/security
+/bootstrap/             @mindclade/platform @mindclade/security
 
-/.github/workflows/     @Mindclade/platform @Mindclade/security
+/.github/workflows/     @mindclade/platform @mindclade/security
 
 # Production freeze state and one-PR emergency overrides.
-/overlays/production.yaml       @Mindclade/platform @Mindclade/security
-/overlays/freeze-windows.yaml   @Mindclade/platform @Mindclade/security
-/overlays/freeze-override.yaml  @Mindclade/platform @Mindclade/security
-/roots/production/           @Mindclade/platform @Mindclade/security
-/applications/production/       @Mindclade/platform @Mindclade/security
+/overlays/production.yaml       @mindclade/platform @mindclade/security
+/overlays/freeze-windows.yaml   @mindclade/platform @mindclade/security
+/overlays/freeze-override.yaml  @mindclade/platform @mindclade/security
+/roots/production/           @mindclade/platform @mindclade/security
+/applications/production/       @mindclade/platform @mindclade/security
+/applications/*/argocd.yaml     @mindclade/platform @mindclade/security
+
+# Recovery procedures are part of the production control plane.
+/docs/disaster-recovery.md   @mindclade/platform @mindclade/security
+/docs/argocd-upgrade.md      @mindclade/platform @mindclade/security
+/docs/failed-sync.md         @mindclade/platform @mindclade/security
+/docs/rollback.md            @mindclade/platform @mindclade/security

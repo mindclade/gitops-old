@@ -2,7 +2,7 @@
 # Copyright © 2026 Mindclade, LLC. All Rights Reserved.
 # Mindclade Proprietary and Confidential.
 # SPDX-License-Identifier: LicenseRef-Mindclade-Proprietary
-#
+
 # The subtle one. The POD declares runAsNonRoot: true, and a container overrides it with
 # runAsUser: 0. A template checking only the pod-level security context passes this while the
 # container runs as root.

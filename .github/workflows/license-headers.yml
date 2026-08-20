@@ -1,4 +1,8 @@
 ---
+# Copyright © 2026 Mindclade, LLC. All Rights Reserved.
+# Mindclade Proprietary and Confidential.
+# SPDX-License-Identifier: LicenseRef-Mindclade-Proprietary
+
 # Proprietary header policy, enforced on every source file.
 #
 # Cheap and credential-free: it reads the working tree and nothing else, so it holds no token
@@ -35,4 +39,4 @@ jobs:
           persist-credentials: false
 
       - name: Ensure proprietary header policy
-        run: bash scripts/license-header-check.sh --check
+        run: python3 scripts/license-header-check.py --check

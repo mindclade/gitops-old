@@ -2,7 +2,7 @@
 # Copyright © 2026 Mindclade, LLC. All Rights Reserved.
 # Mindclade Proprietary and Confidential.
 # SPDX-License-Identifier: LicenseRef-Mindclade-Proprietary
-#
+
 name: Production contract
 
 on:
@@ -21,7 +21,7 @@ concurrency:
 
 jobs:
   contract:
-    name: Production contract
+    name: contract
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:

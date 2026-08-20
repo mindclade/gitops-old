@@ -1,7 +1,7 @@
 # Copyright © 2026 Mindclade, LLC. All Rights Reserved.
 # Mindclade Proprietary and Confidential.
 # SPDX-License-Identifier: LicenseRef-Mindclade-Proprietary
-#
+
 ---
 # A freeze override is valid for one pull request only. Set active=true, record that PR's
 # number, and provide the reviewed incident/change reference. CODEOWNERS requires platform

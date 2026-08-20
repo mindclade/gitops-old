@@ -1,7 +1,7 @@
 # Copyright © 2026 Mindclade, LLC. All Rights Reserved.
 # Mindclade Proprietary and Confidential.
 # SPDX-License-Identifier: LicenseRef-Mindclade-Proprietary
-#
+
 ---
 # Expiring, reviewer-signed holes in admission policy.
 #
@@ -37,8 +37,8 @@ spec:
   #     a service account with no GCS access.
   #   granted: 2026-08-13
   #   expires: 2026-11-13      # 90 days maximum. Longer needs a written argument.
-  #   reviewer: "@Mindclade/security — <name>"
-  #   ticket: https://github.com/Mindclade/gitops/issues/000
+  #   reviewer: "@mindclade/security — <name>"
+  #   ticket: https://github.com/mindclade/gitops/issues/000
   #   removal: >-
   #     What has to be true to drop this. "Reimplement the tokenizer" is an answer;
   #     "revisit later" is not.

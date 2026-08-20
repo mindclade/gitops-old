@@ -2,8 +2,8 @@
 # Copyright © 2026 Mindclade, LLC. All Rights Reserved.
 # Mindclade Proprietary and Confidential.
 # SPDX-License-Identifier: LicenseRef-Mindclade-Proprietary
-#
-# Verify the exact release evidence produced by Mindclade's trusted build workflow.
+
+# Verify the governed deployment authorization for each selected Mindclade artifact.
 # Candidate PR files are data only: this workflow executes from the protected base branch.
 name: provenance
 
@@ -11,6 +11,7 @@ on:
   pull_request_target:
     paths:
       - 'rendered/**'
+      - 'deployments/**'
       - 'releases/**'
       - 'image-policy.yaml'
       - '.github/workflows/provenance.yml'
@@ -32,9 +33,15 @@ jobs:
     permissions:
       contents: read
       id-token: write
-      attestations: read
-      issues: write
     steps:
+      - name: Require the protected default branch for manual verification
+        if: github.event_name == 'workflow_dispatch'
+        run: |
+          test "$GITHUB_REF" = refs/heads/main || {
+            echo "::error::manual provenance verification must run from refs/heads/main"
+            exit 1
+          }
+
       - name: Refuse forked candidates
         if: github.event_name == 'pull_request_target'
         env:
@@ -66,24 +73,21 @@ jobs:
             experimental-features = nix-command flakes
             accept-flake-config = false
 
-      - uses: google-github-actions/auth@7c6bc770dae815cd3e89ee6cdf493a5fab2cc093  # v3
-        with:
-          workload_identity_provider: ${{ vars.WIF_PROVIDER_PLAN }}
-          service_account: ${{ vars.SA_GITOPS_VERIFIER }}
-
-      - uses: google-github-actions/setup-gcloud@aa5489c8933f4cc7a4f7d45035b3b1440c9c10db  # v3
-
       - name: Read third-party digest exemptions
         run: |
           set -euo pipefail
-          nix develop ./.trusted#ci --command yq -r '.spec.unsigned[]?.prefix // empty' .candidate/image-policy.yaml \
+          nix develop ./.trusted#ci --command yq -r '.spec.unsigned[]?.image // empty' .candidate/image-policy.yaml \
             | sort -u > unsigned.txt
 
       - name: Collect and validate image references
         run: |
           set -euo pipefail
           grep -rhoE 'image: *[^ ]+' .candidate/rendered/ 2>/dev/null \
-            | awk '{print $2}' | tr -d '"' | sort -u > images.txt || true
+            | awk '{print $2}' | tr -d '"' > rendered-images.txt || true
+          nix develop ./.trusted#ci --command yq -r \
+            '.spec.applications[]?.images[]? | .repository + "@" + .digest' \
+            .candidate/deployments/*.yaml > selected-images.txt
+          sort -u rendered-images.txt selected-images.txt > images.txt
           status=0
           while IFS= read -r img; do
             [[ -z "$img" ]] && continue
@@ -92,61 +96,43 @@ jobs:
           exit "$status"
 
       - name: Validate complete release records for active images
-        run: >-
-          python3 .trusted/scripts/validate-release-metadata.py
-          --root .candidate --images-file images.txt
-
-      - name: Verify GitHub attestations and Binary Authorization evidence
         env:
-          GH_TOKEN: ${{ github.token }}
+          BINAUTHZ_DEPLOYMENT_ATTESTOR_PROJECT: ${{ vars.BINAUTHZ_DEPLOYMENT_ATTESTOR_PROJECT }}
+          BINAUTHZ_DEPLOYMENT_ATTESTOR: ${{ vars.BINAUTHZ_DEPLOYMENT_ATTESTOR }}
         run: |
           set -euo pipefail
-          registries=$(cut -d/ -f1 images.txt | sort -u | grep -E 'docker\.pkg\.dev$' || true)
-          for registry in $registries; do gcloud auth configure-docker "$registry" --quiet; done
+          python3 .trusted/scripts/validate-release-metadata.py \
+            --root .candidate \
+            --images-file images.txt \
+            --expected-deployment-attestor-project "$BINAUTHZ_DEPLOYMENT_ATTESTOR_PROJECT" \
+            --expected-deployment-attestor "$BINAUTHZ_DEPLOYMENT_ATTESTOR"
 
-          is_unsigned() {
-            while IFS= read -r prefix; do
-              [[ -z "$prefix" ]] && continue
-              case "$1" in "$prefix"*) return 0 ;; esac
-            done < unsigned.txt
-            return 1
-          }
+      # Acquire cloud credentials only after all candidate-controlled YAML and JSON has passed
+      # trusted local validation.
+      - uses: google-github-actions/auth@7c6bc770dae815cd3e89ee6cdf493a5fab2cc093  # v3
+        with:
+          workload_identity_provider: ${{ vars.WIF_PROVIDER_PLAN }}
+          service_account: ${{ vars.SA_GITOPS_VERIFIER }}
 
-          status=0
-          while IFS= read -r img; do
-            [[ -z "$img" ]] && continue
-            if is_unsigned "$img"; then
-              echo "approved third-party digest: $img"
-              continue
-            fi
-            if ! gh attestation verify "oci://$img" \
-                 --repo Mindclade/mindclade-internal-monorepo \
-                 --signer-workflow Mindclade/.github/.github/workflows/reusable-oci-build.yml >/dev/null; then
-              echo "::error::missing/invalid SLSA provenance for $img"; status=1; continue
-            fi
-            if ! gh attestation verify "oci://$img" \
-                 --repo Mindclade/mindclade-internal-monorepo \
-                 --signer-workflow Mindclade/.github/.github/workflows/reusable-oci-build.yml \
-                 --predicate-type https://spdx.dev/Document/v2.3 >/dev/null; then
-              echo "::error::missing/invalid SPDX SBOM attestation for $img"; status=1; continue
-            fi
-            digest="${img##*@}"
-            project="$(cut -d/ -f2 <<<"$img")"
-            if [[ -z "$project" || "$project" == "$img" ]]; then
-              echo "::error::cannot derive Artifact Registry project from $img"; status=1; continue
-            fi
-            if ! gcloud container binauthz attestations list \
-                 --project="$project" \
-                 --attestor=build-attestor \
-                 --attestor-project="$project" \
-                 --artifact-url="$img" 2>/dev/null | grep -q "$digest"; then
-              echo "::error::no Binary Authorization build attestation for $img"; status=1
-            fi
-          done < images.txt
-          exit "$status"
+      - name: Verify Binary Authorization deployment evidence
+        env:
+          BINAUTHZ_DEPLOYMENT_ATTESTOR_PROJECT: ${{ vars.BINAUTHZ_DEPLOYMENT_ATTESTOR_PROJECT }}
+          BINAUTHZ_DEPLOYMENT_ATTESTOR: ${{ vars.BINAUTHZ_DEPLOYMENT_ATTESTOR }}
+        run: >-
+          nix develop ./.trusted#evidence --command
+          python3 .trusted/scripts/verify-release-evidence.py images.txt unsigned.txt
 
+  incident:
+    name: Open incident for evidence drift
+    needs: verify
+    if: ${{ failure() && github.event_name == 'schedule' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      issues: write
+    steps:
       - name: Open an incident issue when deployed evidence no longer verifies
-        if: failure() && github.event_name == 'schedule'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |

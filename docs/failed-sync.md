@@ -1,0 +1,60 @@
+# Failed Argo CD sync
+
+Use this runbook when an Application is `OutOfSync`, `Degraded`, or repeatedly failing to
+reconcile. The normal repair path is a reviewed Git change; do not use an interactive sync or edit
+live resources merely to make the dashboard green.
+
+## Triage without mutation
+
+Record the environment, Application, GitOps commit, first failure time, and owning AppProject.
+Then collect:
+
+```sh
+kubectl get application -n argocd <application> -o yaml
+kubectl describe application -n argocd <application>
+kubectl get events -n argocd --sort-by=.lastTimestamp
+kubectl logs -n argocd deployment/argocd-repo-server --since=30m
+kubectl logs -n argocd statefulset/argocd-application-controller --since=30m
+```
+
+Do not attach Secret payloads, repository credentials, tokens, or sensitive workload data to an
+issue. Redact evidence before sharing it outside the incident response group.
+
+Classify the failure:
+
+| Signal | Likely owner/action |
+|---|---|
+| Repository/authentication failure | Platform; verify the read-only GitHub App installation and Secret Manager rotation path |
+| Render/path not found | GitOps/monorepo; reproduce with the pinned renderer and correct the reviewed source |
+| AppProject destination/resource denial | Security/platform; fix the requested scope or reject the workload—do not broaden with `*` |
+| Gatekeeper denial | Workload owner; correct the manifest or use the reviewed, expiring exemption process |
+| Binary Authorization denial | Release owner; rebuild/qualify/attest the same digest or promote a new qualified digest |
+| Missing CRD/controller | Platform; qualify and install the owning controller before its custom resources |
+| Resource immutable or migration failure | Workload/infrastructure owner; choose reviewed replacement or forward recovery |
+| Quota/capacity/scheduling failure | `infrastructure-live` owner; correct capacity without weakening workload policy |
+| Secret reference not ready | Secret owner; repair the external source/IAM binding, never commit a Secret payload |
+
+## Repair
+
+1. Reproduce the failure from the exact Git commit with the pinned Nix toolchain:
+
+   ```sh
+   nix develop .#ci --command make validate
+   nix develop .#ci --command kustomize build \
+     --load-restrictor LoadRestrictionsNone roots/<environment>
+   ```
+
+2. Fix the authoritative source: the monorepo for workload packages, this repository for Argo and
+   in-cluster desired state, or `infrastructure-live` for cloud prerequisites.
+3. Open a protected pull request with the failure evidence, expected reconciliation delta, owner,
+   and rollback/forward-recovery decision.
+4. Allow Argo self-heal to reconcile the merged state. Observe health and Kubernetes events until
+   the retry window completes.
+5. Record the repairing PR/commit, Argo operation result, artifact digest, and service validation in
+   the incident/change record.
+
+## Emergency containment
+
+An emergency live action requires the documented freeze/emergency bypass, an incident commander,
+exact scope, and immediate reconciliation back into Git. Capture the pre-change object and audit
+evidence. Revoke bypass access after containment and complete a post-incident review.

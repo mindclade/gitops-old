@@ -1,7 +1,7 @@
 # Copyright © 2026 Mindclade, LLC. All Rights Reserved.
 # Mindclade Proprietary and Confidential.
 # SPDX-License-Identifier: LicenseRef-Mindclade-Proprietary
-#
+
 {
   description = "Toolchain for the mindclade gitops repository";
 
@@ -22,7 +22,7 @@
         # The four tools CI needs, and nothing else.
         #
         # These used to be installed by `curl`-ing a release tarball onto PATH with nothing
-        # verifying what came back — in the repository whose scripts/render.sh refuses to
+        # verifying what came back — in the repository whose scripts/render.py refuses to
         # render a remote base that does not match a recorded sha256 and byte count. The tool
         # enforcing that rule was itself unverified. Taking them from the flake removes the
         # download rather than authenticating it: flake.lock pins the exact nixpkgs revision,
@@ -44,6 +44,22 @@
             actionlint
             shellcheck # actionlint shells out to it for `run:` blocks
             yamllint
+            (python3.withPackages (pythonPackages: [
+              pythonPackages.jsonschema
+              pythonPackages.pyyaml
+            ]))
+          ];
+        };
+
+        # External release-evidence verification. Keeping gcloud in a separate shell avoids
+        # making every YAML/schema job build the large Google Cloud SDK closure. Its version is
+        # still fixed by flake.lock rather than inherited from the runner.
+        devShells.evidence = pkgs.mkShell {
+          packages = with pkgs; [
+            bashInteractive
+            curl
+            google-cloud-sdk
+            jq
           ];
         };
 
@@ -68,6 +84,10 @@
             jq
             yamllint
             actionlint
+            (python3.withPackages (pythonPackages: [
+              pythonPackages.jsonschema
+              pythonPackages.pyyaml
+            ]))
 
             # bash 5. macOS ships 3.2; promote.yml and the render path use bash 4+ builtins,
             # and a script that only works in CI is a script nobody can debug locally.
@@ -81,8 +101,8 @@
             echo "  diffs on every PR, and the reversion looks like the cluster changing on"
             echo "  its own."
             echo
-            echo "  ./scripts/render.sh --monorepo ../../mindclade-github/mindclade-internal-monorepo"
-            echo "  ./scripts/render.sh --monorepo <path> --check    # what CI runs"
+            echo "  python3 scripts/render.py --monorepo ../../mindclade-github/mindclade-internal-monorepo --write"
+            echo "  python3 scripts/render.py --monorepo <path>     # what CI runs"
             echo "  kubeconform -strict -summary -ignore-missing-schemas rendered/"
             echo "  gator test --filename=policy/templates --filename=policy/constraints \\"
             echo "             --filename=rendered/development"

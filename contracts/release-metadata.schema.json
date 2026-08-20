@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://mindclade.com/contracts/gitops/release-metadata-2.0.0.schema.json",
+  "$id": "https://mindclade.com/contracts/gitops/release-metadata-3.0.0.schema.json",
   "title": "Mindclade immutable release metadata",
   "type": "object",
   "additionalProperties": false,
@@ -16,13 +16,12 @@
     "provenance",
     "vulnerability",
     "qualification",
-    "github_attestation",
-    "binary_authorization",
+    "supply_chain_attestations",
     "created_at"
   ],
   "properties": {
     "contract_version": {
-      "const": "2.0.0"
+      "const": "3.0.0"
     },
     "release_id": {
       "type": "string",
@@ -30,7 +29,7 @@
     },
     "source_repository": {
       "type": "string",
-      "pattern": "^Mindclade/[A-Za-z0-9_.-]+$"
+      "pattern": "^mindclade/[A-Za-z0-9_.-]+$"
     },
     "source_revision": {
       "type": "string",
@@ -84,22 +83,48 @@
         }
       }
     },
-    "github_attestation": {
+    "supply_chain_attestations": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["repository", "signer_workflow"],
+      "required": ["build", "qualification", "deployment"],
       "properties": {
-        "repository": {
-          "type": "string",
-          "pattern": "^Mindclade/[A-Za-z0-9_.-]+$"
+        "build": {
+          "$ref": "#/$defs/attestorReference"
         },
-        "signer_workflow": {
-          "type": "string",
-          "pattern": "^Mindclade/[A-Za-z0-9_.-]+/.+\\.ya?ml$"
+        "qualification": {
+          "$ref": "#/$defs/attestorReference"
+        },
+        "deployment": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["project", "attestor", "signer_workflow_ref"],
+          "properties": {
+            "project": {
+              "type": "string",
+              "pattern": "^[a-z][a-z0-9-]{4,28}[a-z0-9]$"
+            },
+            "attestor": {
+              "type": "string",
+              "minLength": 3
+            },
+            "signer_workflow_ref": {
+              "type": "string",
+              "pattern": "^mindclade/\\.github/\\.github/workflows/reusable-binauthz-sign\\.yml@refs/tags/v[0-9]+\\.[0-9]+\\.[0-9]+$"
+            }
+          }
         }
       }
     },
-    "binary_authorization": {
+    "created_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "migration": {
+      "type": "object"
+    }
+  },
+  "$defs": {
+    "attestorReference": {
       "type": "object",
       "additionalProperties": false,
       "required": ["project", "attestor"],
@@ -114,15 +139,6 @@
         }
       }
     },
-    "created_at": {
-      "type": "string",
-      "format": "date-time"
-    },
-    "migration": {
-      "type": "object"
-    }
-  },
-  "$defs": {
     "artifactReference": {
       "type": "object",
       "additionalProperties": false,

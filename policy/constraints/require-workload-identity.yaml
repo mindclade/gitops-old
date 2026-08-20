@@ -1,25 +1,23 @@
 # Copyright © 2026 Mindclade, LLC. All Rights Reserved.
 # Mindclade Proprietary and Confidential.
 # SPDX-License-Identifier: LicenseRef-Mindclade-Proprietary
-#
+
 ---
-# Every pod runs as a named service account bound to a Google identity through Workload
-# Identity. `default` is shared by everything in the namespace, so a grant to it is a grant
-# to every workload there — and nothing in the audit log distinguishes them.
+# Every workload runs as a named service account bound to a Google identity through Workload
+# Identity Federation. `default` may exist for namespace initialization, but workloads may
+# not use it.
 apiVersion: constraints.gatekeeper.sh/v1beta1
-kind: K8sRequiredAnnotations
+kind: MindcladeWorkloadIdentity
 metadata:
   name: require-workload-identity
 spec:
-  # dryrun. Promoted to deny once every workload has a dedicated service account — see
-  # policy/README.md. Shipping at deny today would block workloads that work fine.
-  enforcementAction: dryrun
+  enforcementAction: deny
   match:
     kinds:
       - apiGroups: [""]
-        kinds: ["ServiceAccount"]
+        kinds: ["ServiceAccount", "Pod"]
+      - apiGroups: ["apps"]
+        kinds: ["Deployment", "StatefulSet", "DaemonSet", "ReplicaSet"]
+      - apiGroups: ["batch"]
+        kinds: ["Job", "CronJob"]
     excludedNamespaces: [kube-system, gatekeeper-system, gmp-system, argocd]
-  parameters:
-    annotations:
-      - key: iam.gke.io/gcp-service-account
-        allowedRegex: "^[a-z0-9-]+@[a-z0-9-]+\\.iam\\.gserviceaccount\\.com$"

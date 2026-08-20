@@ -1,0 +1,81 @@
+# Copyright © 2026 Mindclade, LLC. All Rights Reserved.
+# Mindclade Proprietary and Confidential.
+# SPDX-License-Identifier: LicenseRef-Mindclade-Proprietary
+
+---
+apiVersion: templates.gatekeeper.sh/v1
+kind: ConstraintTemplate
+metadata:
+  name: mindcladeworkloadidentity
+  annotations:
+    description: >-
+      Workloads must use a dedicated Kubernetes service account, and every dedicated service
+      account must be bound to a Google service account for Workload Identity Federation.
+spec:
+  crd:
+    spec:
+      names:
+        kind: MindcladeWorkloadIdentity
+      validation:
+        openAPIV3Schema:
+          type: object
+
+  targets:
+    - target: admission.k8s.gatekeeper.sh
+      rego: |
+        package mindcladeworkloadidentity
+
+        import future.keywords.contains
+        import future.keywords.if
+        import future.keywords.in
+
+        gsa_annotation := "iam.gke.io/gcp-service-account"
+        gsa_pattern := "^[a-z0-9-]+@[a-z0-9-]+\\.iam\\.gserviceaccount\\.com$"
+
+        # The default ServiceAccount may exist so Kubernetes can initialize a namespace, but
+        # no Mindclade workload may use it. A permission granted to `default` is effectively a
+        # permission granted to every workload in that namespace.
+        violation contains {"msg": msg} if {
+          input.review.kind.kind == "ServiceAccount"
+          input.review.object.metadata.name != "default"
+          annotations := object.get(input.review.object.metadata, "annotations", {})
+          gsa := object.get(annotations, gsa_annotation, "")
+          not regex.match(gsa_pattern, gsa)
+          msg := sprintf(
+            "ServiceAccount %q must carry a valid %s annotation",
+            [input.review.object.metadata.name, gsa_annotation],
+          )
+        }
+
+        violation contains {"msg": msg} if {
+          some spec in workload_pod_specs
+          object.get(spec, "serviceAccountName", "") == ""
+          msg := sprintf(
+            "%s %q must set spec.serviceAccountName to a dedicated ServiceAccount",
+            [input.review.kind.kind, input.review.object.metadata.name],
+          )
+        }
+
+        violation contains {"msg": msg} if {
+          some spec in workload_pod_specs
+          object.get(spec, "serviceAccountName", "") == "default"
+          msg := sprintf(
+            "%s %q may not use the default ServiceAccount",
+            [input.review.kind.kind, input.review.object.metadata.name],
+          )
+        }
+
+        workload_pod_specs contains spec if {
+          input.review.kind.kind == "Pod"
+          spec := input.review.object.spec
+        }
+
+        workload_pod_specs contains spec if {
+          input.review.kind.kind in {"Deployment", "StatefulSet", "DaemonSet", "ReplicaSet", "Job"}
+          spec := input.review.object.spec.template.spec
+        }
+
+        workload_pod_specs contains spec if {
+          input.review.kind.kind == "CronJob"
+          spec := input.review.object.spec.jobTemplate.spec.template.spec
+        }

@@ -1,7 +1,7 @@
 # Copyright © 2026 Mindclade, LLC. All Rights Reserved.
 # Mindclade Proprietary and Confidential.
 # SPDX-License-Identifier: LicenseRef-Mindclade-Proprietary
-#
+
 ---
 apiVersion: argoproj.io/v1alpha1
 kind: AppProject
@@ -11,7 +11,7 @@ metadata:
 spec:
   description: Narrow project used only by the environment root application.
   sourceRepos:
-    - https://github.com/Mindclade/gitops.git
+    - https://github.com/mindclade/gitops.git
   destinations:
     - server: https://kubernetes.default.svc
       namespace: argocd

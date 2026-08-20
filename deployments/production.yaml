@@ -1,0 +1,12 @@
+# Copyright © 2026 Mindclade, LLC. All Rights Reserved.
+# Mindclade Proprietary and Confidential.
+# SPDX-License-Identifier: LicenseRef-Mindclade-Proprietary
+
+---
+apiVersion: mindclade.dev/v1
+kind: ArtifactDeploymentSet
+metadata:
+  name: production
+spec:
+  environment: production
+  applications: []

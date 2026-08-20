@@ -1,7 +1,7 @@
 # Copyright © 2026 Mindclade, LLC. All Rights Reserved.
 # Mindclade Proprietary and Confidential.
 # SPDX-License-Identifier: LicenseRef-Mindclade-Proprietary
-#
+
 ---
 # Does each constraint actually fire on each kind it claims to match?
 #
@@ -145,6 +145,38 @@ tests:
         object: fixtures/deployment-compliant.yaml
         assertions:
           - violations: "no"
+
+  # -------------------------------------------------------------------------------------
+  # require-workload-identity
+  # -------------------------------------------------------------------------------------
+  - name: require-workload-identity
+    template: ../templates/require-workload-identity.yaml
+    constraint: ../constraints/require-workload-identity.yaml
+    cases:
+      - name: annotated-service-account-is-allowed
+        object: fixtures/serviceaccount-workload-identity.yaml
+        assertions:
+          - violations: "no"
+      - name: unbound-service-account-is-denied
+        object: fixtures/serviceaccount-missing-workload-identity.yaml
+        assertions:
+          - violations: "yes"
+      - name: namespace-default-service-account-may-exist
+        object: fixtures/serviceaccount-default.yaml
+        assertions:
+          - violations: "no"
+      - name: workload-with-dedicated-service-account-is-allowed
+        object: fixtures/deployment-compliant.yaml
+        assertions:
+          - violations: "no"
+      - name: workload-without-service-account-is-denied
+        object: fixtures/deployment-missing-serviceaccount.yaml
+        assertions:
+          - violations: "yes"
+      - name: workload-using-default-service-account-is-denied
+        object: fixtures/deployment-default-serviceaccount.yaml
+        assertions:
+          - violations: "yes"
 
   # -------------------------------------------------------------------------------------
   # partner-namespace-isolation

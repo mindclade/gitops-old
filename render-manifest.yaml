@@ -1,7 +1,7 @@
 # Copyright © 2026 Mindclade, LLC. All Rights Reserved.
 # Mindclade Proprietary and Confidential.
 # SPDX-License-Identifier: LicenseRef-Mindclade-Proprietary
-#
+
 ---
 # Active desired-state render inventory.
 #
@@ -13,7 +13,7 @@ apiVersion: mindclade.dev/v1
 kind: RenderManifest
 spec:
   source:
-    repo: Mindclade/mindclade-internal-monorepo
+    repo: mindclade/mindclade-internal-monorepo
     # Protected immutable release tag. github-config protects v* tags from movement/deletion.
     ref: v0.1.1
 

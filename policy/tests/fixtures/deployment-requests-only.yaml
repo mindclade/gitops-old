@@ -2,7 +2,7 @@
 # Copyright © 2026 Mindclade, LLC. All Rights Reserved.
 # Mindclade Proprietary and Confidential.
 # SPDX-License-Identifier: LicenseRef-Mindclade-Proprietary
-#
+
 # Requests but no limits. Schedulable, and able to consume the whole node once running —
 # which on a GPU node is the expensive failure this constraint exists for.
 apiVersion: apps/v1

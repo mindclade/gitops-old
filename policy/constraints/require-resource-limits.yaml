@@ -1,7 +1,7 @@
 # Copyright © 2026 Mindclade, LLC. All Rights Reserved.
 # Mindclade Proprietary and Confidential.
 # SPDX-License-Identifier: LicenseRef-Mindclade-Proprietary
-#
+
 ---
 # A pod with no limits can consume a whole node. On a CPU node that degrades neighbours; on
 # an A4 node it holds tens of thousands of dollars a month of accelerator hostage while

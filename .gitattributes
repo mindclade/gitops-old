@@ -5,7 +5,6 @@
 # This does NOT stop the diff being available. Expanding it is one click, and for a promotion
 # PR the diff is exactly what needs reading.
 rendered/** linguist-generated=true
-rendered/** -diff
 
 # Keep line endings stable. A CRLF sneaking in changes every line of a rendered file and
 # makes the bit-identical promotion check fail for no real reason.

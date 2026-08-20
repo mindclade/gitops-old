@@ -1,24 +1,28 @@
 # Copyright © 2026 Mindclade, LLC. All Rights Reserved.
 # Mindclade Proprietary and Confidential.
 # SPDX-License-Identifier: LicenseRef-Mindclade-Proprietary
-#
+
 ---
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 resources:
   - ../../bootstrap/argocd-config-production.yaml
+  - ../../projects/argocd-administration.yaml
   - ../../projects/default-deny.yaml
   - ../../projects/platform.yaml
   - ../../projects/data.yaml
   - ../../projects/research.yaml
   - ../../projects/serving.yaml
   - ../../projects/partner-isolated.yaml
+  - ../../applications/production/argocd.yaml
   - ../../applications/production/data.yaml
   - ../../applications/production/partner.yaml
   - ../../applications/production/platform.yaml
   - ../../applications/production/policy.yaml
   - ../../applications/production/serving.yaml
 patches:
+  - target: {group: argoproj.io, version: v1alpha1, kind: AppProject, name: argocd-administration}
+    path: sync-windows-patch.yaml
   - target: {group: argoproj.io, version: v1alpha1, kind: AppProject, name: platform}
     path: sync-windows-patch.yaml
   - target: {group: argoproj.io, version: v1alpha1, kind: AppProject, name: data}

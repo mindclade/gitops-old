@@ -1,7 +1,7 @@
 # Copyright © 2026 Mindclade, LLC. All Rights Reserved.
 # Mindclade Proprietary and Confidential.
 # SPDX-License-Identifier: LicenseRef-Mindclade-Proprietary
-#
+
 ---
 # Scheduled production freezes. The annual window is mirrored by the production AppProject
 # sync-window patch, so GitHub blocks the merge and Argo blocks ordinary reconciliation.

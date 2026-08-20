@@ -2,7 +2,7 @@
 # Copyright © 2026 Mindclade, LLC. All Rights Reserved.
 # Mindclade Proprietary and Confidential.
 # SPDX-License-Identifier: LicenseRef-Mindclade-Proprietary
-#
+
 # The one shape the vendored templates DID handle. Kept so a future change that fixes the
 # workload kinds by breaking the Pod path is caught.
 apiVersion: v1

@@ -2,7 +2,7 @@
 # Copyright © 2026 Mindclade, LLC. All Rights Reserved.
 # Mindclade Proprietary and Confidential.
 # SPDX-License-Identifier: LicenseRef-Mindclade-Proprietary
-#
+
 # `resources: {}` — present but empty. Distinct from omitting the block entirely, and the
 # shape a Helm chart emits when its values file has no resource stanza.
 apiVersion: apps/v1

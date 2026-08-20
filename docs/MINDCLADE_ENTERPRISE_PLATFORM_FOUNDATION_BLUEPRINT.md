@@ -2,7 +2,7 @@
 
 **Company:** Mindclade  
 **Scope:** GitHub Enterprise, Google Cloud foundation, Terraform/Terragrunt live infrastructure, Argo CD GitOps, and artifact promotion  
-**Repositories:** `.github`, `github-config`, `bootstrap`, `infrastructure-live`, `gitops`, `mindclade-internal-monorepo`  
+**Repositories:** `.github`, `.github-private`, `github-config`, `bootstrap`, `infrastructure-live`, `gitops`, `mindclade-internal-monorepo`
 **Status:** Final — production architecture decision  
 **Date:** 2026-08-19  
 **Supersedes:** Earlier standalone draft blueprints for `github-config`, `bootstrap`, `infrastructure-live`, and `gitops`
@@ -11,11 +11,12 @@
 
 ## 1. Executive Decision
 
-Mindclade will operate six repositories with non-overlapping authority:
+Mindclade will operate seven repositories with non-overlapping authority:
 
 | Repository | Final authority |
 |---|---|
-| `.github` | Shared GitHub workflows, templates, organization profile, and organization-wide contributor experience |
+| `.github` | Shared GitHub workflows, templates, community health, and organization-wide contributor experience |
+| `.github-private` | Member-only organization profile and internal engineering navigation |
 | `github-config` | GitHub Enterprise organization, repository, team, ruleset, Actions, environment, and access governance |
 | `bootstrap` | Ring 0 Google Cloud state, initial automation trust, seed projects, and break-glass recovery |
 | `infrastructure-live` | Normal Google Cloud organization, environment, network, project, cluster, storage, database, and security infrastructure |
@@ -24,7 +25,7 @@ Mindclade will operate six repositories with non-overlapping authority:
 
 The operating invariant is:
 
-> **The monorepo produces immutable artifacts. Bootstrap establishes durable trust. Infrastructure-live produces cloud infrastructure. GitOps declares what runs. Argo CD reconciles it. GitHub-config governs who and what may change the system. The `.github` repository provides shared workflow implementations without becoming a second policy source.**
+> **The monorepo produces immutable artifacts. Bootstrap establishes durable trust. Infrastructure-live produces cloud infrastructure. GitOps declares what runs. Argo CD reconciles it. GitHub-config governs who and what may change the system. The `.github` repository provides shared workflow implementations without becoming a second policy source. The private member profile provides navigation without becoming a control plane.**
 
 This is a production target, not a requirement to deploy every scale feature immediately. The architecture defines the stable boundaries now so Mindclade can grow without later repository ownership surgery.
 
@@ -296,7 +297,6 @@ The `.github` repository owns reusable GitHub-facing assets, not organization co
 
 It owns:
 
-- organization profile;
 - issue and pull-request templates;
 - contribution and support templates;
 - reusable GitHub Actions workflows;
@@ -330,8 +330,6 @@ It does not own:
 │       ├── reusable-terraform-validate.yml
 │       ├── reusable-terragrunt-plan.yml
 │       └── reusable-artifact-verification.yml
-├── profile/
-│   └── README.md
 ├── workflow-templates/
 ├── docs/
 │   ├── workflow-contracts.md
@@ -350,6 +348,14 @@ It does not own:
 - OIDC trust may include the called workflow identity through `job_workflow_ref`.
 - Third-party Actions are allowlisted and immutable-pinned for privileged workflows.
 - The default `GITHUB_TOKEN` permission is read-only.
+
+### 8.4 Member profile publication boundary
+
+The member-only organization profile is published from the private
+`.github-private/profile/README.md` path required by GitHub Enterprise Cloud. That repository
+owns internal navigation and member-facing operating guidance only. It must not implement
+reusable workflows, declare GitHub settings, hold credentials, or become a second source for
+cloud, Kubernetes, or application desired state.
 
 ---
 

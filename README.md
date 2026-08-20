@@ -1,104 +1,120 @@
-# `gitops`
+<!-- mindclade-doc: repository-home@1 -->
 
-Mindclade's only source of truth for Argo CD and in-cluster Kubernetes desired state.
+<!-- Brand source: mindclade/.github-private/mindclade-brand-assets (MONO family). -->
 
-> ## `rendered/` IS GENERATED — NEVER HAND-EDIT IT
->
-> CI writes it. An edit you make there is reverted by the next render, and the reversion looks
-> like the cluster changing on its own. Change the source and let CI render.
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/assets/brand/mono-wordmark-dark-1080w.png">
+    <source media="(prefers-color-scheme: light)" srcset="docs/assets/brand/mono-wordmark-1080w.png">
+    <img alt="Mindclade." src="docs/assets/brand/mono-wordmark-1080w.png" width="360">
+  </picture>
+</p>
 
-## The rendered-manifests pattern
+# Mindclade · GitOps
 
-CI renders Helm and Kustomize down to plain YAML and commits the result. Argo applies that
-YAML and does no templating of its own.
+> **Platform Foundation · Kubernetes desired state**
+> Reviewed, rendered, policy-checked manifests reconciled by environment-scoped Argo CD.
 
-The reason is a single property: **the PR diff is the cluster delta.** Not an approximation
-of it, not the inputs that produce it — the exact set of resources that will change.
+| Repository contract | Value |
+| --- | --- |
+| Enterprise | [`mindclade`](https://github.com/enterprises/mindclade) |
+| Organization | [`mindclade`](https://github.com/mindclade) |
+| Repository index | [Mindclade repositories](https://github.com/orgs/mindclade/repositories) |
+| Repository | [`mindclade/gitops`](https://github.com/mindclade/gitops) |
+| Class | `production-control` |
+| Visibility | `internal` |
+| Owner | Platform |
+| Production authority | Yes |
+| Change model | Pull request to `main`; generated render; development-to-production promotion |
+| Documentation | [`docs/README.md`](docs/README.md) |
 
-With in-cluster templating, a PR that bumps one Helm value shows you one changed line and
-tells you nothing about the 40 resources it rewrites. Reviewing "does this change do what it
-says" becomes impossible, and the answer arrives after the apply.
+This repository is the only source of truth for Argo CD and in-cluster Kubernetes desired
+state. `rendered/` contains plain YAML produced from pinned monorepo source; Argo CD performs
+no Helm or Kustomize rendering at reconciliation time.
 
-Costs worth knowing: `rendered/` is large and noisy in history (`.gitattributes` marks it
-`linguist-generated`), and a render bug is a commit rather than a runtime error. Both are
-worth it for a readable production diff.
+> **Generated content:** Never hand-edit `rendered/`. Change its source or deployment
+> selection and run the renderer. CI rejects files without generated provenance and the
+> credentialed render workflow detects drift from the pinned source.
 
-## Layout
+## Authority boundary
 
+`gitops` owns Argo CD composition, AppProjects, ApplicationSets, Gatekeeper policy,
+environment artifact selection, and rendered Kubernetes resources. `infrastructure-live`
+owns clusters, Binary Authorization, cloud identities, DNS, and secret backends. The internal
+monorepo owns workload source and build outputs.
+
+The diagram shows the reviewed path from workload source to a reconciled cluster and the two
+distinct admission responsibilities.
+
+```mermaid
+%%{init: {"theme":"base","themeVariables":{"primaryColor":"#F2EFE8","primaryTextColor":"#201C24","primaryBorderColor":"#B5673F","secondaryColor":"#FBFAF7","tertiaryColor":"#FBFAF7","lineColor":"#5B5660","edgeLabelBackground":"#FBFAF7","clusterBkg":"#FBFAF7","clusterBorder":"#E2DED4"}}}%%
+flowchart LR
+    SRC["Internal monorepo<br/>workload source"] -->|"pinned ref + content locks"| R["scripts/render.py"]
+    SEL["deployments/*.yaml<br/>approved digests"] --> R
+    R --> DEV["rendered/development<br/>generated YAML"]
+    DEV -->|"bit-identical promotion"| STG["rendered/staging"]
+    STG -->|"bit-identical promotion"| PROD["rendered/production"]
+    PROD --> PR["Reviewed Git commit"]
+    PR --> ARGO["Environment Argo CD<br/>read-only repository access"]
+    ARGO --> GK["Gatekeeper<br/>structure, registry, digest"]
+    GK --> BA["Binary Authorization<br/>cryptographic attestation"]
+    BA --> GKE["GKE workload"]
+
+    classDef authority fill:#201C24,color:#F2EFE8,stroke:#D68A61,stroke-width:2px;
+    classDef managed fill:#F2EFE8,color:#201C24,stroke:#B5673F,stroke-width:1.5px;
+    classDef external fill:#FBFAF7,color:#423D48,stroke:#5B5660,stroke-width:1.5px;
+    class SRC,SEL,PR authority;
+    class R,DEV,STG,PROD,ARGO,GK,BA,GKE managed;
 ```
-bootstrap/      pinned Argo CD payloads and root app — applied once by the audited bootstrap script
-applications/   ApplicationSets. HAND-WRITTEN
-projects/       AppProject: repo, cluster, and namespace allowlists. HAND-WRITTEN
-policy/         Policy Controller templates and constraints. HAND-WRITTEN
-overlays/       per-environment overlay values. HAND-WRITTEN
-rendered/       plain YAML, one directory per environment. CI-WRITTEN
-```
 
-Everything except `rendered/` is authored. `rendered/` is output.
+## Repository map
 
-## Promotion
+| Path | Ownership |
+| --- | --- |
+| `bootstrap/` | Pinned Argo CD payloads, configuration, root app, and audited bootstrap script |
+| `applications/` | Hand-authored environment ApplicationSets |
+| `projects/` | Hand-authored AppProject repository, cluster, and namespace allowlists |
+| `policy/` | Gatekeeper templates, constraints, tests, and expiring exemptions |
+| `overlays/` | Hand-authored environment values and patches |
+| `deployments/` | Environment-specific immutable artifact selections |
+| `render-manifest.yaml` | Pinned monorepo source and render target inventory |
+| `rendered/` | CI-generated plain YAML consumed by Argo CD |
+| `roots/` | Environment root composition |
 
-`promote.yml` copies manifests **bit-identically** from `rendered/staging/<app>` to
-`rendered/production/<app>` and applies only a namespace overlay. It does not re-render.
+## Render and validate
 
-That is what makes "staging runs the same thing as production" a checkable claim rather than
-an assertion. A re-render at promotion time could pick up a different chart version, a
-different image tag, or a different default — and nothing in the diff would say so.
-
-`validate.yml` enforces it: a promotion PR whose diff contains anything beyond namespace
-changes fails.
-
-## Policy
-
-Policy Controller (Gatekeeper) constraints live in `policy/constraints/`. The two controls
-with the highest consequence are:
-
-- **`require-image-policy`** — an image must be digest-pinned and come from an approved registry.
-  Binary Authorization separately verifies the cryptographic deployment attestation at admission.
-- **`deny-holdout-bucket-mount`** — no training workload may mount the held-out evaluation
-  bucket. Benchmark numbers are worthless if the holdout set has leaked into training, and
-  that leak is invisible after the fact.
-
-New constraints ship in `dryrun` and are promoted to `deny` once the violation count is zero.
-`policy/README.md` has the process. Shipping straight to `deny` blocks deployments that were
-already running fine, which is how a policy gets an emergency exemption on its first day.
-
-Exemptions are in `policy/exemptions.yaml`. Every one has an expiry and a reviewer. An
-exemption with no expiry is a deleted constraint with extra steps.
-
-## Working on this
+Enter the pinned shell. The renderer requires a checkout of the internal monorepo at the ref
+declared in `render-manifest.yaml`.
 
 ```sh
-nix develop      # kubeconform, gator, kustomize, helm, opa
-
-# Validate what CI validates
+nix develop
+make validate
+python3 scripts/render.py --monorepo ../mindclade-internal-monorepo
 kubeconform -strict -summary -ignore-missing-schemas rendered/
 gator verify policy/tests/suite.yaml
 gator test --filename=policy/templates --filename=policy/constraints \
   --filename=rendered/development
 ```
 
-To change a workload: edit its source in the monorepo, let CI render into
-`rendered/development/`, then promote through staging to production.
+`gator verify` proves constraints reject known-bad fixtures; `gator test` evaluates actual
+rendered resources. Both are required to distinguish working policy from a clean estate.
 
-To change platform policy or an ApplicationSet: edit here directly. Those are hand-written.
+## Promotion contract
 
-## CI
+Promotion copies manifests bit-identically from development to staging and then production,
+apart from the reviewed namespace overlay. It does not re-render. CI fails a promotion pull
+request that changes anything outside the allowed transformation, making the reviewed diff
+the exact cluster delta.
 
-| Workflow | Trigger | What it does |
-|---|---|---|
-| `validate.yml` | PR | kubeconform, Gatekeeper behavior tests, and generated-output integrity checks |
-| `provenance.yml` | PR | Every image digest referenced in `rendered/` has a valid attestation |
-| `promote.yml` | dispatch | Opens a promotion PR, staging → production, bit-identical |
-| `freeze.yml` | PR | Blocks production changes during a declared freeze window |
+Gatekeeper enforces structural admission requirements such as approved registries and
+immutable digests. Google Cloud Binary Authorization is the single cryptographic admission
+gate. This repository intentionally does not deploy a second signature admission controller.
 
-The no-drift check in `validate.yml` is what enforces the "never hand-edit" rule
-mechanically rather than by asking nicely.
+## Start here
 
-## Argo's access
-
-Argo has **read-only** access to this repository and to nothing else. It cannot write here,
-which means it cannot self-modify, and a compromised Argo cannot rewrite the manifests that
-define what it is allowed to run.
-
-The cloud-side identity and secret prerequisites are owned by the environment units in `infrastructure-live`; Argo CD itself is installed only from `bootstrap/` in this repository.
+- [Documentation index](docs/README.md)
+- [Architecture](docs/architecture.md)
+- [Workload activation](docs/workload-activation.md)
+- [Policy rollout and testing](policy/README.md)
+- [Rollback](docs/rollback.md)
+- [Disaster recovery](docs/disaster-recovery.md)

@@ -2,7 +2,7 @@
 # Copyright © 2026 Mindclade, LLC. All Rights Reserved.
 # Mindclade Proprietary and Confidential.
 # SPDX-License-Identifier: LicenseRef-Mindclade-Proprietary
-#
+
 # Deterministic GitOps render verification and update.
 #
 # Pull requests are handled by pull_request_target so the workflow implementation is loaded
@@ -16,7 +16,10 @@ on:
     branches: [main]
     paths:
       - 'render-manifest.yaml'
-      - 'scripts/render.sh'
+      - 'deployments/**'
+      - 'overlays/**'
+      - 'scripts/render.py'
+      - 'scripts/apply-artifact-selection.py'
       - '.github/workflows/render.yml'
   schedule:
     - cron: "27 5 * * *"
@@ -74,7 +77,7 @@ jobs:
           set -euo pipefail
           repo="$(nix develop ./.trusted#ci --command yq -r '.spec.source.repo' .candidate/render-manifest.yaml)"
           ref="$(nix develop ./.trusted#ci --command yq -r '.spec.source.ref' .candidate/render-manifest.yaml)"
-          [[ "$repo" == "Mindclade/mindclade-internal-monorepo" ]] || {
+          [[ "$repo" == "mindclade/mindclade-internal-monorepo" ]] || {
             echo "::error::render source repository is not authorized: $repo"
             exit 1
           }
@@ -114,12 +117,24 @@ jobs:
           path: .monorepo
           persist-credentials: false
 
+      - name: Drop cloud credentials before processing candidate data
+        run: |
+          set -euo pipefail
+          if [ -n "${GOOGLE_GHA_CREDS_PATH:-}" ]; then
+            rm -f -- "$GOOGLE_GHA_CREDS_PATH"
+          fi
+          {
+            echo 'CLOUDSDK_AUTH_CREDENTIAL_FILE_OVERRIDE='
+            echo 'GOOGLE_APPLICATION_CREDENTIALS='
+            echo 'GOOGLE_GHA_CREDS_PATH='
+          } >> "$GITHUB_ENV"
+
       - name: Verify candidate rendered state with trusted renderer
         env:
           MINDCLADE_GITOPS_ROOT: ${{ github.workspace }}/.candidate
         run: >-
           nix develop ./.trusted#ci --command
-          ./.trusted/scripts/render.sh --monorepo .monorepo --check
+          python3 ./.trusted/scripts/render.py --monorepo .monorepo
 
   update:
     if: github.event_name != 'pull_request_target'
@@ -130,6 +145,14 @@ jobs:
       pull-requests: write
       id-token: write
     steps:
+      - name: Require the protected default branch for cloud-backed updates
+        if: github.event_name == 'workflow_dispatch'
+        run: |
+          test "$GITHUB_REF" = refs/heads/main || {
+            echo "::error::manual render updates must run from refs/heads/main"
+            exit 1
+          }
+
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
         with:
           persist-credentials: false
@@ -146,7 +169,7 @@ jobs:
           set -euo pipefail
           repo="$(nix develop .#ci --command yq -r '.spec.source.repo' render-manifest.yaml)"
           ref="$(nix develop .#ci --command yq -r '.spec.source.ref' render-manifest.yaml)"
-          [[ "$repo" == "Mindclade/mindclade-internal-monorepo" ]] || {
+          [[ "$repo" == "mindclade/mindclade-internal-monorepo" ]] || {
             echo "::error::render source repository is not authorized: $repo"
             exit 1
           }
@@ -186,8 +209,20 @@ jobs:
           path: .monorepo
           persist-credentials: false
 
+      - name: Drop cloud credentials before processing desired-state data
+        run: |
+          set -euo pipefail
+          if [ -n "${GOOGLE_GHA_CREDS_PATH:-}" ]; then
+            rm -f -- "$GOOGLE_GHA_CREDS_PATH"
+          fi
+          {
+            echo 'CLOUDSDK_AUTH_CREDENTIAL_FILE_OVERRIDE='
+            echo 'GOOGLE_APPLICATION_CREDENTIALS='
+            echo 'GOOGLE_GHA_CREDS_PATH='
+          } >> "$GITHUB_ENV"
+
       - name: Render desired state
-        run: nix develop .#ci --command ./scripts/render.sh --monorepo .monorepo
+        run: nix develop .#ci --command python3 scripts/render.py --monorepo .monorepo --write
 
       - id: commit
         name: Commit to the render branch

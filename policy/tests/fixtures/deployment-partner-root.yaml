@@ -2,7 +2,7 @@
 # Copyright © 2026 Mindclade, LLC. All Rights Reserved.
 # Mindclade Proprietary and Confidential.
 # SPDX-License-Identifier: LicenseRef-Mindclade-Proprietary
-#
+
 # A partner-namespace workload with no security context at all: an image whose Dockerfile has
 # no USER runs as root, and nothing in this manifest says so.
 apiVersion: apps/v1

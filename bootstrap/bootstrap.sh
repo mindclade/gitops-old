@@ -2,18 +2,36 @@
 # Copyright © 2026 Mindclade, LLC. All Rights Reserved.
 # Mindclade Proprietary and Confidential.
 # SPDX-License-Identifier: LicenseRef-Mindclade-Proprietary
-#
+
 set -euo pipefail
+IFS=$'\n\t'
 umask 077
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-ENVIRONMENT="${1:-}"
-PROFILE="${2:-standard}"
-EXPECTED_CONTEXT="${3:-${MINDCLADE_EXPECTED_KUBE_CONTEXT:-}}"
+ENVIRONMENT=""
+PROFILE="standard"
+EXPECTED_CONTEXT=""
+APPLY=0
 
 usage() {
-  echo "usage: $0 <development|staging|production> <standard|ha> <expected-kube-context>" >&2
+  echo "usage: $0 --apply --environment <development|staging|production> [--profile <standard|ha>] --context <expected-kube-context>" >&2
   exit 2
+}
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --apply) APPLY=1; shift ;;
+    --environment) [[ $# -ge 2 ]] || usage; ENVIRONMENT="$2"; shift 2 ;;
+    --profile) [[ $# -ge 2 ]] || usage; PROFILE="$2"; shift 2 ;;
+    --context) [[ $# -ge 2 ]] || usage; EXPECTED_CONTEXT="$2"; shift 2 ;;
+    -h|--help) usage ;;
+    *) usage ;;
+  esac
+done
+
+[[ "$APPLY" -eq 1 ]] || {
+  echo "refusing to mutate a cluster without explicit --apply" >&2
+  usage
 }
 
 case "$ENVIRONMENT" in development|staging|production) ;; *) usage ;; esac
@@ -23,6 +41,13 @@ case "$PROFILE" in
   *) usage ;;
 esac
 [[ -n "$EXPECTED_CONTEXT" ]] || usage
+declared_profile="$(awk '$1 == "path:" && $2 ~ /^bootstrap\/profiles\// {print $2}' \
+  "$ROOT/applications/$ENVIRONMENT/argocd.yaml")"
+if [[ "$declared_profile" != "bootstrap/profiles/$PROFILE" ]]; then
+  echo "bootstrap profile '$PROFILE' disagrees with Git desired state '$declared_profile' for $ENVIRONMENT" >&2
+  echo "change and qualify applications/$ENVIRONMENT/argocd.yaml before bootstrapping a different profile" >&2
+  exit 2
+fi
 if [[ "$ENVIRONMENT" == production && "${MINDCLADE_PRODUCTION_BOOTSTRAP_CONFIRM:-}" != "production" ]]; then
   echo "set MINDCLADE_PRODUCTION_BOOTSTRAP_CONFIRM=production for a production bootstrap" >&2
   exit 2
@@ -46,7 +71,7 @@ if [[ "$actual_context" != "$EXPECTED_CONTEXT" ]]; then
   exit 2
 fi
 kubectl cluster-info >/dev/null
-kubectl auth can-i create namespaces >/dev/null | grep -qx yes || {
+kubectl auth can-i create namespaces | grep -qx yes || {
   echo "current identity cannot create namespaces" >&2
   exit 2
 }
@@ -118,7 +143,7 @@ kubectl create secret generic argocd-secret \
 kubectl create secret generic mindclade-github-repo-creds \
   -n argocd \
   --from-literal=type=git \
-  --from-literal=url=https://github.com/Mindclade \
+  --from-literal=url=https://github.com/mindclade \
   --from-file=githubAppPrivateKey="$ARGOCD_GITHUB_APP_PRIVATE_KEY_FILE" \
   --from-file=githubAppID="$ARGOCD_GITHUB_APP_ID_FILE" \
   --from-file=githubAppInstallationID="$ARGOCD_GITHUB_APP_INSTALLATION_ID_FILE" \
@@ -129,9 +154,18 @@ kubectl create secret generic mindclade-github-repo-creds \
 kubectl apply --server-side -f bootstrap-project.yaml
 kubectl apply --server-side -f "argocd-config-${ENVIRONMENT}.yaml"
 
+# The upstream installation creates a one-time local-admin password Secret. Mindclade disables
+# local admin in argocd-cm and uses governed SSO, so retaining that credential creates an unused
+# recovery path. Cluster-admin recovery remains possible by rerunning this audited bootstrap.
+kubectl delete secret -n argocd argocd-initial-admin-secret --ignore-not-found
+
 root_manifest="$(mktemp)"
 trap 'rm -f "$root_manifest"' EXIT
+# These are intentionally literal template expressions consumed by envsubst and the
+# unresolved-variable guard, not shell expansions.
+# shellcheck disable=SC2016
 MINDCLADE_ENVIRONMENT="$ENVIRONMENT" envsubst '${MINDCLADE_ENVIRONMENT}' < root-app.yaml > "$root_manifest"
+# shellcheck disable=SC2016
 if grep -q '\${' "$root_manifest"; then
   echo "unresolved template variable remains in root application" >&2
   exit 1
@@ -152,4 +186,8 @@ for resource in \
 done
 
 kubectl get -n argocd "application/root-${ENVIRONMENT}" >/dev/null
+if kubectl get secret -n argocd argocd-initial-admin-secret >/dev/null 2>&1; then
+  echo "initial Argo CD local-admin credential still exists after SSO bootstrap" >&2
+  exit 1
+fi
 printf 'Argo CD bootstrap applied for %s (%s) to context %s.\n' "$ENVIRONMENT" "$PROFILE" "$actual_context"

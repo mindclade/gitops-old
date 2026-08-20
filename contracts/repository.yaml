@@ -1,7 +1,7 @@
 # Copyright © 2026 Mindclade, LLC. All Rights Reserved.
 # Mindclade Proprietary and Confidential.
 # SPDX-License-Identifier: LicenseRef-Mindclade-Proprietary
-#
+
 # MINDCLADE CONFIDENTIAL - PROPRIETARY AND TRADE SECRET
 # Copyright (c) 2026 Mindclade. All rights reserved.
 ---
@@ -9,6 +9,11 @@ schema_version: 1
 repository: gitops
 repository_class: production-control
 visibility: internal
+github:
+  enterprise_url: https://github.com/enterprises/mindclade
+  organization_url: https://github.com/mindclade
+  repository_index_url: https://github.com/orgs/mindclade/repositories
+  repository_url: https://github.com/mindclade/gitops
 authority:
   - argocd-installation
   - argocd-configuration
@@ -21,12 +26,21 @@ forbidden_authority:
   - application-source
   - plaintext-secrets
 required_paths:
+  - .kubernetes-version
   - bootstrap/argocd-install.yaml
+  - bootstrap/profiles/standard/kustomization.yaml
+  - bootstrap/profiles/ha/kustomization.yaml
   - bootstrap/root-app.yaml
   - applications
+  - deployments
   - projects
+  - projects/argocd-administration.yaml
   - policy
   - overlays/production.yaml
+  - docs/disaster-recovery.md
+  - docs/argocd-upgrade.md
+  - docs/failed-sync.md
+  - docs/rollback.md
 forbidden_paths:
   - .terraform
   - .terragrunt-cache

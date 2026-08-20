@@ -7,8 +7,8 @@ what the cluster enforces should be readable in this repository, not fetched at 
 time from a moving reference.
 
 A constraint whose ConstraintTemplate is absent does not fail loudly — it fails to
-apply, and the control silently does not exist. Vendoring makes `gator test` able to
-evaluate every constraint in `../constraints/` without a cluster.
+apply, and the control silently does not exist. CI therefore proves that every active
+constraint has a first-party or explicitly deployed vendored template.
 
 ## Provenance
 
@@ -17,6 +17,11 @@ evaluate every constraint in `../constraints/` without a cluster.
 | `requiredannotations.yaml` | `library/general/requiredannotations` | `K8sRequiredAnnotations` |
 
 Pinned at commit `e4d3bd2448b20bc7910417f5b2cf18b63a0bd33c`.
+
+`requiredannotations.yaml` is retained as a checksum-reviewable upstream reference but is
+not deployed. Workload Identity uses the first-party `../require-workload-identity.yaml`,
+which permits namespace initialization while denying workloads that use `default` and
+checks every supported workload nesting.
 
 ## Four templates were removed from here. Do not re-vendor them.
 
