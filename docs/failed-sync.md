@@ -1,4 +1,11 @@
+<!-- mindclade-doc: runbook@1 -->
+
 # Failed Argo CD sync
+
+> **Use when:** an Application is `OutOfSync`, `Degraded`, or repeatedly fails reconciliation.
+> **Impact:** desired state or service health may be incomplete in the affected environment.
+> **Owner:** the AppProject owner with platform support.
+> **Escalate:** immediately for production impact, policy-control drift, or suspected credential use.
 
 Use this runbook when an Application is `OutOfSync`, `Degraded`, or repeatedly failing to
 reconcile. The normal repair path is a reviewed Git change; do not use an interactive sync or edit
@@ -58,3 +65,15 @@ Classify the failure:
 An emergency live action requires the documented freeze/emergency bypass, an incident commander,
 exact scope, and immediate reconciliation back into Git. Capture the pre-change object and audit
 evidence. Revoke bypass access after containment and complete a post-incident review.
+
+## Verify recovery
+
+- The exact repairing commit renders successfully with the pinned toolchain.
+- Argo CD reports the Application synchronized and healthy through the retry window.
+- Kubernetes events and controller logs contain no recurring cause.
+- The service acceptance check passes for the original failure path.
+- Any emergency mutation is represented in Git and temporary access has been revoked.
+
+Escalate when ownership is unclear, evidence suggests an admission or credential control has
+drifted, or forward recovery would alter persistent data. Preserve the failed and repairing commits,
+operation IDs, events, artifact digest, and incident timeline for handoff.

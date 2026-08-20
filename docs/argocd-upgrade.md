@@ -1,4 +1,10 @@
-# Argo CD upgrade
+<!-- mindclade-doc: how-to@1 -->
+
+# Upgrade Argo CD
+
+> **Audience:** platform operators upgrading the GitOps control plane.
+> **Outcome:** replace both vendored profiles from one verified upstream release and promote them
+> through development, staging, and production with a tested recovery decision.
 
 Argo CD is installed once by `bootstrap/bootstrap.sh`, then reconciles its pinned upstream
 installation through `argocd-self-management`. Terraform owns only cloud prerequisites.
@@ -47,3 +53,13 @@ If reconciliation fails, do not force-sync or weaken the administration AppProje
 `docs/failed-sync.md`. Revert the protected Git change only when CRD/data compatibility permits;
 otherwise perform an explicitly reviewed forward recovery. The cold-start script remains the
 recovery path after complete Argo loss, not the routine upgrade mechanism.
+
+## Completion criteria
+
+- Both vendored profiles identify the same immutable upstream version and pass checksum/provenance
+  validation.
+- Development and staging prove reconciliation, RBAC, repository access, notifications, metrics,
+  restart behavior, and rollback or forward recovery.
+- Production controllers and all existing Applications return healthy before the change closes.
+- The change record retains the versions, commits, validation output, observations, and named
+  recovery owner.
