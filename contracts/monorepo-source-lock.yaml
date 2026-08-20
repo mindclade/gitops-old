@@ -1,0 +1,22 @@
+# Copyright © 2026 Mindclade, LLC. All Rights Reserved.
+# Mindclade Proprietary and Confidential.
+# SPDX-License-Identifier: LicenseRef-Mindclade-Proprietary
+
+---
+apiVersion: mindclade.dev/v2
+kind: MonorepoSourceLock
+metadata:
+  name: kubernetes-v0.2.0
+spec:
+  repository: mindclade/mindclade-internal-monorepo
+  ref: v0.2.0
+  resolution:
+    status: unresolved
+    commitSha: null
+    reason: protected-v0.2.0-tag-not-published
+  interfaceContract:
+    path: infra/terraform/governance/module-interfaces.json
+    sha256: null
+  activation:
+    allowed: false
+    blocker: resolve-protected-tag-and-byte-lock-interface-contract

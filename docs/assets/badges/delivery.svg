@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" role="img" aria-label="delivery: Argo CD" width="141" height="24" viewBox="0 0 141 24">
+  <title>delivery: Argo CD</title>
+  <defs><clipPath id="badge-shape"><rect width="141" height="24" rx="4"/></clipPath></defs>
+  <g clip-path="url(#badge-shape)">
+    <rect width="141" height="24" fill="#201C24"/>
+    <path d="M74 0h67v24H74z" fill="#B5673F"/>
+  </g>
+  <g fill="#F2EFE8" font-family="Verdana,DejaVu Sans,sans-serif" font-size="11" text-anchor="middle">
+    <text x="37" y="16">delivery</text>
+    <text x="107.5" y="16" font-weight="700">Argo CD</text>
+  </g>
+</svg>

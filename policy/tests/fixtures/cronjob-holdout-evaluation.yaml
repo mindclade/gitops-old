@@ -1,0 +1,22 @@
+---
+# Copyright © 2026 Mindclade, LLC. All Rights Reserved.
+# Mindclade Proprietary and Confidential.
+# SPDX-License-Identifier: LicenseRef-Mindclade-Proprietary
+
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: holdout-evaluation
+  namespace: research-evaluation
+spec:
+  schedule: "0 2 * * *"
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          serviceAccountName: eval-runner
+          restartPolicy: Never
+          containers:
+            - name: evaluator
+              image: europe-west4-docker.pkg.dev/mc/containers/evaluator@sha256:0000000000000000000000000000000000000000000000000000000000000000
+              args: ["--dataset=gs://mc-holdout-eval/cases.jsonl"]

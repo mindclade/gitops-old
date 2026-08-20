@@ -1,0 +1,46 @@
+# Copyright © 2026 Mindclade, LLC. All Rights Reserved.
+# Mindclade Proprietary and Confidential.
+# SPDX-License-Identifier: LicenseRef-Mindclade-Proprietary
+
+---
+apiVersion: mindclade.dev/v2
+kind: InfrastructureQualificationRunInventory
+metadata:
+  name: platform-clusters
+spec:
+  concurrency: exactly-one-environment-cluster-profile-run
+  activationClass: qualification
+  productActivationAllowed: false
+  normalKueueMutationAllowed: false
+  restoreBeforeNextRun: {namespaceState: blocked, quota: zero, jobs: suspended}
+  clusters:
+    - id: development-platform
+      qualificationRole: combined
+      allowedProfiles: [cpu, h100, h200]
+      selectedProfile: null
+      runId: null
+      state: blocked
+    - id: production-compute
+      qualificationRole: compute
+      allowedProfiles: [cpu, h100, h200]
+      selectedProfile: null
+      runId: null
+      state: blocked
+    - id: production-serving
+      qualificationRole: serving
+      allowedProfiles: [cpu]
+      selectedProfile: null
+      runId: null
+      state: blocked
+    - id: staging-compute
+      qualificationRole: compute
+      allowedProfiles: [cpu, h100, h200]
+      selectedProfile: null
+      runId: null
+      state: blocked
+    - id: staging-serving
+      qualificationRole: serving
+      allowedProfiles: [cpu]
+      selectedProfile: null
+      runId: null
+      state: blocked

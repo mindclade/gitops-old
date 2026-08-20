@@ -17,6 +17,12 @@ exemptions.yaml     Expiring, reviewer-signed holes.
 A template defines *what* can be checked. A constraint decides *where* it applies and whether
 a violation warns or blocks.
 
+Application, data, research, serving, and partner service accounts remain subject to the
+Workload Identity constraint. Pinned platform-operator namespaces are excluded when their
+controllers need only a projected Kubernetes API token. That exclusion grants no Google IAM;
+any future Google API access requires an exact KSA/GSA binding in the operator's owning source
+and separate qualification.
+
 **A constraint whose template is missing does not fail loudly.** It fails to apply, and the
 control silently does not exist. That is why library templates are vendored rather than
 assumed present, and why `validate.yml` checks every constraint kind has a template before it
@@ -36,6 +42,12 @@ signature admission controllers:
 GitHub Actions verifies the producer identity and evidence before merge. Binary Authorization
 is the single runtime cryptographic gate. A second Sigstore admission controller is prohibited
 unless Mindclade approves a distinct requirement and failure model in a new architecture decision.
+
+Mindclade-produced application images always require their governed attestation. The only
+temporary unsigned class is the source-qualified upstream Argo control plane: four exact digests
+declared in `image-policy.yaml`, repeated exactly in Gatekeeper and the staging/production Binary
+Authorization policies, independently security-reviewed, and expired within 90 days. A namespace
+or registry-prefix exception is not permitted.
 
 ## Policy rollout: dryrun → deny
 
@@ -86,7 +98,9 @@ In `exemptions.yaml`. Every one has:
 
 - **An expiry.** Not optional. An exemption with no expiry is a deleted constraint with extra
   steps.
-- **A reviewer.** Named, from `@security`.
+- **An owner and reviewer.** A named accountable owner and a named approver from `@security`.
+- **A grant date and exact scope.** One namespace and one workload, without wildcards; the
+  expiry may be at most 90 days after the grant.
 - **A reason.** Specific enough that someone can tell in three months whether it still holds.
 - **A ticket.** Linking to the work that removes the need for it.
 
@@ -95,13 +109,19 @@ one should require someone to look at it again.
 
 ## The two constraints that matter most
 
-**`require-image-policy`** — an image must be pinned by digest and come from an approved registry. Binary Authorization separately requires the deployment attestation issued only after the signer verifies independent Buildkite build/provenance and qualification evidence. Restricted biological workloads may have an additional explicitly scoped biosecurity policy; it is not a global platform-image prerequisite. The structural and cryptographic controls have deliberately distinct responsibilities.
+**`require-image-policy`** — an image must be pinned by digest and come from an approved registry. Binary Authorization separately requires the deployment attestation issued only after the signer verifies independent ARC build/provenance and qualification evidence. Restricted biological workloads may have an additional explicitly scoped biosecurity policy; it is not a global platform-image prerequisite. The structural and cryptographic controls have deliberately distinct responsibilities.
 
 **`deny-holdout-bucket-mount`** — no training workload may mount the held-out evaluation
 bucket. Benchmark numbers are worthless if the holdout set leaked into training, and the leak
 is invisible afterwards: the model just looks better than it is. There is also an IAM DENY
 policy on the bucket in `infrastructure-live`. Two independent controls, because this one
 cannot be detected after the fact.
+
+The admission rule detects direct inline GCS CSI bucket names and literal bucket references
+in container/init-container environment values, commands, and arguments. Kubernetes admission
+cannot resolve the contents of Secrets, ConfigMaps, or PVC backends. The bucket IAM deny is
+therefore the authoritative boundary for those indirect paths; a clean Gatekeeper result is
+not evidence that IAM can be skipped.
 
 ## Testing a constraint before shipping it
 

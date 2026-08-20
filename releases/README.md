@@ -18,7 +18,7 @@ A record binds one immutable `repository@sha256:digest` to:
 - its full source commit and builder invocation;
 - checksummed SBOM and provenance artifacts;
 - passing vulnerability and qualification evidence;
-- distinct Buildkite build/provenance and qualification attestors; and
+- distinct ARC build/provenance and qualification attestors; and
 - the protected GitHub deployment attestor and immutable signer workflow identity.
 
 GitOps owns selection and validation, not evidence creation. The dedicated deployment signer

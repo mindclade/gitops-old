@@ -82,6 +82,10 @@ spec:
         }
 
         input_containers contains c if {
+          some c in input.review.object.spec.ephemeralContainers
+        }
+
+        input_containers contains c if {
           some c in input.review.object.spec.template.spec.containers
         }
 
@@ -93,8 +97,12 @@ spec:
           some c in input.review.object.spec.jobTemplate.spec.template.spec.containers
         }
 
+        input_containers contains c if {
+          some c in input.review.object.spec.jobTemplate.spec.template.spec.initContainers
+        }
+
         has_digest(image) if {
-          contains(image, "@sha256:")
+          regex.match("@sha256:[0-9a-f]{64}$", image)
         }
 
         from_allowed_registry(image) if {

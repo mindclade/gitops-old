@@ -1,0 +1,17 @@
+# Copyright © 2026 Mindclade, LLC. All Rights Reserved.
+# Mindclade Proprietary and Confidential.
+# SPDX-License-Identifier: LicenseRef-Mindclade-Proprietary
+
+---
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - base.yaml
+commonAnnotations:
+  mindclade.dev/qualification-overlay-state: blocked
+labels:
+  - includeSelectors: false
+    pairs:
+      mindclade.dev/cluster-role: compute
+      mindclade.dev/environment: production
+      mindclade.dev/qualification-role: compute

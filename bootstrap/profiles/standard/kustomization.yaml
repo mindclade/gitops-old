@@ -7,6 +7,9 @@ apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 resources:
   - ../../argocd-install.yaml
+components:
+  - ../../components/immutable-images
+  - ../../components/control-plane-baseline
 patches:
   # These three objects have distinct owners after cold start: the environment root owns SSO
   # and RBAC ConfigMaps, and the audited bootstrap path owns credential fields in argocd-secret.

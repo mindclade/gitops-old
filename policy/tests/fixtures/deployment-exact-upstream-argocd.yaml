@@ -1,0 +1,23 @@
+---
+# Copyright © 2026 Mindclade, LLC. All Rights Reserved.
+# Mindclade Proprietary and Confidential.
+# SPDX-License-Identifier: LicenseRef-Mindclade-Proprietary
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: exact-upstream-argocd
+  namespace: argocd
+spec:
+  selector:
+    matchLabels: {app: argocd-server}
+  template:
+    metadata:
+      labels: {app: argocd-server}
+    spec:
+      containers:
+        - name: argocd-server
+          image: quay.io/argoproj/argocd@sha256:0deb1a1c917629b960ead995ae3b6069450a866992676599658687ef9a641ee8
+          resources:
+            limits: {cpu: 500m, memory: 512Mi}
+            requests: {cpu: 100m, memory: 128Mi}

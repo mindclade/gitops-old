@@ -36,8 +36,8 @@ done
 
 case "$ENVIRONMENT" in development|staging|production) ;; *) usage ;; esac
 case "$PROFILE" in
-  standard) INSTALL=argocd-install.yaml ;;
-  ha) INSTALL=argocd-install-ha.yaml ;;
+  standard) INSTALL=argocd-install.yaml; INSTALL_PROFILE=install-profiles/standard ;;
+  ha) INSTALL=argocd-install-ha.yaml; INSTALL_PROFILE=install-profiles/ha ;;
   *) usage ;;
 esac
 [[ -n "$EXPECTED_CONTEXT" ]] || usage
@@ -53,7 +53,7 @@ if [[ "$ENVIRONMENT" == production && "${MINDCLADE_PRODUCTION_BOOTSTRAP_CONFIRM:
   exit 2
 fi
 
-for command in kubectl envsubst awk mktemp stat sort wc; do
+for command in kubectl kustomize envsubst awk mktemp stat sort wc; do
   command -v "$command" >/dev/null || { echo "required command is missing: $command" >&2; exit 2; }
 done
 if command -v sha256sum >/dev/null; then
@@ -119,12 +119,33 @@ actual_hash="$(hash_file "$INSTALL")"
   exit 1
 }
 
+temporary_files=()
+cleanup() {
+  if (( ${#temporary_files[@]} > 0 )); then
+    rm -f -- "${temporary_files[@]}"
+  fi
+}
+trap cleanup EXIT
+
+install_manifest="$(mktemp)"
+temporary_files+=("$install_manifest")
+kustomize build --load-restrictor LoadRestrictionsNone "$INSTALL_PROFILE" > "$install_manifest"
+image_count="$(awk '$1 == "image:" {count++} END {print count + 0}' "$install_manifest")"
+if (( image_count == 0 )); then
+  echo "rendered Argo CD install profile contains no images" >&2
+  exit 1
+fi
+if awk '$1 == "image:" {print $2}' "$install_manifest" | grep -vqE '@sha256:[0-9a-f]{64}$'; then
+  echo "refusing mutable image reference in rendered Argo CD install profile" >&2
+  exit 1
+fi
+
 kubectl create namespace argocd --dry-run=client -o yaml | kubectl apply -f -
 kubectl label namespace argocd \
   app.kubernetes.io/managed-by=mindclade-gitops \
   mindclade.dev/environment="$ENVIRONMENT" \
   --overwrite
-kubectl apply -n argocd --server-side --force-conflicts -f "$INSTALL"
+kubectl apply -n argocd --server-side --force-conflicts -f "$install_manifest"
 
 for crd in applications.argoproj.io applicationsets.argoproj.io appprojects.argoproj.io; do
   kubectl wait --for=condition=Established "crd/${crd}" --timeout=5m
@@ -160,7 +181,7 @@ kubectl apply --server-side -f "argocd-config-${ENVIRONMENT}.yaml"
 kubectl delete secret -n argocd argocd-initial-admin-secret --ignore-not-found
 
 root_manifest="$(mktemp)"
-trap 'rm -f "$root_manifest"' EXIT
+temporary_files+=("$root_manifest")
 # These are intentionally literal template expressions consumed by envsubst and the
 # unresolved-variable guard, not shell expansions.
 # shellcheck disable=SC2016

@@ -2,12 +2,61 @@
 # Mindclade Proprietary and Confidential.
 # SPDX-License-Identifier: LicenseRef-Mindclade-Proprietary
 
-# Release-evidence exceptions are intentionally empty. GKE-managed system images are not
-# committed under rendered/ and therefore do not need a GitOps verification bypass. A future
-# third-party workload exception must be an exact digest, carry an owner/reason/expiry, and be
-# validated before this file is expanded.
+# This is the complete catalog of reviewed upstream GitOps control-plane bytes. These images
+# cannot carry Mindclade deployment attestations because Mindclade is not their producer. The
+# exception is cryptographically scoped to exact digests, expires, and is accepted only when
+# Gatekeeper and the applied staging/production Binary Authorization policies contain the same
+# set. Application and Mindclade-produced workload images remain attestation-only.
 ---
 apiVersion: mindclade.dev/v1
 kind: ImagePolicy
 spec:
-  unsigned: []
+  unsigned:
+    - image: ghcr.io/dexidp/dex@sha256:b8469881d3cb3a73001506f0d3aaefecb9c45d2311c1e0f405d8ac538316c59d
+      owner: "@mindclade/platform"
+      reason: Upstream Dex runtime pinned by the reviewed Argo CD payload.
+      scope:
+        component: argocd-control-plane
+        environments: [staging, production]
+      granted: "2026-08-20"
+      expires: "2026-11-18"
+      reviewer: "@mindclade/security"
+      approval: required-protected-security-review
+      change: protected-gitops-and-infrastructure-live-pull-requests
+      removal: Replace with a Mindclade-mirrored and deployment-attested digest.
+    - image: public.ecr.aws/docker/library/haproxy@sha256:e11f034e651603f10a365e5ad5a0321825e18eded9620e40c4f4d6ae58419bfe
+      owner: "@mindclade/platform"
+      reason: Upstream HAProxy runtime pinned by the source-qualified Argo CD HA profile.
+      scope:
+        component: argocd-control-plane
+        environments: [staging, production]
+      granted: "2026-08-20"
+      expires: "2026-11-18"
+      reviewer: "@mindclade/security"
+      approval: required-protected-security-review
+      change: protected-gitops-and-infrastructure-live-pull-requests
+      removal: Replace with a Mindclade-mirrored and deployment-attested digest.
+    - image: public.ecr.aws/docker/library/redis@sha256:08ad0b1d280850169a790dba1393ff7a90aef951fc19632cf4d3ce4f78e679ba
+      owner: "@mindclade/platform"
+      reason: Upstream Redis runtime pinned by the reviewed Argo CD payload.
+      scope:
+        component: argocd-control-plane
+        environments: [staging, production]
+      granted: "2026-08-20"
+      expires: "2026-11-18"
+      reviewer: "@mindclade/security"
+      approval: required-protected-security-review
+      change: protected-gitops-and-infrastructure-live-pull-requests
+      removal: Replace with a Mindclade-mirrored and deployment-attested digest.
+    - image: quay.io/argoproj/argocd@sha256:0deb1a1c917629b960ead995ae3b6069450a866992676599658687ef9a641ee8
+      owner: "@mindclade/platform"
+      reason: Upstream Argo CD runtime pinned by the reviewed vendored installation payloads.
+      scope:
+        component: argocd-control-plane
+        environments: [staging, production]
+      granted: "2026-08-20"
+      expires: "2026-11-18"
+      reviewer: "@mindclade/security"
+      approval: required-protected-security-review
+      change: protected-gitops-and-infrastructure-live-pull-requests
+      removal: Replace with a Mindclade-mirrored and deployment-attested digest.

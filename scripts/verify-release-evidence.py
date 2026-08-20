@@ -8,14 +8,19 @@
 from __future__ import annotations
 
 import argparse
+import datetime as dt
 import json
 import os
+import re
 import subprocess
 import sys
 import urllib.error
 import urllib.request
 from pathlib import Path
 from typing import Any
+
+
+DIGEST_IMAGE = re.compile(r"[^\s]+@sha256:[0-9a-f]{64}")
 
 
 def parse_args() -> argparse.Namespace:
@@ -81,6 +86,88 @@ def image_has_evidence(image: str, token: str, project: str, attestor: str) -> b
     return any(valid_occurrence(item, token, project, attestor) for item in occurrences)
 
 
+def policy(token: str, project: str) -> dict[str, Any]:
+    request = urllib.request.Request(
+        f"https://binaryauthorization.googleapis.com/v1/projects/{project}/policy",
+        headers={"Authorization": f"Bearer {token}"},
+        method="GET",
+    )
+    with urllib.request.urlopen(request, timeout=30) as response:
+        value = json.load(response)
+    if not isinstance(value, dict):
+        raise ValueError("Binary Authorization policy response is not an object")
+    return value
+
+
+def governed_exceptions(path: Path) -> dict[str, dict[str, Any]]:
+    value = json.loads(path.read_text(encoding="utf-8"))
+    if not isinstance(value, list):
+        raise ValueError("unsigned exceptions must be a JSON list")
+    today = dt.date.today()
+    result: dict[str, dict[str, Any]] = {}
+    for index, exception in enumerate(value):
+        if not isinstance(exception, dict):
+            raise ValueError(f"unsigned exception[{index}] is not an object")
+        image = str(exception.get("image", ""))
+        if not DIGEST_IMAGE.fullmatch(image) or image in result:
+            raise ValueError(f"unsigned exception[{index}] is not one unique exact digest")
+        if exception.get("owner") != "@mindclade/platform":
+            raise ValueError(f"unsigned exception[{index}] has the wrong owner")
+        if exception.get("reviewer") != "@mindclade/security":
+            raise ValueError(f"unsigned exception[{index}] has the wrong reviewer")
+        if exception.get("approval") != "required-protected-security-review":
+            raise ValueError(f"unsigned exception[{index}] lacks protected review")
+        if exception.get("scope") != {
+            "component": "argocd-control-plane",
+            "environments": ["staging", "production"],
+        }:
+            raise ValueError(f"unsigned exception[{index}] has the wrong scope")
+        for field in ("reason", "change", "removal"):
+            if not str(exception.get(field, "")).strip():
+                raise ValueError(f"unsigned exception[{index}] is missing {field}")
+        granted = dt.date.fromisoformat(str(exception.get("granted", "")))
+        expires = dt.date.fromisoformat(str(exception.get("expires", "")))
+        if expires < today or expires < granted or (expires - granted).days > 90:
+            raise ValueError(f"unsigned exception[{index}] is expired or too broad in time")
+        result[image] = exception
+    return result
+
+
+def policy_errors(
+    value: dict[str, Any], exceptions: set[str], project: str, attestor: str
+) -> list[str]:
+    errors: list[str] = []
+    if value.get("globalPolicyEvaluationMode") != "ENABLE":
+        errors.append("global policy evaluation is not enabled")
+    default = value.get("defaultAdmissionRule") or {}
+    if default.get("evaluationMode") != "REQUIRE_ATTESTATION":
+        errors.append("default rule does not require attestation")
+    if default.get("enforcementMode") != "ENFORCED_BLOCK_AND_AUDIT_LOG":
+        errors.append("default rule is not block-and-audit enforced")
+    required_attestors = set(default.get("requireAttestationsBy") or [])
+    expected_attestor = f"projects/{project}/attestors/{attestor}"
+    if required_attestors != {expected_attestor}:
+        errors.append("default rule does not require exactly the deployment attestor")
+    if value.get("clusterAdmissionRules"):
+        errors.append("cluster admission rules must be empty")
+    if value.get("kubernetesNamespaceAdmissionRules"):
+        errors.append("namespace admission rules must be empty")
+    applied_exceptions = {
+        str(item.get("namePattern", ""))
+        for item in value.get("admissionWhitelistPatterns") or []
+        if isinstance(item, dict)
+    }
+    if applied_exceptions != exceptions:
+        missing = sorted(exceptions - applied_exceptions)
+        extra = sorted(applied_exceptions - exceptions)
+        errors.append(
+            f"applied exact-digest exceptions disagree with GitOps; missing={missing}, extra={extra}"
+        )
+    if any("*" in image or not DIGEST_IMAGE.fullmatch(image) for image in applied_exceptions):
+        errors.append("applied exception is not one exact digest")
+    return errors
+
+
 def lines(path: Path) -> list[str]:
     return [
         line.strip()
@@ -113,11 +200,21 @@ def main() -> int:
         ).stdout.strip()
         if not token:
             raise ValueError("gcloud returned an empty access token")
-        unsigned = set(lines(args.unsigned_exceptions))
+        unsigned = governed_exceptions(args.unsigned_exceptions)
+        active_images = set(lines(args.images))
+        orphaned = set(unsigned) - active_images
+        if orphaned:
+            raise ValueError(f"unsigned exceptions are not active control-plane images: {sorted(orphaned)}")
+        applied_policy = policy(token, project)
+        failures = policy_errors(applied_policy, set(unsigned), project, attestor)
+        if failures:
+            for failure in failures:
+                print(f"::error::Binary Authorization policy: {failure}", file=sys.stderr)
+            return 1
         status = 0
-        for image in lines(args.images):
+        for image in sorted(active_images):
             if image in unsigned:
-                print(f"approved third-party digest: {image}")
+                print(f"verified applied exact-digest control-plane exception: {image}")
             elif image_has_evidence(image, token, project, attestor):
                 print(f"verified governed deployment attestation: {image}")
             else:

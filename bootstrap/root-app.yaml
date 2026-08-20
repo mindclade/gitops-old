@@ -8,8 +8,6 @@ kind: Application
 metadata:
   name: root-${MINDCLADE_ENVIRONMENT}
   namespace: argocd
-  finalizers:
-    - resources-finalizer.argocd.argoproj.io
 spec:
   project: bootstrap
   source:

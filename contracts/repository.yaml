@@ -26,8 +26,13 @@ forbidden_authority:
   - application-source
   - plaintext-secrets
 required_paths:
+  - AGENTS.md
   - .kubernetes-version
   - bootstrap/argocd-install.yaml
+  - bootstrap/argocd-install.provenance.json
+  - bootstrap/components/immutable-images/kustomization.yaml
+  - bootstrap/install-profiles/standard/kustomization.yaml
+  - bootstrap/install-profiles/ha/kustomization.yaml
   - bootstrap/profiles/standard/kustomization.yaml
   - bootstrap/profiles/ha/kustomization.yaml
   - bootstrap/root-app.yaml
@@ -40,6 +45,7 @@ required_paths:
   - docs/disaster-recovery.md
   - docs/argocd-upgrade.md
   - docs/failed-sync.md
+  - docs/freeze-and-emergency.md
   - docs/rollback.md
 forbidden_paths:
   - .terraform

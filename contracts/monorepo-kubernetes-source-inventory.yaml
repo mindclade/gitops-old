@@ -1,0 +1,29 @@
+# Copyright © 2026 Mindclade, LLC. All Rights Reserved.
+# Mindclade Proprietary and Confidential.
+# SPDX-License-Identifier: LicenseRef-Mindclade-Proprietary
+
+---
+apiVersion: mindclade.dev/v1
+kind: MonorepoKubernetesSourceInventory
+metadata: {name: v0.2.0-render-interface}
+spec:
+  repository: mindclade/mindclade-internal-monorepo
+  ref: v0.2.0
+  packages:
+    infra/kubernetes/base: kustomize
+    infra/kubernetes/platform/jobset: kustomize
+    infra/kubernetes/platform/jobset/chart: helm
+    infra/kubernetes/platform/kueue: kustomize
+    infra/kubernetes/platform/kueue/chart: helm
+    infra/kubernetes/platform/observability: kustomize
+    infra/kubernetes/platform/operator-system/foundation: directory
+    infra/kubernetes/platform/qualification: kustomize
+    infra/kubernetes/platform/security: kustomize
+    infra/kubernetes/policies: kustomize
+  qualificationTemplates:
+    package: infra/kubernetes/platform/qualification
+    profileOrder: [cpu, h100, h200]
+    canonicalDigest: sha256:d73ca8be8f74a31fce8782439ab08e00ff7ff57e9fa90bf3c13bc3b6edb5c727
+    digestAlgorithm: canonical-json-v1
+    sourceLockRef: v0.2.0
+  liveEnvironmentCompositionAllowed: false

@@ -9,8 +9,9 @@ metadata:
   name: mindcladedenyholdoutmount
   annotations:
     description: >-
-      No training workload may reach the held-out evaluation data, by any mount, volume,
-      environment variable, or argument.
+      No training workload may directly reference held-out evaluation data through an inline
+      GCS volume, literal environment value, command, or argument. Bucket IAM remains the
+      authoritative control for indirect references such as PVCs and Secret-backed values.
 spec:
   crd:
     spec:
@@ -90,6 +91,18 @@ spec:
           )
         }
 
+        violation contains {"msg": msg} if {
+          some container in input_containers
+          some command in container.command
+          some bucket in input.parameters.holdoutBuckets
+          contains(command, bucket)
+          not sa_is_allowed
+          msg := sprintf(
+            "container %q references holdout bucket %q in its command.",
+            [container.name, bucket],
+          )
+        }
+
         sa_is_allowed if {
           sa := object.get(input.review.object.spec, "serviceAccountName", "")
           sa in input.parameters.allowedServiceAccounts
@@ -100,8 +113,21 @@ spec:
           sa in input.parameters.allowedServiceAccounts
         }
 
+        sa_is_allowed if {
+          sa := object.get(input.review.object.spec.jobTemplate.spec.template.spec, "serviceAccountName", "")
+          sa in input.parameters.allowedServiceAccounts
+        }
+
         input_containers contains c if {
           some c in input.review.object.spec.containers
+        }
+
+        input_containers contains c if {
+          some c in input.review.object.spec.initContainers
+        }
+
+        input_containers contains c if {
+          some c in input.review.object.spec.ephemeralContainers
         }
 
         input_containers contains c if {
@@ -109,7 +135,15 @@ spec:
         }
 
         input_containers contains c if {
+          some c in input.review.object.spec.template.spec.initContainers
+        }
+
+        input_containers contains c if {
           some c in input.review.object.spec.jobTemplate.spec.template.spec.containers
+        }
+
+        input_containers contains c if {
+          some c in input.review.object.spec.jobTemplate.spec.template.spec.initContainers
         }
 
         input_volumes contains v if {

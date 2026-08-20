@@ -14,6 +14,11 @@ on:
       - 'deployments/**'
       - 'releases/**'
       - 'image-policy.yaml'
+      - 'bootstrap/argocd-install.provenance.json'
+      - 'bootstrap/components/**'
+      - 'bootstrap/install-profiles/**'
+      - 'bootstrap/profiles/**'
+      - 'policy/constraints/require-image-policy.yaml'
       - '.github/workflows/provenance.yml'
   schedule:
     - cron: "41 4 * * *"
@@ -73,11 +78,11 @@ jobs:
             experimental-features = nix-command flakes
             accept-flake-config = false
 
-      - name: Read third-party digest exemptions
+      - name: Read governed control-plane digest exceptions
         run: |
           set -euo pipefail
-          nix develop ./.trusted#ci --command yq -r '.spec.unsigned[]?.image // empty' .candidate/image-policy.yaml \
-            | sort -u > unsigned.txt
+          nix develop ./.trusted#ci --command yq -o=json '.spec.unsigned' \
+            .candidate/image-policy.yaml > unsigned-exceptions.json
 
       - name: Collect and validate image references
         run: |
@@ -87,7 +92,11 @@ jobs:
           nix develop ./.trusted#ci --command yq -r \
             '.spec.applications[]?.images[]? | .repository + "@" + .digest' \
             .candidate/deployments/*.yaml > selected-images.txt
-          sort -u rendered-images.txt selected-images.txt > images.txt
+          nix develop ./.trusted#ci --command yq -r \
+            '.images[] | .name + "@" + .digest' \
+            .candidate/bootstrap/components/immutable-images/kustomization.yaml \
+            > control-plane-images.txt
+          sort -u rendered-images.txt selected-images.txt control-plane-images.txt > images.txt
           status=0
           while IFS= read -r img; do
             [[ -z "$img" ]] && continue
@@ -101,9 +110,11 @@ jobs:
           BINAUTHZ_DEPLOYMENT_ATTESTOR: ${{ vars.BINAUTHZ_DEPLOYMENT_ATTESTOR }}
         run: |
           set -euo pipefail
-          python3 .trusted/scripts/validate-release-metadata.py \
+          nix develop ./.trusted#ci --command python3 \
+            .trusted/scripts/validate-release-metadata.py \
             --root .candidate \
             --images-file images.txt \
+            --unsigned-exceptions-file unsigned-exceptions.json \
             --expected-deployment-attestor-project "$BINAUTHZ_DEPLOYMENT_ATTESTOR_PROJECT" \
             --expected-deployment-attestor "$BINAUTHZ_DEPLOYMENT_ATTESTOR"
 
@@ -120,7 +131,8 @@ jobs:
           BINAUTHZ_DEPLOYMENT_ATTESTOR: ${{ vars.BINAUTHZ_DEPLOYMENT_ATTESTOR }}
         run: >-
           nix develop ./.trusted#evidence --command
-          python3 .trusted/scripts/verify-release-evidence.py images.txt unsigned.txt
+          python3 .trusted/scripts/verify-release-evidence.py
+          images.txt unsigned-exceptions.json
 
   incident:
     name: Open incident for evidence drift

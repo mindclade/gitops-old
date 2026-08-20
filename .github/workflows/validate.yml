@@ -111,7 +111,36 @@ jobs:
           for profile in standard ha; do
             nix develop .#ci --command kustomize build \
               --load-restrictor LoadRestrictionsNone \
+              "bootstrap/install-profiles/$profile" > "$stage/argocd-install-$profile.yaml"
+            nix develop .#ci --command kustomize build \
+              --load-restrictor LoadRestrictionsNone \
               "bootstrap/profiles/$profile" > "$stage/argocd-$profile.yaml"
+            for rendered_profile in \
+              "$stage/argocd-install-$profile.yaml" \
+              "$stage/argocd-$profile.yaml"; do
+              image_count="$(awk '$1 == "image:" {count++} END {print count + 0}' "$rendered_profile")"
+              if (( image_count == 0 )); then
+                echo "::error::$rendered_profile contains no images"
+                exit 1
+              fi
+              if awk '$1 == "image:" {print $2}' "$rendered_profile" \
+                | grep -vqE '@sha256:[0-9a-f]{64}$'; then
+                echo "::error::$rendered_profile contains a mutable image reference"
+                exit 1
+              fi
+              if nix develop .#ci --command yq -e \
+                'select((.kind == "Deployment" or .kind == "StatefulSet") and .metadata.namespace != "argocd")' \
+                "$rendered_profile" >/dev/null 2>&1; then
+                echo "::error::$rendered_profile contains an Argo workload outside the explicit argocd namespace"
+                exit 1
+              fi
+              if nix develop .#ci --command yq -e \
+                'select(.kind == "Deployment" or .kind == "StatefulSet") | (.spec.template.spec.containers[]?, .spec.template.spec.initContainers[]?) | select(.resources.requests.cpu == null or .resources.requests.memory == null or .resources.limits.cpu == null or .resources.limits.memory == null)' \
+                "$rendered_profile" >/dev/null 2>&1; then
+                echo "::error::$rendered_profile contains an unqualified container resource budget"
+                exit 1
+              fi
+            done
             for separately_owned in \
               argocd-cm argocd-rbac-cm argocd-secret argocd-notifications-secret; do
               if nix develop .#ci --command yq -e \
@@ -190,6 +219,20 @@ jobs:
               --filename=policy/constraints \
               --filename="rendered/$env" || status=1
           done
+          stage="$(mktemp -d)"
+          trap 'rm -rf "$stage"' EXIT
+          for profile in standard ha; do
+            for profile_type in install-profiles profiles; do
+              output="$stage/argocd-$profile_type-$profile.yaml"
+              nix develop .#ci --command kustomize build \
+                --load-restrictor LoadRestrictionsNone \
+                "bootstrap/$profile_type/$profile" > "$output"
+              nix develop .#ci --command gator test \
+                --filename=policy/templates \
+                --filename=policy/constraints \
+                --filename="$output" || status=1
+            done
+          done
           exit "$status"
 
   exemptions:
@@ -204,43 +247,7 @@ jobs:
       - name: Fail on an expired exemption
         # Deliberate friction. An exemption that quietly outlives its expiry is a permanent
         # hole with a date on it; renewing one should require somebody to look at it again.
-        run: |
-          set -euo pipefail
-          python3 - <<'PY'
-          import datetime, sys, yaml, pathlib
-
-          path = pathlib.Path("policy/exemptions.yaml")
-          doc = yaml.safe_load(path.read_text()) or {}
-          exemptions = (doc.get("spec") or {}).get("exemptions") or []
-
-          today = datetime.date.today()
-          expired, malformed = [], []
-
-          for e in exemptions:
-              name = f"{e.get('constraint','?')} / {(e.get('scope') or {}).get('workload','?')}"
-              raw = e.get("expires")
-              if not raw:
-                  malformed.append(f"{name}: no expiry")
-                  continue
-              exp = raw if isinstance(raw, datetime.date) else datetime.date.fromisoformat(str(raw))
-              if exp < today:
-                  expired.append(f"{name}: expired {exp}")
-              elif (exp - today).days <= 14:
-                  print(f"::warning::exemption expires in {(exp - today).days} days — {name}")
-              if not e.get("reviewer"):
-                  malformed.append(f"{name}: no reviewer")
-              if not e.get("ticket"):
-                  malformed.append(f"{name}: no ticket")
-
-          for m in malformed:
-              print(f"::error::malformed exemption — {m}")
-          for x in expired:
-              print(f"::error::expired exemption — {x}")
-
-          if expired or malformed:
-              sys.exit(1)
-          print(f"{len(exemptions)} exemption(s), all valid.")
-          PY
+        run: python3 scripts/validate-repository.py
 
   no-drift:
     name: rendered/ carries generated headers

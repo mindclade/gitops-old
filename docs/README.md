@@ -13,7 +13,10 @@
 | Import or activate the control plane | [Initial import](initial-import.md) | Validate generated state and bootstrap one environment |
 | Activate a workload | [Workload activation](workload-activation.md) | Prove artifact, policy, and destination readiness |
 | Diagnose reconciliation failure | [Failed sync](failed-sync.md) | Classify the owner and repair the authoritative source |
+| Make an emergency frozen change | [Freeze and emergency](freeze-and-emergency.md) | Authorize one reviewed merge and audited sync without a standing bypass |
+| Qualify production Argo CD | [Production qualification](production-qualification.md) | Separate source checks from applied policy, admission, recovery, and freeze evidence |
 | Recover Argo CD | [Disaster recovery](disaster-recovery.md) | Recreate the control plane from pinned Git state |
+| Revoke a compromised artifact | [Compromised artifact revocation](compromised-artifact-revocation.md) | Freeze promotion, deny the digest, and restore a last-known-good selection |
 
 ## Getting started
 
@@ -35,9 +38,15 @@
 ## Operations
 
 - [Failed sync](failed-sync.md) — read-only triage and Git-mediated repair.
+- [Freeze and emergency change](freeze-and-emergency.md) — operate the independent GitHub and
+  Argo deny gates without granting a standing manual-sync bypass.
 - [Rollback](rollback.md) — restore the last compatible reviewed digest.
 - [Argo CD upgrade](argocd-upgrade.md) — qualify and promote pinned standard and HA payloads.
+- [Production qualification](production-qualification.md) — close applied policy, admission,
+  rollback, freeze, and recovery evidence without promoting workloads.
 - [Disaster recovery](disaster-recovery.md) — rebuild Argo CD without changing workload intent.
+- [Compromised artifact revocation](compromised-artifact-revocation.md) — contain a suspect digest,
+  revoke deployment eligibility, and prove workload replacement.
 - [Policy guide](../policy/README.md) — stage, test, and enforce admission policy.
 
 ## Reference and governance

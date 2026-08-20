@@ -20,4 +20,16 @@ spec:
         kinds: ["Deployment", "StatefulSet", "DaemonSet", "ReplicaSet"]
       - apiGroups: ["batch"]
         kinds: ["Job", "CronJob"]
-    excludedNamespaces: [kube-system, gatekeeper-system, gmp-system, argocd]
+    excludedNamespaces:
+      # Google- and GitOps-managed control planes own their own identity lifecycle.
+      - kube-system
+      - gke-managed-system
+      - gatekeeper-system
+      - gmp-system
+      - argocd
+      # These pinned platform operators reconcile the Kubernetes API and deliberately use
+      # projected Kubernetes service-account tokens. They do not require Google API access;
+      # if one gains it later, bind that exact KSA/GSA in its owning source and qualification.
+      - cert-manager
+      - jobset-system
+      - kueue-system

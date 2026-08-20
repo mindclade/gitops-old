@@ -71,6 +71,10 @@ tests:
         object: fixtures/deployment-compliant.yaml
         assertions:
           - violations: "no"
+      - name: exact-reviewed-upstream-control-plane-image-is-allowed
+        object: fixtures/deployment-exact-upstream-argocd.yaml
+        assertions:
+          - violations: "no"
 
   # -------------------------------------------------------------------------------------
   # deny-privileged
@@ -141,6 +145,10 @@ tests:
         object: fixtures/deployment-unapproved-registry.yaml
         assertions:
           - violations: "yes"
+      - name: malformed-digest-is-denied
+        object: fixtures/deployment-malformed-digest.yaml
+        assertions:
+          - violations: "yes"
       - name: digest-pinned-deployment-is-allowed
         object: fixtures/deployment-compliant.yaml
         assertions:
@@ -163,6 +171,10 @@ tests:
           - violations: "yes"
       - name: namespace-default-service-account-may-exist
         object: fixtures/serviceaccount-default.yaml
+        assertions:
+          - violations: "no"
+      - name: kubernetes-platform-operator-service-account-is-allowed
+        object: fixtures/serviceaccount-platform-operator.yaml
         assertions:
           - violations: "no"
       - name: workload-with-dedicated-service-account-is-allowed
@@ -197,5 +209,29 @@ tests:
           - violations: "yes"
       - name: non-root-partner-workload-is-allowed
         object: fixtures/deployment-partner-compliant.yaml
+        assertions:
+          - violations: "no"
+
+  # -------------------------------------------------------------------------------------
+  # deny-holdout-bucket-mount
+  # -------------------------------------------------------------------------------------
+  # This is the model-quality isolation boundary. The init-container case is deliberate:
+  # staging the holdout before the trainer starts contaminates the model just as surely as
+  # mounting it in the primary container. The CronJob case pins the deeper service-account
+  # nesting used by the one workload that is allowed to read holdout data.
+  - name: deny-holdout-bucket-mount
+    template: ../templates/deny-holdout-mount.yaml
+    constraint: ../constraints/deny-holdout-bucket-mount.yaml
+    cases:
+      - name: training-holdout-volume-is-denied
+        object: fixtures/deployment-holdout-mount.yaml
+        assertions:
+          - violations: "yes"
+      - name: init-container-holdout-command-is-denied
+        object: fixtures/deployment-holdout-init-container.yaml
+        assertions:
+          - violations: "yes"
+      - name: evaluation-cronjob-is-allowed
+        object: fixtures/cronjob-holdout-evaluation.yaml
         assertions:
           - violations: "no"

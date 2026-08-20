@@ -28,10 +28,10 @@ CONTRACT = json.loads(
     '"application-source","plaintext-secrets"],'
     '"forbidden_paths":[".terraform",".terragrunt-cache"],'
     '"repository_class":"production-control",'
-    '"required_paths":[".kubernetes-version","bootstrap/argocd-install.yaml","bootstrap/argocd-install.provenance.json","bootstrap/profiles/standard/kustomization.yaml",'
+    '"required_paths":[".kubernetes-version","bootstrap/argocd-install.yaml","bootstrap/argocd-install.provenance.json","bootstrap/components/immutable-images/kustomization.yaml","bootstrap/components/control-plane-baseline/kustomization.yaml","bootstrap/install-profiles/standard/kustomization.yaml","bootstrap/install-profiles/ha/kustomization.yaml","bootstrap/profiles/standard/kustomization.yaml",'
     '"bootstrap/profiles/ha/kustomization.yaml","bootstrap/root-app.yaml",'
     '"applications","deployments","projects","projects/argocd-administration.yaml","policy","overlays/production.yaml",'
-    '"docs/disaster-recovery.md","docs/argocd-upgrade.md","docs/failed-sync.md","docs/rollback.md"],'
+    '"docs/disaster-recovery.md","docs/argocd-upgrade.md","docs/production-qualification.md","docs/failed-sync.md","docs/freeze-and-emergency.md","docs/rollback.md"],'
     '"visibility":"internal"}'
 )
 ERRORS: list[str] = []
@@ -207,6 +207,17 @@ for required in (":validateAttestationOccurrence", 'value.get("result") == "VERI
         error(
             f"release verifier omits cryptographic attestation validation: {required}"
         )
+for required in (
+    "globalPolicyEvaluationMode",
+    "ENFORCED_BLOCK_AND_AUDIT_LOG",
+    "clusterAdmissionRules",
+    "kubernetesNamespaceAdmissionRules",
+    "admissionWhitelistPatterns",
+):
+    if required not in release_verifier:
+        error(f"release verifier omits applied Binary Authorization policy check: {required}")
+if "unsigned-exceptions-file" not in release_validator or "unsigned-exceptions.json" not in provenance_workflow:
+    error("release metadata path does not consume governed control-plane exceptions")
 for forbidden in (
     "BINAUTHZ_ATTESTOR_PROJECT",
     "BINAUTHZ_BUILD_ATTESTOR",
@@ -218,7 +229,7 @@ for forbidden in (
 for required in (
     '"const": "3.0.0"',
     '"supply_chain_attestations"',
-    "reusable-binauthz-sign.yml@refs/tags/v3.0.0",
+    "reusable-binauthz-sign.yml@refs/tags/v4.0.0",
 ):
     if required not in release_schema and required not in release_validator:
         error(f"release contract omits governed supply-chain binding: {required}")

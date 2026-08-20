@@ -105,6 +105,16 @@ Plain Kubernetes Secret payloads are prohibited. Argo repository access is a rea
 App credential installed out of band during audited bootstrap. Production bootstrap also
 requires an explicit environment confirmation and a verified Kubernetes context.
 
+ApplicationSet-generated Applications do not carry cascading resource-deletion finalizers, and
+every ApplicationSet enables `preserveResourcesOnDeletion`. Resource pruning remains an explicit
+per-environment sync-policy decision, while deletion of an ApplicationSet or environment root
+cannot silently turn into workload deletion.
+
+Production deny windows block automated and manual sync. A reviewed GitHub freeze override only
+authorizes the Git merge; the separate, audited cluster-admin procedure in
+[Freeze and emergency change](freeze-and-emergency.md) permits one exact live sync and then
+restores the committed deny state.
+
 ## Failure domains and recovery
 
 | Failure | Containment | Recovery |
@@ -124,6 +134,8 @@ requires an explicit environment confirmation and a verified Kubernetes context.
 - Argo has read-only repository access.
 - Gatekeeper and Binary Authorization retain distinct structural and cryptographic roles.
 - Secret values never enter Git.
+- Deleting an ApplicationSet or root does not cascade-delete managed workload resources.
+- A production deny window has no standing manual-sync bypass.
 
 ## Related documentation
 

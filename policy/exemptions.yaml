@@ -5,8 +5,9 @@
 ---
 # Expiring, reviewer-signed holes in admission policy.
 #
-# Every entry has an expiry, a named reviewer from @security, a specific reason, and a ticket
-# for the work that removes the need for it. An exemption with no expiry is a deleted
+# Every entry has an accountable owner, an exact namespace/workload scope, a grant date, an
+# expiry no more than 90 days later, a named reviewer from @security, a specific reason, and a
+# ticket for the work that removes the need for it. An exemption with no expiry is a deleted
 # constraint with extra steps.
 #
 # `validate.yml` FAILS when an exemption is past its expiry. That friction is deliberate:
@@ -25,6 +26,7 @@ spec:
   # Shape of an entry:
   #
   # - constraint: require-image-policy
+  #   owner: "@mindclade/model-platform — <name>"
   #   scope:
   #     namespace: research-pretraining
   #     workload: legacy-tokenizer-job
@@ -54,6 +56,8 @@ spec:
 #     mitigating control that makes a temporary exemption safe, because "temporary" and
 #     "permanent" produce identical, unrecoverable results.
 #
-#   Binary Authorization attestation policy (production)
-#     An unsigned image in production is unverifiable provenance in the path of customer
-#     data. The correct response to a blocked deploy is to sign the image.
+#   Binary Authorization for Mindclade-produced application images (production)
+#     An unsigned application image in production is unverifiable provenance in the path of
+#     customer data. Reviewed upstream Argo control-plane images use the separate exact-digest,
+#     expiring contract in ../../image-policy.yaml; they are never authorized by this workload
+#     exemption file, a registry prefix, or a namespace-wide bypass.

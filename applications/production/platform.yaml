@@ -13,6 +13,8 @@ metadata:
 spec:
   goTemplate: true
   goTemplateOptions: ["missingkey=error"]
+  syncPolicy:
+    preserveResourcesOnDeletion: true
   generators:
     - git:
         repoURL: https://github.com/mindclade/gitops.git
@@ -25,8 +27,6 @@ spec:
       labels:
         mindclade.dev/environment: production
         mindclade.dev/domain: platform
-      finalizers:
-        - resources-finalizer.argocd.argoproj.io
     spec:
       project: platform
       source:

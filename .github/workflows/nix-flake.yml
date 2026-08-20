@@ -6,9 +6,8 @@
 # The flake dev shell must actually build.
 #
 # Every repository here documents `nix develop` as the way to get the toolchain, and the
-# shellHook checks that the pinned terraform matches .terraform-version. None of that helps if
-# the flake itself stopped evaluating three weeks ago and nobody noticed — which is what the
-# weekly schedule below is for.
+# pinned shell is part of repository validation. None of that helps if its closure stopped
+# building and nobody noticed — which is what the weekly schedule below is for.
 name: nix-flake
 
 on:
@@ -23,8 +22,8 @@ on:
       - "flake.lock"
   workflow_dispatch:
   schedule:
-    # Weekly. The flake pins a nixpkgs CHANNEL rather than a revision, so it can break without
-    # any file in this repository changing.
+    # Weekly verification catches cache/source availability and supported-platform failures
+    # even when the committed flake and revision-pinned lock have not changed.
     - cron: "17 2 * * 1"
 
 permissions:
@@ -66,6 +65,9 @@ jobs:
         # Cheaper than building the shell, and it fails distinctly: a syntax error or an
         # unresolvable input surfaces here rather than inside a ten-minute build.
         run: nix flake metadata --no-write-lock-file
+
+      - name: Locked flake contract
+        run: nix flake check --no-update-lock-file --show-trace
 
       - name: Validate flake dev shell
         run: nix develop --command bash -lc 'kustomize version'

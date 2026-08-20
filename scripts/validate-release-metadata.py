@@ -47,7 +47,7 @@ REQUIRED = {
 }
 DEFAULT_SOURCE_REPOSITORY = "mindclade/mindclade-internal-monorepo"
 DEFAULT_SIGNER_WORKFLOW_REF = (
-    "mindclade/.github/.github/workflows/reusable-binauthz-sign.yml@refs/tags/v3.0.0"
+    "mindclade/.github/.github/workflows/reusable-binauthz-sign.yml@refs/tags/v4.0.0"
 )
 
 
@@ -71,10 +71,70 @@ def attestor_ref(value):
     )
 
 
+def governed_exception_images(path: Path | None, errors: list[str]) -> set[str]:
+    """Load the trusted JSON projection of image-policy.spec.unsigned."""
+    if path is None:
+        return set()
+    try:
+        value = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        errors.append(f"cannot read unsigned exceptions file: {exc}")
+        return set()
+    if not isinstance(value, list):
+        errors.append("unsigned exceptions file must contain one JSON list")
+        return set()
+    today = dt.date.today()
+    images: set[str] = set()
+    for index, exception in enumerate(value):
+        label = f"unsigned exception[{index}]"
+        if not isinstance(exception, dict):
+            errors.append(f"{label} must be an object")
+            continue
+        image = str(exception.get("image", ""))
+        if not DIGEST_IMAGE.fullmatch(image):
+            errors.append(f"{label} must name one exact digest")
+        elif image in images:
+            errors.append(f"{label} duplicates {image}")
+        else:
+            images.add(image)
+        for field in (
+            "owner",
+            "reason",
+            "reviewer",
+            "approval",
+            "change",
+            "removal",
+        ):
+            if not nonempty(exception.get(field)):
+                errors.append(f"{label} missing {field}")
+        if exception.get("owner") != "@mindclade/platform":
+            errors.append(f"{label} owner must be @mindclade/platform")
+        if exception.get("reviewer") != "@mindclade/security":
+            errors.append(f"{label} reviewer must be @mindclade/security")
+        if exception.get("approval") != "required-protected-security-review":
+            errors.append(f"{label} must require protected security review")
+        if exception.get("scope") != {
+            "component": "argocd-control-plane",
+            "environments": ["staging", "production"],
+        }:
+            errors.append(f"{label} has an invalid control-plane scope")
+        try:
+            granted = dt.date.fromisoformat(str(exception.get("granted", "")))
+            expires = dt.date.fromisoformat(str(exception.get("expires", "")))
+            if expires < today:
+                errors.append(f"{label} is expired")
+            if expires < granted or (expires - granted).days > 90:
+                errors.append(f"{label} lifetime must be between 0 and 90 days")
+        except ValueError:
+            errors.append(f"{label} granted/expires must be ISO dates")
+    return images
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--root", type=Path, default=Path(__file__).resolve().parents[1])
     ap.add_argument("--images-file", type=Path)
+    ap.add_argument("--unsigned-exceptions-file", type=Path)
     ap.add_argument("--expected-source-repository", default=DEFAULT_SOURCE_REPOSITORY)
     ap.add_argument(
         "--expected-signer-workflow-ref", default=DEFAULT_SIGNER_WORKFLOW_REF
@@ -85,6 +145,7 @@ def main() -> int:
     root = args.root.resolve()
     errors = []
     records = {}
+    unsigned_images = governed_exception_images(args.unsigned_exceptions_file, errors)
     if not MINDCLADE_REPOSITORY.fullmatch(str(args.expected_source_repository)):
         errors.append("--expected-source-repository must name one Mindclade repository")
     if not SIGNER_WORKFLOW_REF.fullmatch(str(args.expected_signer_workflow_ref)):
@@ -257,9 +318,12 @@ def main() -> int:
         except OSError as exc:
             errors.append(f"cannot read images file: {exc}")
             images = []
+        active_images = set(images)
         for image in images:
-            if image not in records:
+            if image not in records and image not in unsigned_images:
                 errors.append(f"no release metadata record for active image: {image}")
+        for image in sorted(unsigned_images - active_images):
+            errors.append(f"unsigned exception is not an active control-plane image: {image}")
     if errors:
         for error in sorted(set(errors)):
             print(f"ERROR: {error}", file=sys.stderr)

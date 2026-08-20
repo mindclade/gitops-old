@@ -17,8 +17,10 @@ installation through `argocd-self-management`. Terraform owns only cloud prerequ
    and standard/HA manifests from the official release.
 2. Replace both vendored payloads from the same immutable upstream tag. Update
    `bootstrap/argocd-install.version`, both SHA-256 files, and
-   `bootstrap/argocd-install.provenance.json`. Do not hand-edit upstream payloads or replace
-   third-party notices with Mindclade licensing.
+   `bootstrap/argocd-install.provenance.json`. Resolve every upstream image tag to its registry
+   manifest-list digest, update `bootstrap/components/immutable-images/kustomization.yaml`, and
+   record the exact source-tag/digest bindings in provenance. Do not hand-edit upstream payloads
+   or replace third-party notices with Mindclade licensing.
 3. Render both profiles and run the complete contract:
 
    ```sh
@@ -33,6 +35,10 @@ installation through `argocd-self-management`. Terraform owns only cloud prerequ
    `argocd-notifications-secret`. Environment roots and bootstrap/secret operators own those
    objects; allowing both Applications to manage them creates conflicting field ownership and can
    erase SSO or repository credentials.
+5. Confirm every `image:` in both cold-start and self-management profile renders ends in the
+   reviewed `@sha256:` digest and that the production Binary Authorization disposition for those
+   third-party images is explicitly approved. A namespace-wide admission bypass is not artifact
+   evidence.
 
 ## Qualify and promote
 
@@ -60,6 +66,8 @@ recovery path after complete Argo loss, not the routine upgrade mechanism.
 
 - Both vendored profiles identify the same immutable upstream version and pass checksum/provenance
   validation.
+- Cold-start and self-management renders use the same reviewed image digests, with no tag-only
+  reference.
 - Development and staging prove reconciliation, RBAC, repository access, notifications, metrics,
   restart behavior, and rollback or forward recovery.
 - Production controllers and all existing Applications return healthy before the change closes.

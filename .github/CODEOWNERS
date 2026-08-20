@@ -47,3 +47,4 @@
 /docs/argocd-upgrade.md      @mindclade/platform @mindclade/security
 /docs/failed-sync.md         @mindclade/platform @mindclade/security
 /docs/rollback.md            @mindclade/platform @mindclade/security
+/docs/freeze-and-emergency.md @mindclade/platform @mindclade/security

@@ -10,7 +10,7 @@
 ## Prerequisites
 
 - the existing `mindclade/gitops` repository and its `.git` history;
-- `.github` workflow release `v3.0.0` and the corresponding `github-config` policy;
+- `.github` workflow release `v4.0.0` and the corresponding `github-config` policy;
 - completed `bootstrap` and `infrastructure-live` prerequisites for the first environment;
 - a read-only Argo GitHub App installation and approved OAuth client values; and
 - a checkout of `mindclade-internal-monorepo` at the ref pinned by `render-manifest.yaml`.

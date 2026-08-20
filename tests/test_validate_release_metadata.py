@@ -8,6 +8,7 @@
 
 from __future__ import annotations
 
+import datetime as dt
 import json
 import subprocess
 import sys
@@ -23,7 +24,7 @@ BUILD_ATTESTOR = "build-attestor"
 QUALIFICATION_ATTESTOR = "qualification-attestor"
 DEPLOYMENT_ATTESTOR = "deployment-attestor"
 SIGNER_WORKFLOW_REF = (
-    "mindclade/.github/.github/workflows/reusable-binauthz-sign.yml@refs/tags/v3.0.0"
+    "mindclade/.github/.github/workflows/reusable-binauthz-sign.yml@refs/tags/v4.0.0"
 )
 IMAGE = (
     "us-central1-docker.pkg.dev/mindclade-production/containers/app@sha256:" + "b" * 64
@@ -63,9 +64,32 @@ def valid_record() -> dict:
     }
 
 
+def valid_exception(image: str) -> dict:
+    granted = dt.date.today()
+    return {
+        "image": image,
+        "owner": "@mindclade/platform",
+        "reason": "Reviewed upstream GitOps control-plane runtime.",
+        "scope": {
+            "component": "argocd-control-plane",
+            "environments": ["staging", "production"],
+        },
+        "granted": granted.isoformat(),
+        "expires": (granted + dt.timedelta(days=90)).isoformat(),
+        "reviewer": "@mindclade/security",
+        "approval": "required-protected-security-review",
+        "change": "protected-gitops-and-infrastructure-live-pull-requests",
+        "removal": "Replace with a mirrored and attested digest.",
+    }
+
+
 class ReleaseMetadataContractTest(unittest.TestCase):
     def run_validator(
-        self, record: dict, *, active_image: str | None = None
+        self,
+        record: dict,
+        *,
+        active_image: str | None = None,
+        exceptions: list[dict] | None = None,
     ) -> subprocess.CompletedProcess[str]:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
@@ -91,6 +115,10 @@ class ReleaseMetadataContractTest(unittest.TestCase):
                 images = root / "images.txt"
                 images.write_text(active_image + "\n", encoding="utf-8")
                 command.extend(["--images-file", str(images)])
+            if exceptions is not None:
+                exception_file = root / "unsigned-exceptions.json"
+                exception_file.write_text(json.dumps(exceptions), encoding="utf-8")
+                command.extend(["--unsigned-exceptions-file", str(exception_file)])
             return subprocess.run(command, capture_output=True, check=False, text=True)
 
     def test_trusted_complete_record_passes(self) -> None:
@@ -127,6 +155,38 @@ class ReleaseMetadataContractTest(unittest.TestCase):
         result = self.run_validator(valid_record(), active_image=other_image)
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("no release metadata record for active image", result.stderr)
+
+    def test_governed_control_plane_exception_replaces_release_record(self) -> None:
+        upstream = "quay.io/argoproj/argocd@sha256:" + "d" * 64
+        result = self.run_validator(
+            valid_record(),
+            active_image=upstream,
+            exceptions=[valid_exception(upstream)],
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+
+    def test_orphaned_control_plane_exception_fails(self) -> None:
+        upstream = "quay.io/argoproj/argocd@sha256:" + "d" * 64
+        result = self.run_validator(
+            valid_record(),
+            active_image=IMAGE,
+            exceptions=[valid_exception(upstream)],
+        )
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("not an active control-plane image", result.stderr)
+
+    def test_expired_control_plane_exception_fails(self) -> None:
+        upstream = "quay.io/argoproj/argocd@sha256:" + "d" * 64
+        exception = valid_exception(upstream)
+        exception["granted"] = "2025-01-01"
+        exception["expires"] = "2025-03-01"
+        result = self.run_validator(
+            valid_record(),
+            active_image=upstream,
+            exceptions=[exception],
+        )
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("is expired", result.stderr)
 
 
 if __name__ == "__main__":

@@ -33,5 +33,5 @@ spec:
     - name: operator
       policies:
         - "p, proj:serving:operator, applications, sync, serving/*, allow"
-      groups: [Mindclade:model-serving]
+      groups: [mindclade:model-serving]
   orphanedResources: {warn: true}

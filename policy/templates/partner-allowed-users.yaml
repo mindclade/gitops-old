@@ -241,6 +241,10 @@ spec:
         }
 
         input_containers contains c if {
+          some c in input.review.object.spec.ephemeralContainers
+        }
+
+        input_containers contains c if {
           some c in input.review.object.spec.template.spec.containers
         }
 

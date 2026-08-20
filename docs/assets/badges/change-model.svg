@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" role="img" aria-label="change: pull-request" width="162" height="24" viewBox="0 0 162 24">
+  <title>change: pull-request</title>
+  <defs><clipPath id="badge-shape"><rect width="162" height="24" rx="4"/></clipPath></defs>
+  <g clip-path="url(#badge-shape)">
+    <rect width="162" height="24" fill="#201C24"/>
+    <path d="M60 0h102v24H60z" fill="#B5673F"/>
+  </g>
+  <g fill="#F2EFE8" font-family="Verdana,DejaVu Sans,sans-serif" font-size="11" text-anchor="middle">
+    <text x="30" y="16">change</text>
+    <text x="111" y="16" font-weight="700">pull-request</text>
+  </g>
+</svg>

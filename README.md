@@ -1,5 +1,4 @@
-<!-- mindclade-doc: repository-home@1 -->
-
+<!-- mindclade-doc: repository-home@2 -->
 <!-- Brand source: mindclade/.github-private/mindclade-brand-assets (MONO family). -->
 
 <p align="center">
@@ -10,111 +9,117 @@
   </picture>
 </p>
 
+<p align="center">
+  <img alt="class: production-control" src="docs/assets/badges/repository-class.svg">
+  <img alt="visibility: internal" src="docs/assets/badges/visibility.svg">
+  <img alt="change: pull-request" src="docs/assets/badges/change-model.svg">
+  <img alt="delivery: Argo CD" src="docs/assets/badges/delivery.svg">
+</p>
+
 # Mindclade · GitOps
 
 > **Platform Foundation · Kubernetes desired state**
-> Reviewed, rendered, policy-checked manifests reconciled by environment-scoped Argo CD.
+> Review immutable artifact selection, admission policy, and Argo CD reconciliation as Git
+> changes before they reach a cluster.
 
 | Repository contract | Value |
 | --- | --- |
-| Enterprise | [`mindclade`](https://github.com/enterprises/mindclade) |
-| Organization | [`mindclade`](https://github.com/mindclade) |
-| Repository index | [Mindclade repositories](https://github.com/orgs/mindclade/repositories) |
-| Repository | [`mindclade/gitops`](https://github.com/mindclade/gitops) |
 | Class | `production-control` |
 | Visibility | `internal` |
-| Owner | Platform |
-| Production authority | Yes |
-| Change model | Pull request to `main`; generated render; development-to-production promotion |
-| Documentation | [`docs/README.md`](docs/README.md) |
+| Change model | `pull-request` |
+| Authority | `argocd-installation`<br>`argocd-configuration`<br>`kubernetes-desired-state`<br>`promotion`<br>`admission-policy` |
+| Start here | [`docs/README.md`](docs/README.md) |
 
-This repository is the only source of truth for Argo CD and in-cluster Kubernetes desired
-state. `rendered/` contains plain YAML produced from pinned monorepo source; Argo CD performs
-no Helm or Kustomize rendering at reconciliation time.
+## Mission
 
-> **Generated content:** Never hand-edit `rendered/`. Change its source or deployment
-> selection and run the renderer. CI rejects files without generated provenance and the
-> credentialed render workflow detects drift from the pinned source.
+`gitops` owns the desired state reconciled into Mindclade Kubernetes clusters. Platform and
+service owners use it to review Argo CD composition, AppProjects, immutable artifact selection,
+environment promotion, and Gatekeeper policy without granting pull-request jobs cluster access.
 
 ## Authority boundary
 
-`gitops` owns Argo CD composition, AppProjects, ApplicationSets, Gatekeeper policy,
-environment artifact selection, and rendered Kubernetes resources. `infrastructure-live`
-owns clusters, Binary Authorization, cloud identities, DNS, and secret backends. The internal
-monorepo owns workload source and build outputs.
+### This repository creates
 
-The diagram shows the reviewed path from workload source to a reconciled cluster and the two
-distinct admission responsibilities.
+- Pinned Argo CD installation and configuration, root applications, and project boundaries.
+- Environment ApplicationSets, immutable deployment selections, and rendered Kubernetes state.
+- Admission constraints, policy tests, promotion controls, and rollback source.
+
+### This repository deliberately does not create
+
+- GCP projects, networks, clusters, cloud identities, or Binary Authorization infrastructure;
+  those belong to `infrastructure-live`.
+- Containers, application source, model artifacts, or release qualification; those belong to
+  the monorepo and its protected build system.
+- Plaintext secrets; Git contains references only.
+
+## Quick start
+
+Run the offline render, policy, RBAC, release-metadata, and repository checks:
+
+```sh
+nix develop .#ci --command make validate
+nix flake check --no-update-lock-file
+```
+
+Expected result: generated provenance, bootstrap checksums, YAML, project boundaries, policy
+fixtures, deployment selections, shell checks, and repository contracts pass. Do not sync Argo
+CD, run `kubectl apply`, promote an artifact, or change a production freeze from a development
+session.
+
+## Estate position
+
+The highlighted node is this repository. Its contract and boundary lists are the text equivalent
+of the upstream artifact and infrastructure relationships.
 
 ```mermaid
+%% current: gitops %%
 %%{init: {"theme":"base","themeVariables":{"primaryColor":"#F2EFE8","primaryTextColor":"#201C24","primaryBorderColor":"#B5673F","secondaryColor":"#FBFAF7","tertiaryColor":"#FBFAF7","lineColor":"#5B5660","edgeLabelBackground":"#FBFAF7","clusterBkg":"#FBFAF7","clusterBorder":"#E2DED4"}}}%%
 flowchart LR
-    SRC["Internal monorepo<br/>workload source"] -->|"pinned ref + content locks"| R["scripts/render.py"]
-    SEL["deployments/*.yaml<br/>approved digests"] --> R
-    R --> DEV["rendered/development<br/>generated YAML"]
-    DEV -->|"bit-identical promotion"| STG["rendered/staging"]
-    STG -->|"bit-identical promotion"| PROD["rendered/production"]
-    PROD --> PR["Reviewed Git commit"]
-    PR --> ARGO["Environment Argo CD<br/>read-only repository access"]
-    ARGO --> GK["Gatekeeper<br/>structure, registry, digest"]
-    GK --> BA["Binary Authorization<br/>cryptographic attestation"]
-    BA --> GKE["GKE workload"]
-
-    classDef authority fill:#201C24,color:#F2EFE8,stroke:#D68A61,stroke-width:2px;
+    GHP[".github-private<br/>profile + brand"] --> GH[".github<br/>shared workflows"]
+    GH --> GC["github-config<br/>GitHub governance"]
+    GH --> BS["bootstrap<br/>Ring 0 trust"]
+    BS --> IL["infrastructure-live<br/>cloud foundation"]
+    IL --> GO["gitops<br/>cluster desired state"]
+    MO["internal monorepo<br/>source + evidence"] --> GO
+    GC --> MO
+    classDef current fill:#201C24,color:#F2EFE8,stroke:#D68A61,stroke-width:3px;
     classDef managed fill:#F2EFE8,color:#201C24,stroke:#B5673F,stroke-width:1.5px;
-    classDef external fill:#FBFAF7,color:#423D48,stroke:#5B5660,stroke-width:1.5px;
-    class SRC,SEL,PR authority;
-    class R,DEV,STG,PROD,ARGO,GK,BA,GKE managed;
+    classDef source fill:#FBFAF7,color:#423D48,stroke:#5B5660,stroke-width:1.5px;
+    class GO current;
+    class GH,GC,BS,IL managed;
+    class GHP,MO source;
 ```
 
 ## Repository map
 
-| Path | Ownership |
+| Path | Purpose |
 | --- | --- |
-| `bootstrap/` | Pinned Argo CD payloads, configuration, root app, and audited bootstrap script |
-| `applications/` | Hand-authored environment ApplicationSets |
-| `projects/` | Hand-authored AppProject repository, cluster, and namespace allowlists |
-| `policy/` | Gatekeeper templates, constraints, tests, and expiring exemptions |
-| `overlays/` | Hand-authored environment values and patches |
-| `deployments/` | Environment-specific immutable artifact selections |
-| `render-manifest.yaml` | Pinned monorepo source and render target inventory |
-| `rendered/` | CI-generated plain YAML consumed by Argo CD |
-| `roots/` | Environment root composition |
+| `bootstrap/` | Pinned Argo CD payloads, profiles, root app, and audited bootstrap source. |
+| `applications/` | Environment ApplicationSets. |
+| `projects/` | Repository, cluster, and namespace allowlists. |
+| `policy/` | Gatekeeper templates, constraints, fixtures, and expiring exemptions. |
+| `deployments/` | Environment-specific immutable artifact selections. |
+| `overlays/` | Reviewed environment values and patches. |
+| `roots/` | Environment root composition and sync controls. |
 
-## Render and validate
+## Change path
 
-Enter the pinned shell. The renderer requires a checkout of the internal monorepo at the ref
-declared in `render-manifest.yaml`.
+Change authored inputs, regenerate derived output, and review both source and provenance. Pull
+requests must pass render, policy, RBAC, artifact, and repository gates. Promotion preserves
+reviewed artifacts across environments; protected workflows own reconciliation, rollback, and
+emergency operations. Never hand-edit generated output.
 
-```sh
-nix develop
-make validate
-python3 scripts/render.py --monorepo ../mindclade-internal-monorepo
-kubeconform -strict -summary -ignore-missing-schemas rendered/
-gator verify policy/tests/suite.yaml
-gator test --filename=policy/templates --filename=policy/constraints \
-  --filename=rendered/development
-```
+## Documentation and support
 
-`gator verify` proves constraints reject known-bad fixtures; `gator test` evaluates actual
-rendered resources. Both are required to distinguish working policy from a clean estate.
-
-## Promotion contract
-
-Promotion copies manifests bit-identically from development to staging and then production,
-apart from the reviewed namespace overlay. It does not re-render. CI fails a promotion pull
-request that changes anything outside the allowed transformation, making the reviewed diff
-the exact cluster delta.
-
-Gatekeeper enforces structural admission requirements such as approved registries and
-immutable digests. Google Cloud Binary Authorization is the single cryptographic admission
-gate. This repository intentionally does not deploy a second signature admission controller.
-
-## Start here
-
-- [Documentation index](docs/README.md)
+- [Documentation home](docs/README.md)
 - [Architecture](docs/architecture.md)
 - [Workload activation](docs/workload-activation.md)
-- [Policy rollout and testing](policy/README.md)
+- [Failed sync](docs/failed-sync.md)
 - [Rollback](docs/rollback.md)
 - [Disaster recovery](docs/disaster-recovery.md)
+- [Contributing](CONTRIBUTING.md)
+
+## Security
+
+Never commit secret payloads, private keys, kubeconfigs, cluster credentials, or mutable image
+references. Report vulnerabilities through [the private security process](SECURITY.md).

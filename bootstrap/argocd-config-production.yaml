@@ -52,6 +52,6 @@ data:
     p, role:security-readonly, applications, get, */*, allow
     p, role:security-readonly, logs, get, */*, allow
     p, role:security-readonly, projects, get, *, allow
-    g, Mindclade:platform, role:platform-admin
-    g, Mindclade:incident-command, role:platform-admin
-    g, Mindclade:security, role:security-readonly
+    g, mindclade:platform, role:platform-admin
+    g, mindclade:incident-command, role:platform-admin
+    g, mindclade:security, role:security-readonly

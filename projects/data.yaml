@@ -33,5 +33,5 @@ spec:
     - name: developer
       policies:
         - "p, proj:data:developer, applications, sync, data/*, allow"
-      groups: [Mindclade:data-platform]
+      groups: [mindclade:data-platform]
   orphanedResources: {warn: true}

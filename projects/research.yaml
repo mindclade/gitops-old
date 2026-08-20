@@ -35,5 +35,5 @@ spec:
     - name: researcher
       policies:
         - "p, proj:research:researcher, applications, sync, research/*, allow"
-      groups: [Mindclade:research]
+      groups: [mindclade:research]
   orphanedResources: {warn: true}

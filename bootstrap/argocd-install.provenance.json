@@ -2,6 +2,26 @@
   "schema_version": 1,
   "upstream_repository": "argoproj/argo-cd",
   "upstream_ref": "v3.5.1",
+  "upstream_commit": "109ca7ca71139e514114499d294a492e7910a965",
+  "images_resolved_at": "2026-08-20",
+  "images": [
+    {
+      "source": "ghcr.io/dexidp/dex:v2.45.0",
+      "digest": "sha256:b8469881d3cb3a73001506f0d3aaefecb9c45d2311c1e0f405d8ac538316c59d"
+    },
+    {
+      "source": "public.ecr.aws/docker/library/haproxy:3.0.8-alpine",
+      "digest": "sha256:e11f034e651603f10a365e5ad5a0321825e18eded9620e40c4f4d6ae58419bfe"
+    },
+    {
+      "source": "public.ecr.aws/docker/library/redis:8.2.3-alpine",
+      "digest": "sha256:08ad0b1d280850169a790dba1393ff7a90aef951fc19632cf4d3ce4f78e679ba"
+    },
+    {
+      "source": "quay.io/argoproj/argocd:v3.5.1",
+      "digest": "sha256:0deb1a1c917629b960ead995ae3b6069450a866992676599658687ef9a641ee8"
+    }
+  ],
   "artifacts": [
     {
       "path": "bootstrap/argocd-install.yaml",

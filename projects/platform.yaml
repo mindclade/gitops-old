@@ -34,7 +34,13 @@ spec:
     - {group: gateway.networking.k8s.io, kind: GatewayClass}
     - {group: cert-manager.io, kind: ClusterIssuer}
     - {group: templates.gatekeeper.sh, kind: ConstraintTemplate}
-    - {group: constraints.gatekeeper.sh, kind: "*"}
+    - {group: constraints.gatekeeper.sh, kind: MindcladeDenyHoldoutMount}
+    - {group: constraints.gatekeeper.sh, kind: MindcladeDisallowedTags}
+    - {group: constraints.gatekeeper.sh, kind: MindcladePartnerAllowedUsers}
+    - {group: constraints.gatekeeper.sh, kind: MindcladePrivilegedContainer}
+    - {group: constraints.gatekeeper.sh, kind: MindcladeRequireImagePolicy}
+    - {group: constraints.gatekeeper.sh, kind: MindcladeRequiredResources}
+    - {group: constraints.gatekeeper.sh, kind: MindcladeWorkloadIdentity}
   namespaceResourceWhitelist:
     - {group: "*", kind: "*"}
   namespaceResourceBlacklist:
@@ -44,6 +50,6 @@ spec:
       policies:
         - p, proj:platform:admin, applications, *, platform/*, allow
       groups:
-        - Mindclade:platform
+        - mindclade:platform
   orphanedResources:
     warn: true

@@ -48,15 +48,19 @@ zero violations, and the change still promotes through development and staging.
 The process is in [`policy/README.md`](policy/README.md). Roughly: `dryrun`, wait a full
 deployment cycle, read the violations, fix the workloads, then promote.
 
-Two controls take **no exemption, ever**: `deny-holdout-bucket-mount` and the production
-Binary Authorization attestation policy. Both guard against things that are unrecoverable
-once they happen. Gatekeeper's `require-image-policy` remains the distinct structural control
-for approved registries and immutable digests.
+`deny-holdout-bucket-mount` and Binary Authorization for Mindclade-produced application images
+take **no exemption, ever**. Reviewed upstream GitOps control-plane images are the sole temporary
+exception class: each exact digest must be present in `image-policy.yaml`, Gatekeeper, and the
+applied staging/production Binary Authorization policy, with platform ownership, security review,
+and an expiry of at most 90 days. Registry prefixes and namespace-wide bypasses are prohibited.
 
 ## Exemptions expire
 
-Every entry in `policy/exemptions.yaml` needs an expiry, a named `@security` reviewer, a
-specific reason, and a ticket. CI fails on an expired one — that friction is the point.
+Every entry in `policy/exemptions.yaml` needs an accountable owner, one exact namespace and
+workload, a grant date, an expiry no more than 90 days later, a named `@security` reviewer,
+specific reason and risk statements, a removal condition, and a repository issue. CI rejects
+wildcards, missing fields, duplicates, inactive constraints, never-exemptible controls, and
+expired records — that friction is the point.
 
 ## Local checks
 

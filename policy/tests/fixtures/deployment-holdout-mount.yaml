@@ -1,0 +1,30 @@
+---
+# Copyright © 2026 Mindclade, LLC. All Rights Reserved.
+# Mindclade Proprietary and Confidential.
+# SPDX-License-Identifier: LicenseRef-Mindclade-Proprietary
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: training-with-holdout
+  namespace: research-training
+spec:
+  selector:
+    matchLabels: {app: trainer}
+  template:
+    metadata:
+      labels: {app: trainer}
+    spec:
+      serviceAccountName: trainer
+      containers:
+        - name: trainer
+          image: europe-west4-docker.pkg.dev/mc/containers/trainer@sha256:0000000000000000000000000000000000000000000000000000000000000000
+          volumeMounts:
+            - name: holdout
+              mountPath: /data/holdout
+      volumes:
+        - name: holdout
+          csi:
+            driver: gcsfuse.csi.storage.gke.io
+            volumeAttributes:
+              bucketName: mc-holdout-eval

@@ -1,0 +1,67 @@
+# Copyright © 2026 Mindclade, LLC. All Rights Reserved.
+# Mindclade Proprietary and Confidential.
+# SPDX-License-Identifier: LicenseRef-Mindclade-Proprietary
+
+---
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources: [upstream.yaml, availability.yaml]
+images:
+  - name: quay.io/jetstack/cert-manager-cainjector
+    digest: sha256:c7898aece8fb08102fca0b37683e37cb94e0a77c0d15b8e3c9128f6c04c868e0
+  - name: quay.io/jetstack/cert-manager-controller
+    digest: sha256:cd49e769e18ada1fd7b9a9bacc87c90db24c65cbfd4bf71694dda7ed40e91187
+  - name: quay.io/jetstack/cert-manager-webhook
+    digest: sha256:f5bfe77541e38978aec53cc6eb924d190e1fe923c98b2582e6ccf5edf6c02cce
+patches:
+  - target: {version: v1, kind: Namespace, name: cert-manager}
+    patch: |-
+      $patch: delete
+      apiVersion: v1
+      kind: Namespace
+      metadata: {name: cert-manager}
+  - target: {group: apps, version: v1, kind: Deployment, name: cert-manager-cainjector}
+    patch: |-
+      apiVersion: apps/v1
+      kind: Deployment
+      metadata: {name: cert-manager-cainjector}
+      spec:
+        replicas: 2
+        template:
+          spec:
+            nodeSelector: {mindclade.dev/node-pool: system}
+            containers:
+              - name: cert-manager-cainjector
+                resources:
+                  requests: {cpu: 100m, ephemeral-storage: 128Mi, memory: 128Mi}
+                  limits: {cpu: 500m, ephemeral-storage: 512Mi, memory: 512Mi}
+  - target: {group: apps, version: v1, kind: Deployment, name: cert-manager}
+    patch: |-
+      apiVersion: apps/v1
+      kind: Deployment
+      metadata: {name: cert-manager}
+      spec:
+        replicas: 2
+        template:
+          spec:
+            nodeSelector: {mindclade.dev/node-pool: system}
+            containers:
+              - name: cert-manager-controller
+                resources:
+                  requests: {cpu: 100m, ephemeral-storage: 128Mi, memory: 128Mi}
+                  limits: {cpu: "1", ephemeral-storage: 512Mi, memory: 512Mi}
+  - target: {group: apps, version: v1, kind: Deployment, name: cert-manager-webhook}
+    patch: |-
+      apiVersion: apps/v1
+      kind: Deployment
+      metadata: {name: cert-manager-webhook}
+      spec:
+        replicas: 2
+        template:
+          spec:
+            nodeSelector: {mindclade.dev/node-pool: system}
+            containers:
+              - name: cert-manager-webhook
+                resources:
+                  requests: {cpu: 100m, ephemeral-storage: 128Mi, memory: 128Mi}
+                  limits: {cpu: 500m, ephemeral-storage: 512Mi, memory: 256Mi}

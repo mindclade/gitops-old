@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" role="img" aria-label="class: production-control" width="202" height="24" viewBox="0 0 202 24">
+  <title>class: production-control</title>
+  <defs><clipPath id="badge-shape"><rect width="202" height="24" rx="4"/></clipPath></defs>
+  <g clip-path="url(#badge-shape)">
+    <rect width="202" height="24" fill="#201C24"/>
+    <path d="M58 0h144v24H58z" fill="#B5673F"/>
+  </g>
+  <g fill="#F2EFE8" font-family="Verdana,DejaVu Sans,sans-serif" font-size="11" text-anchor="middle">
+    <text x="29" y="16">class</text>
+    <text x="130" y="16" font-weight="700">production-control</text>
+  </g>
+</svg>

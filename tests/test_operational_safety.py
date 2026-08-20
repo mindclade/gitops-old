@@ -8,10 +8,13 @@
 from __future__ import annotations
 
 import importlib.util
+import json
 import subprocess
 import tempfile
 import unittest
 from pathlib import Path
+
+import yaml
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -38,6 +41,21 @@ class GitOpsSafetyTest(unittest.TestCase):
         self.assertEqual(result.returncode, 2)
         self.assertIn("explicit --apply", result.stderr)
 
+    def test_bootstrap_applies_the_digest_render_not_the_raw_upstream_file(self) -> None:
+        source = (ROOT / "bootstrap/bootstrap.sh").read_text(encoding="utf-8")
+        self.assertIn(
+            'kustomize build --load-restrictor LoadRestrictionsNone "$INSTALL_PROFILE"',
+            source,
+        )
+        self.assertIn(
+            'kubectl apply -n argocd --server-side --force-conflicts -f "$install_manifest"',
+            source,
+        )
+        self.assertNotIn(
+            'kubectl apply -n argocd --server-side --force-conflicts -f "$INSTALL"',
+            source,
+        )
+
     def test_tree_comparison_detects_extra_generated_files(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
@@ -55,6 +73,129 @@ class GitOpsSafetyTest(unittest.TestCase):
             encoding="utf-8"
         )
         self.assertNotIn("configure-docker", source)
+
+    def test_composition_deletion_preserves_managed_resources(self) -> None:
+        root_application = yaml.safe_load(
+            (ROOT / "bootstrap/root-app.yaml").read_text(encoding="utf-8")
+        )
+        self.assertNotIn(
+            "resources-finalizer.argocd.argoproj.io",
+            (root_application.get("metadata") or {}).get("finalizers") or [],
+        )
+        for path in sorted((ROOT / "applications").rglob("*.yaml")):
+            application = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+            if application.get("kind") != "ApplicationSet":
+                continue
+            with self.subTest(path=path.relative_to(ROOT)):
+                spec = application.get("spec") or {}
+                self.assertIs(
+                    (spec.get("syncPolicy") or {}).get(
+                        "preserveResourcesOnDeletion"
+                    ),
+                    True,
+                )
+                self.assertNotIn(
+                    "resources-finalizer.argocd.argoproj.io",
+                    (((spec.get("template") or {}).get("metadata") or {}).get(
+                        "finalizers"
+                    ))
+                    or [],
+                )
+
+    def test_production_deny_windows_have_no_manual_bypass(self) -> None:
+        operations = yaml.safe_load(
+            (ROOT / "roots/production/sync-windows-patch.yaml").read_text(
+                encoding="utf-8"
+            )
+        )
+        windows = next(
+            operation["value"]
+            for operation in operations
+            if operation.get("path") == "/spec/syncWindows"
+        )
+        self.assertEqual(len(windows), 2)
+        for window in windows:
+            with self.subTest(schedule=window.get("schedule")):
+                self.assertEqual(window.get("kind"), "deny")
+                self.assertIs(window.get("manualSync"), False)
+
+    def test_dex_and_rbac_use_the_same_canonical_github_org(self) -> None:
+        for environment in ("development", "staging", "production"):
+            path = ROOT / f"bootstrap/argocd-config-{environment}.yaml"
+            documents = {
+                document["metadata"]["name"]: document
+                for document in yaml.safe_load_all(path.read_text(encoding="utf-8"))
+            }
+            dex = yaml.safe_load(documents["argocd-cm"]["data"]["dex.config"])
+            self.assertEqual(
+                dex["connectors"][0]["config"]["orgs"], [{"name": "mindclade"}]
+            )
+            group_rules = [
+                line.strip()
+                for line in documents["argocd-rbac-cm"]["data"][
+                    "policy.csv"
+                ].splitlines()
+                if line.strip().startswith("g,")
+            ]
+            self.assertTrue(group_rules)
+            self.assertTrue(
+                all(rule.startswith("g, mindclade:") for rule in group_rules)
+            )
+
+    def test_every_argocd_profile_is_namespaced_resourced_and_digest_pinned(self) -> None:
+        provenance = json.loads(
+            (ROOT / "bootstrap/argocd-install.provenance.json").read_text(
+                encoding="utf-8"
+            )
+        )
+        approved_images = {
+            f"{record['source'].rsplit(':', 1)[0]}@{record['digest']}"
+            for record in provenance["images"]
+        }
+        for profile_type in ("install-profiles", "profiles"):
+            for profile in ("standard", "ha"):
+                with self.subTest(profile_type=profile_type, profile=profile):
+                    result = subprocess.run(
+                        [
+                            "kustomize",
+                            "build",
+                            "--load-restrictor",
+                            "LoadRestrictionsNone",
+                            str(ROOT / f"bootstrap/{profile_type}/{profile}"),
+                        ],
+                        text=True,
+                        capture_output=True,
+                        check=True,
+                    )
+                    documents = [
+                        document
+                        for document in yaml.safe_load_all(result.stdout)
+                        if isinstance(document, dict)
+                    ]
+                    workloads = [
+                        document
+                        for document in documents
+                        if document.get("kind") in {"Deployment", "StatefulSet"}
+                    ]
+                    self.assertTrue(workloads)
+                    for workload in workloads:
+                        self.assertEqual(
+                            workload["metadata"].get("namespace"), "argocd"
+                        )
+                        pod_spec = workload["spec"]["template"]["spec"]
+                        for container in (
+                            (pod_spec.get("containers") or [])
+                            + (pod_spec.get("initContainers") or [])
+                        ):
+                            self.assertIn(container["image"], approved_images)
+                            resources = container.get("resources") or {}
+                            for section in ("requests", "limits"):
+                                for resource_name in ("cpu", "memory"):
+                                    self.assertTrue(
+                                        (resources.get(section) or {}).get(resource_name),
+                                        f"{workload['metadata']['name']}/{container['name']} "
+                                        f"omits {section}.{resource_name}",
+                                    )
 
 
 if __name__ == "__main__":

@@ -1,0 +1,25 @@
+---
+# Copyright © 2026 Mindclade, LLC. All Rights Reserved.
+# Mindclade Proprietary and Confidential.
+# SPDX-License-Identifier: LicenseRef-Mindclade-Proprietary
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: training-init-with-holdout
+  namespace: research-training
+spec:
+  selector:
+    matchLabels: {app: trainer}
+  template:
+    metadata:
+      labels: {app: trainer}
+    spec:
+      serviceAccountName: trainer
+      initContainers:
+        - name: stage-data
+          image: europe-west4-docker.pkg.dev/mc/containers/stager@sha256:0000000000000000000000000000000000000000000000000000000000000000
+          command: ["gcloud", "storage", "cp", "gs://mc-holdout-eval/cases.jsonl", "/data/"]
+      containers:
+        - name: trainer
+          image: europe-west4-docker.pkg.dev/mc/containers/trainer@sha256:0000000000000000000000000000000000000000000000000000000000000000

@@ -10,7 +10,10 @@
       schedule: "0 0 20 12 *"
       duration: 408h
       applications: ["*"]
-      manualSync: true
+      # A reviewed GitHub freeze override authorizes a merge; it does not silently grant
+      # every project sync role a live Argo bypass. The audited cluster-admin procedure in
+      # docs/freeze-and-emergency.md temporarily changes this live field when required.
+      manualSync: false
       timeZone: America/Detroit
     - kind: deny
       # Dormant by default: February 31 never occurs. During an incident, change this to
@@ -18,5 +21,5 @@
       schedule: "0 0 31 2 *"
       duration: 2h
       applications: ["*"]
-      manualSync: true
+      manualSync: false
       timeZone: America/Detroit
