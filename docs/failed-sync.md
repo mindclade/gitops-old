@@ -4,7 +4,7 @@
 
 > **Use when:** an Application is `OutOfSync`, `Degraded`, or repeatedly fails reconciliation.
 > **Impact:** desired state or service health may be incomplete in the affected environment.
-> **Owner:** the AppProject owner with platform support.
+> **Primary owner:** the AppProject owner with platform support.
 > **Escalate:** immediately for production impact, policy-control drift, or suspected credential use.
 
 Use this runbook when an Application is `OutOfSync`, `Degraded`, or repeatedly failing to
@@ -77,3 +77,10 @@ evidence. Revoke bypass access after containment and complete a post-incident re
 Escalate when ownership is unclear, evidence suggests an admission or credential control has
 drifted, or forward recovery would alter persistent data. Preserve the failed and repairing commits,
 operation IDs, events, artifact digest, and incident timeline for handoff.
+
+## Escalation and handoff
+
+Provide the next responder with the environment, Application/AppProject, failed and current commits,
+artifact digest, first-failure time, rendered diff, controller events/logs, attempted mutations, and
+service impact. Escalate persistent-data decisions to the data owner and policy or credential drift
+to security before recovery continues.

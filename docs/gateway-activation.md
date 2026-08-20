@@ -7,6 +7,7 @@
 > **Audience:** platform operators enabling public ingress for an environment.
 > **Outcome:** reconcile Gateway resources only after their controller, DNS, certificate, and
 > cloud prerequisites have been qualified.
+> **Risk:** high—incorrect DNS, certificate, or Gateway ownership can make public service unavailable.
 
 The public Gateway/TLS path is intentionally **inactive by default** in this repository.
 
@@ -49,6 +50,14 @@ created.
 4. Merge through the protected path, observe Argo reconciliation, and verify the reserved address,
    Gateway status, certificate status, DNS answers, TLS chain, and application health.
 5. Repeat the qualification in staging before promoting the same strategy to production.
+
+## Verify activation
+
+- The Gateway is programmed at the reviewed reserved address and reports accepted listeners/routes.
+- External DNS resolves to that address from multiple resolvers.
+- The certificate chain, names, expiry, and renewal path match the selected ownership strategy.
+- Argo CD is synchronized and healthy, and application health checks pass over TLS.
+- No plaintext private key or overlapping cloud/GitOps certificate owner exists.
 
 ## Rollback
 

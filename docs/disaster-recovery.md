@@ -2,9 +2,10 @@
 
 # Argo CD control plane is unavailable or lost
 
-> **Audience:** Incident commander, platform operator, and infrastructure operator
-> **Outcome:** Recreate Argo CD from pinned repository state without changing workload intent
-> or crossing environment boundaries.
+> **Use when:** Argo CD is unavailable or lost after cluster or namespace failure.
+> **Impact:** reconciliation is unavailable; running workloads may drift until recovery completes.
+> **Primary owner:** incident commander with platform and infrastructure operators.
+> **Escalate:** when context, profile, commit, credential provenance, or cloud prerequisites differ.
 
 ## Symptoms
 
@@ -65,7 +66,7 @@ establishes the deny-by-default bootstrap project, installs credential reference
 the upstream initial-admin secret, applies the root application, and waits for core Argo
 rollouts.
 
-## Verify
+## Verify recovery
 
 ```sh
 kubectl get applications.argoproj.io -n argocd
@@ -77,6 +78,13 @@ Confirm the root application is present, only the intended environment's applica
 discovered, core components are ready, the initial-admin secret is absent, and Gatekeeper and
 Binary Authorization still deny their qualified negative fixtures. Restore stateful workload
 data from its authoritative backup system; GitOps restores configuration, not data.
+
+## Escalation and handoff
+
+Hand the next responder the incident ID, target context/environment/profile, authoritative commits,
+credential-file provenance, commands, controller events, mutations, data recovery point, negative
+policy tests, and remaining service risk. Escalate any cross-environment discovery or policy bypass
+to security before reopening workloads.
 
 ## Close and prevent recurrence
 

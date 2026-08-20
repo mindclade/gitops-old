@@ -2,9 +2,10 @@
 
 # A GitOps deployment must be rolled back
 
-> **Audience:** Service owner, platform operator, and incident commander
-> **Outcome:** Restore the last compatible reviewed artifact through Git while preserving
-> audit evidence and reconciliation authority.
+> **Use when:** a recently reconciled immutable artifact causes a confirmed service regression.
+> **Impact:** service behavior is degraded; rollback can be unsafe after incompatible data changes.
+> **Primary owner:** service owner with platform operator and incident commander.
+> **Escalate:** when migration compatibility is uncertain or the last known-good digest is unqualified.
 
 ## Symptoms
 
@@ -34,7 +35,7 @@ be overwritten.
    policy, provenance, and promotion-integrity checks.
 6. Merge through the protected path and observe Argo CD reconcile the reviewed state.
 
-## Verify
+## Verify recovery
 
 - the live workload reports the known-good immutable digest;
 - Argo reports `Synced` and `Healthy` without manual overrides;
@@ -42,7 +43,7 @@ be overwritten.
 - Gatekeeper and Binary Authorization remain enforced; and
 - the deployment record links source, GitOps commit, digest, approvals, and Argo sync.
 
-## Follow-up
+## Escalation and follow-up
 
 Unfreeze promotion only after stability criteria are met. Preserve failed-artifact evidence,
 open the forward-fix work, and document why automated qualification did not catch the

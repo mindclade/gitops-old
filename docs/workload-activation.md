@@ -5,6 +5,7 @@
 > **Audience:** release owners adding a product workload to GitOps desired state.
 > **Outcome:** commit a reproducible, policy-compliant render that references only a qualified
 > immutable artifact.
+> **Risk:** high—activation changes reconciled workload intent and can affect production service.
 
 The control plane is intentionally deployable before product workloads.
 
@@ -56,3 +57,9 @@ render directories for topology documentation.
 
 If admission or reconciliation fails, do not weaken policy. Preserve the digest and commits and
 follow [Failed Argo CD sync](failed-sync.md).
+
+## Roll back or recover
+
+Revert the smallest selection/promotion commit only when the previous artifact remains compatible
+with current data and configuration. Otherwise use a reviewed forward fix. Follow
+[deployment rollback](rollback.md) and preserve the failed digest and qualification evidence.
