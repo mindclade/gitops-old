@@ -355,18 +355,11 @@ jobs:
         with:
           persist-credentials: false
 
-      - name: Cache pre-commit environment
-        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830  # v4
-        with:
-          path: /home/runner/.cache/pre-commit
-          key: pre-commit-${{ runner.os }}-${{ hashFiles('.pre-commit-config.yaml') }}
-          restore-keys: |
-            pre-commit-${{ runner.os }}-
-
       - name: Run Mindclade proprietary license header checks
-        uses: pre-commit/action@2c7b3805fd2a0fd8c1884dcaebf91fc102a13ecd
-        with:
-          extra_args: --hook-stage pre-commit --all-files
+        # The only configured pre-commit hook is this repository-local checker. Running it
+        # directly avoids pre-commit/action's transitive actions/cache@v4 reference, which is
+        # intentionally rejected by the organization's immutable-SHA Actions policy.
+        run: python3 scripts/license-header-check.py --check
 
   dependency-review:
     name: dependency-review
