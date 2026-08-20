@@ -5,6 +5,7 @@
 > **Audience:** Platform bootstrap operators
 > **Outcome:** Import the repository, validate generated and hand-authored state, and activate
 > each environment only after its cloud and trust prerequisites are qualified.
+> **Risk:** critical—activation establishes continuous reconciliation authority in each cluster.
 
 ## Prerequisites
 
@@ -54,3 +55,10 @@
 
 The platform import order is `.github`, `bootstrap`, `github-config`,
 `infrastructure-live`, then `gitops`.
+
+## Roll back or recover
+
+Before bootstrap, revert or close the import change. After Argo owns an environment, restore only a
+compatible reviewed Git commit and let reconciliation converge; do not delete Applications or edit
+live resources to undo the import. Follow [disaster recovery](disaster-recovery.md) if the control
+plane is unavailable and [rollback](rollback.md) for a workload regression.

@@ -5,6 +5,7 @@
 > **Audience:** platform operators upgrading the GitOps control plane.
 > **Outcome:** replace both vendored profiles from one verified upstream release and promote them
 > through development, staging, and production with a tested recovery decision.
+> **Risk:** critical—a control-plane regression can stop or corrupt reconciliation across an environment.
 
 Argo CD is installed once by `bootstrap/bootstrap.sh`, then reconciles its pinned upstream
 installation through `argocd-self-management`. Terraform owns only cloud prerequisites.
