@@ -33,7 +33,7 @@ StrictLoader.add_constructor(
     yaml.resolver.BaseResolver.DEFAULT_MAPPING_TAG, construct_mapping
 )
 for p in Path(__file__).resolve().parents[1].rglob("*.y*ml"):
-    if any(x in p.parts for x in (".git", "rendered")):
+    if any(x in p.parts for x in (".git", "rendered", "vendor")):
         continue
     # Vendored Argo CD payloads are byte-verified against the pinned upstream release.
     # Re-parsing thousands of upstream documents here adds minutes without validating

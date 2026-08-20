@@ -270,6 +270,9 @@ secret_patterns = [
 for path in TRACKED_PATHS:
     if not path.is_file() or path.stat().st_size > 2_000_000:
         continue
+    relative = path.relative_to(ROOT)
+    if relative.parts and relative.parts[0] == "vendor":
+        continue
     text = path.read_text(encoding="utf-8", errors="ignore")
     for pattern in secret_patterns:
         if pattern.search(text):
@@ -305,7 +308,11 @@ image_field = re.compile(r"^\s*(?:-\s*)?image:\s*[\"']?([^\"'\s#]+)")
 new_tag_field = re.compile(r"^\s*newTag:\s*[\"']?([^\"'\s#]+)")
 for path in ROOT.rglob("*.y*ml"):
     relative = path.relative_to(ROOT)
-    if "tests" in relative.parts or "testdata" in relative.parts:
+    if (
+        "tests" in relative.parts
+        or "testdata" in relative.parts
+        or (relative.parts and relative.parts[0] == "vendor")
+    ):
         continue
     text = path.read_text(encoding="utf-8", errors="ignore")
     for line_number, line in enumerate(text.splitlines(), start=1):
