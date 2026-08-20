@@ -1,0 +1,27 @@
+# Copyright © 2026 Mindclade, LLC. All Rights Reserved.
+# Mindclade Proprietary and Confidential.
+# SPDX-License-Identifier: LicenseRef-Mindclade-Proprietary
+
+---
+apiVersion: supply-chain.mindclade.dev/v1alpha1
+kind: VendoredHelmRelease
+metadata:
+  name: actions-runner-controller-0.14.2
+spec:
+  upstreamRepository: actions/actions-runner-controller
+  upstreamRelease: gha-runner-scale-set-0.14.2
+  resolvedAt: "2026-08-20"
+  charts:
+    gha-runner-scale-set-controller:
+      version: 0.14.2
+      ociReference: ghcr.io/actions/actions-runner-controller-charts/gha-runner-scale-set-controller
+      ociDigest: sha256:3081ba15c41f0aa791058dedd2a7406fece24c9aeaa94956c268e5099427a452
+    gha-runner-scale-set:
+      version: 0.14.2
+      ociReference: ghcr.io/actions/actions-runner-controller-charts/gha-runner-scale-set
+      ociDigest: sha256:579e3a1bdf4032b3c3de3e9b0880a4a6d3c1989a67c06010f680c1cc49524d11
+  images:
+    controller: ghcr.io/actions/gha-runner-scale-set-controller:0.14.2@sha256:1b4c7f62e971ab259a4b8798e48e2adaad4af747f45990f474ea5feefa03531d
+    runner: ghcr.io/actions/actions-runner:2.336.0@sha256:0cfdcc701ce933c6d243c6b0b2da767366dc9f2e99961d4c3754b0b78084cdda
+  expandedTreeSha256: 0876dabcbddfa983227a2614b6199783eac65e85e9e063b32325fad3443cacc5
+

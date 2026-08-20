@@ -1,4 +1,4 @@
-.PHONY: license-headers license-headers-fix repository-invariants bootstrap-checks \
+.PHONY: license-headers license-headers-fix repository-invariants bootstrap-checks arc-render \
         yaml-check project-rbac release-metadata release-metadata-tests deployment-selections shell-check \
         validate-production-contract validate-repository-home validate
 
@@ -13,6 +13,9 @@ repository-invariants:
 
 bootstrap-checks:
 	cd bootstrap && sha256sum -c argocd-install.yaml.sha256 && sha256sum -c argocd-install-ha.yaml.sha256
+
+arc-render:
+	python3 scripts/render-arc.py
 
 yaml-check:
 	python3 scripts/validate-yaml.py
@@ -38,4 +41,4 @@ validate-production-contract:
 validate-repository-home:
 	python3 scripts/validate-repository-home.py --root .
 
-validate: validate-production-contract validate-repository-home repository-invariants bootstrap-checks yaml-check project-rbac release-metadata deployment-selections release-metadata-tests shell-check
+validate: validate-production-contract validate-repository-home repository-invariants bootstrap-checks arc-render yaml-check project-rbac release-metadata deployment-selections release-metadata-tests shell-check

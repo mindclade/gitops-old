@@ -14,6 +14,9 @@
 /contracts/             @mindclade/platform @mindclade/security
 /image-policy.yaml      @mindclade/platform @mindclade/security
 /render-manifest.yaml   @mindclade/platform @mindclade/security
+/scripts/validate-release-metadata.py @mindclade/platform @mindclade/security
+/scripts/verify-release-evidence.py @mindclade/platform @mindclade/security
+/scripts/validate-repository.py @mindclade/platform @mindclade/security
 
 # Admission policy. A constraint change alters what the cluster will accept, which is a
 # security decision regardless of who is making it.
@@ -31,6 +34,11 @@
 
 # Argo's own installation and the app-of-apps entrypoint.
 /bootstrap/             @mindclade/platform @mindclade/security
+/arc/                   @mindclade/platform @mindclade/security
+/vendor/arc/            @mindclade/platform @mindclade/security
+/roots/ci/              @mindclade/platform @mindclade/security
+/applications/ci/       @mindclade/platform @mindclade/security
+/projects/arc-artifact-authority.yaml @mindclade/platform @mindclade/security
 
 /.github/workflows/     @mindclade/platform @mindclade/security
 
@@ -48,3 +56,4 @@
 /docs/failed-sync.md         @mindclade/platform @mindclade/security
 /docs/rollback.md            @mindclade/platform @mindclade/security
 /docs/freeze-and-emergency.md @mindclade/platform @mindclade/security
+/docs/production-qualification.md @mindclade/platform @mindclade/security

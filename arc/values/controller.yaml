@@ -1,0 +1,38 @@
+# Copyright © 2026 Mindclade, LLC. All Rights Reserved.
+# Mindclade Proprietary and Confidential.
+# SPDX-License-Identifier: LicenseRef-Mindclade-Proprietary
+
+replicaCount: 2
+fullnameOverride: arc-controller
+image:
+  repository: ghcr.io/actions/gha-runner-scale-set-controller
+  tag: 0.14.2@sha256:1b4c7f62e971ab259a4b8798e48e2adaad4af747f45990f474ea5feefa03531d
+  pullPolicy: IfNotPresent
+serviceAccount:
+  create: true
+  name: arc-controller
+podSecurityContext:
+  runAsNonRoot: true
+  seccompProfile: {type: RuntimeDefault}
+securityContext:
+  allowPrivilegeEscalation: false
+  capabilities: {drop: [ALL]}
+  readOnlyRootFilesystem: true
+  runAsNonRoot: true
+resources:
+  requests: {cpu: 250m, memory: 256Mi}
+  limits: {cpu: "1", memory: 1Gi}
+nodeSelector:
+  iam.gke.io/gke-metadata-server-enabled: "true"
+topologySpreadConstraints:
+  - maxSkew: 1
+    topologyKey: topology.kubernetes.io/zone
+    whenUnsatisfiable: DoNotSchedule
+    labelSelector:
+      matchLabels:
+        app.kubernetes.io/name: gha-runner-scale-set-controller
+flags:
+  logLevel: info
+  logFormat: json
+  updateStrategy: eventual
+

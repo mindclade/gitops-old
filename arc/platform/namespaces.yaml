@@ -1,0 +1,48 @@
+# Copyright © 2026 Mindclade, LLC. All Rights Reserved.
+# Mindclade Proprietary and Confidential.
+# SPDX-License-Identifier: LicenseRef-Mindclade-Proprietary
+
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: arc-systems
+  labels:
+    app.kubernetes.io/managed-by: mindclade-gitops
+    mindclade.dev/authority: artifact-release
+    pod-security.kubernetes.io/enforce: restricted
+    pod-security.kubernetes.io/audit: restricted
+    pod-security.kubernetes.io/warn: restricted
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: arc-canary
+  labels:
+    app.kubernetes.io/managed-by: mindclade-gitops
+    mindclade.dev/authority: artifact-release
+    pod-security.kubernetes.io/enforce: restricted
+    pod-security.kubernetes.io/audit: restricted
+    pod-security.kubernetes.io/warn: restricted
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: arc-build
+  labels:
+    app.kubernetes.io/managed-by: mindclade-gitops
+    mindclade.dev/authority: artifact-release
+    pod-security.kubernetes.io/enforce: restricted
+    pod-security.kubernetes.io/audit: restricted
+    pod-security.kubernetes.io/warn: restricted
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: arc-qualify
+  labels:
+    app.kubernetes.io/managed-by: mindclade-gitops
+    mindclade.dev/authority: artifact-release
+    pod-security.kubernetes.io/enforce: restricted
+    pod-security.kubernetes.io/audit: restricted
+    pod-security.kubernetes.io/warn: restricted

@@ -14,7 +14,7 @@ EXPECTED_CONTEXT=""
 APPLY=0
 
 usage() {
-  echo "usage: $0 --apply --environment <development|staging|production> [--profile <standard|ha>] --context <expected-kube-context>" >&2
+  echo "usage: $0 --apply --environment <ci|development|staging|production> [--profile <standard|ha>] --context <expected-kube-context>" >&2
   exit 2
 }
 
@@ -34,7 +34,7 @@ done
   usage
 }
 
-case "$ENVIRONMENT" in development|staging|production) ;; *) usage ;; esac
+case "$ENVIRONMENT" in ci|development|staging|production) ;; *) usage ;; esac
 case "$PROFILE" in
   standard) INSTALL=argocd-install.yaml; INSTALL_PROFILE=install-profiles/standard ;;
   ha) INSTALL=argocd-install-ha.yaml; INSTALL_PROFILE=install-profiles/ha ;;

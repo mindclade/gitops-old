@@ -1,0 +1,75 @@
+# Copyright © 2026 Mindclade, LLC. All Rights Reserved.
+# Mindclade Proprietary and Confidential.
+# SPDX-License-Identifier: LicenseRef-Mindclade-Proprietary
+
+from __future__ import annotations
+
+import importlib.util
+import tempfile
+import unittest
+from pathlib import Path
+from unittest import mock
+
+
+SCRIPT = Path(__file__).resolve().parents[1] / "scripts/create-release-promotion.py"
+SPEC = importlib.util.spec_from_file_location("promotion", SCRIPT)
+assert SPEC and SPEC.loader
+PROMOTION = importlib.util.module_from_spec(SPEC)
+SPEC.loader.exec_module(PROMOTION)
+
+
+class PromotionTest(unittest.TestCase):
+    def run_main(self, root: Path, *arguments: str) -> int:
+        with mock.patch.object(PROMOTION, "PROPOSALS", root / "deployments/proposals"):
+            with mock.patch.object(PROMOTION.sys, "argv", [str(SCRIPT), *arguments]):
+                return PROMOTION.main()
+
+    def test_writes_only_closed_catalog_proposal(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            digest = "sha256:" + "1" * 64
+            rollback = "sha256:" + "2" * 64
+            self.assertEqual(
+                self.run_main(
+                    root,
+                    "--release-id", "v1.2.3",
+                    "--image-ref", f"us-central1-docker.pkg.dev/mc-common-ci/releases/go-vanity@{digest}",
+                    "--source-sha", "a" * 40,
+                    "--rollback-digest", rollback,
+                ),
+                0,
+            )
+            text = (root / "deployments/proposals/v1.2.3.yaml").read_text()
+            self.assertIn("application: platform-go-vanity", text)
+            self.assertIn(f"imageRef: us-central1-docker.pkg.dev/mc-common-ci/releases/go-vanity@{digest}", text)
+
+    def test_rejects_unknown_package(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            with self.assertRaisesRegex(ValueError, "closed promotion catalog"):
+                self.run_main(
+                    Path(directory),
+                    "--release-id", "v1.2.3",
+                    "--image-ref", "us-central1-docker.pkg.dev/mc-common-ci/releases/injected@sha256:" + "1" * 64,
+                    "--source-sha", "a" * 40,
+                    "--rollback-digest", "sha256:" + "2" * 64,
+                )
+
+    def test_refuses_overwrite(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            existing = root / "deployments/proposals/v1.2.3.yaml"
+            existing.parent.mkdir(parents=True)
+            existing.write_text("existing\n")
+            with self.assertRaisesRegex(ValueError, "refusing to replace"):
+                self.run_main(
+                    root,
+                    "--release-id", "v1.2.3",
+                    "--image-ref", "us-central1-docker.pkg.dev/mc-common-ci/releases/go-vanity@sha256:" + "1" * 64,
+                    "--source-sha", "a" * 40,
+                    "--rollback-digest", "sha256:" + "2" * 64,
+                )
+
+
+if __name__ == "__main__":
+    unittest.main()
+
