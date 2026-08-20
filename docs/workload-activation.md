@@ -48,7 +48,7 @@ render directories for topology documentation.
 7. Merge through the protected environment path and observe development before promoting the same
    qualified digest through staging and production.
 
-## Verify activation
+## Verify
 
 - The committed render is reproducible and contains no mutable image reference.
 - Argo CD reports the workload healthy and synchronized in the intended environment only.
