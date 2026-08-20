@@ -1,4 +1,10 @@
-# Workload activation
+<!-- mindclade-doc: how-to@1 -->
+
+# Activate a workload
+
+> **Audience:** release owners adding a product workload to GitOps desired state.
+> **Outcome:** commit a reproducible, policy-compliant render that references only a qualified
+> immutable artifact.
 
 The control plane is intentionally deployable before product workloads.
 
@@ -16,3 +22,37 @@ A workload becomes GitOps desired state only when one change can prove all of th
 Planned services that do not meet those gates remain in the monorepo and are **not** listed in
 `render-manifest.yaml`. GitOps does not carry `:latest`, unbuilt-image exceptions, or inactive
 render directories for topology documentation.
+
+## Procedure
+
+1. Confirm the workload package exists at the exact protected monorepo release consumed by this
+   repository.
+2. Record the immutable image digest and verify its checksummed SBOM, provenance, independent
+   qualification, vulnerability result, and governed Binary Authorization attestation.
+3. Verify the target AppProject already permits only the required destination, namespace, and
+   resource kinds. Submit a separate reviewed scope change if it does not.
+4. Add the workload source to `render-manifest.yaml` and update the intended environment selection.
+5. Reproduce generated content with the canonical renderer:
+
+   ```sh
+   python3 scripts/render.py --monorepo <path-to-pinned-monorepo-checkout>
+   ```
+
+6. Review every generated delta and run the full contract:
+
+   ```sh
+   nix develop .#ci --command make validate
+   ```
+
+7. Merge through the protected environment path and observe development before promoting the same
+   qualified digest through staging and production.
+
+## Verify activation
+
+- The committed render is reproducible and contains no mutable image reference.
+- Argo CD reports the workload healthy and synchronized in the intended environment only.
+- Binary Authorization admits the exact digest and retains the evidence linkage.
+- Service, metrics, alerts, and rollback behavior meet the release acceptance criteria.
+
+If admission or reconciliation fails, do not weaken policy. Preserve the digest and commits and
+follow [Failed Argo CD sync](failed-sync.md).

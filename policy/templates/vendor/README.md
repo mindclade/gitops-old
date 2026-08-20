@@ -42,7 +42,7 @@ So `deny-latest-tag`, `deny-privileged`, `require-resource-limits` and
 as long as they had existed. The same manifest fires as a `Pod` and is silent as a
 `Deployment`:
 
-```
+```text
 pod      deny-latest-tag FIRES
 deploy   deny-latest-tag SILENT
 ```

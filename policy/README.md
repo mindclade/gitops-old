@@ -7,7 +7,7 @@ Gatekeeper enforces the structural preconditions for deployment: immutable diges
 
 ## Layout
 
-```
+```text
 templates/          ConstraintTemplates we wrote — the Rego. Reusable logic.
 templates/vendor/   ConstraintTemplates vendored from gatekeeper-library, pinned.
 constraints/        Constraint instances — where each template applies, and how hard.
