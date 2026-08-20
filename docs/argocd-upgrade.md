@@ -5,7 +5,8 @@
 > **Audience:** platform operators upgrading the GitOps control plane.
 > **Outcome:** replace both vendored profiles from one verified upstream release and promote them
 > through development, staging, and production with a tested recovery decision.
-> **Risk:** critical—a control-plane regression can stop or corrupt reconciliation across an environment.
+> **Risk:** critical—a control-plane regression can stop or corrupt reconciliation across an
+> environment.
 
 Argo CD is installed once by `bootstrap/bootstrap.sh`, then reconciles its pinned upstream
 installation through `argocd-self-management`. Terraform owns only cloud prerequisites.
@@ -48,14 +49,14 @@ Changing production from the standard to HA profile additionally requires at lea
 schedulable nodes across three zones and verified disruption budgets/capacity. Do not select HA as
 a label when the cluster cannot sustain its replica topology.
 
-## Failure
+## Roll back or recover
 
 If reconciliation fails, do not force-sync or weaken the administration AppProject. Follow
 `docs/failed-sync.md`. Revert the protected Git change only when CRD/data compatibility permits;
 otherwise perform an explicitly reviewed forward recovery. The cold-start script remains the
 recovery path after complete Argo loss, not the routine upgrade mechanism.
 
-## Completion criteria
+## Verify
 
 - Both vendored profiles identify the same immutable upstream version and pass checksum/provenance
   validation.
