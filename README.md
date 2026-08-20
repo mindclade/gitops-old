@@ -1,3 +1,138 @@
+<!-- mindclade-doc: repository-home@2 -->
+
+<!-- Brand source: mindclade/.github-private/mindclade-brand-assets (MC family). -->
+
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)"
+            srcset="docs/assets/brand/mc-lockup-horizontal-dark-1520w.png">
+    <source media="(prefers-color-scheme: light)"
+            srcset="docs/assets/brand/mc-lockup-horizontal-1520w.png">
+    <img alt="Mindclade" src="docs/assets/brand/mc-lockup-horizontal-1520w.png" width="380">
+  </picture>
+</p>
+
+# Mindclade · GitOps
+
+> **Platform Foundation · Ring 2**
+> Argo CD projects, applications, and Kubernetes desired state for every Mindclade cluster.
+
+<p align="center">
+  <img alt="class: desired-state"
+       src="https://img.shields.io/badge/class-desired--state-B5673F?style=flat-square&labelColor=201C24">
+  <img alt="ring: 2"
+       src="https://img.shields.io/badge/ring-2-B5673F?style=flat-square&labelColor=201C24">
+  <img alt="argo cd: v2.x"
+       src="https://img.shields.io/badge/argo--cd-v2.x-B5673F?style=flat-square&labelColor=201C24">
+  <img alt="license: proprietary"
+       src="https://img.shields.io/badge/license-proprietary-5B5660?style=flat-square&labelColor=201C24">
+</p>
+
+| Repository contract | Value |
+| --- | --- |
+| Enterprise | [`mindclade`](https://github.com/enterprises/mindclade) |
+| Organization | [`mindclade`](https://github.com/mindclade) |
+| Repository index | [Mindclade repositories](https://github.com/orgs/mindclade/repositories) |
+| Repository | [`mindclade/gitops`](https://github.com/mindclade/gitops) |
+| Class | `desired-state` |
+| Visibility | `private` |
+| Change model | Pull request to `main`; promotion by environment overlay |
+| Documentation | [`docs/README.md`](docs/README.md) |
+
+Every object that exists inside a cluster is described here. Nothing is applied by hand:
+Argo CD reconciles `main`, and a change reaches a cluster only by merge.
+
+## Authority boundary
+
+### This repository creates
+
+- Argo CD projects, applications, and application sets;
+- Kustomize bases and per-environment overlays;
+- namespace, RBAC, quota, and network-policy manifests;
+- image promotion policy and sync windows.
+
+### This repository does not create
+
+- clusters, node pools, networks, or cloud IAM;
+- Ring-0 state, automation identities, or break-glass access;
+- application source or container images.
+
+Those authorities remain in `infrastructure-live`, `bootstrap`, and the internal monorepo.
+
+## Quick start
+
+```sh
+nix develop
+make validate
+```
+
+Expected result: every overlay builds, and every rendered manifest passes schema and policy
+checks. Rendering is offline; no cluster credentials are required or accepted.
+
+## Promotion
+
+```text
+merge to main
+-> Argo CD syncs dev automatically
+-> promotion pull request bumps the staging overlay
+-> promotion pull request bumps the production overlay, with sync window
+```
+
+A production overlay is never edited in the same pull request as a base.
+
+## Repository map
+
+| Path | Responsibility |
+| --- | --- |
+| `apps/` | One directory per application: base plus overlays |
+| `clusters/` | Per-cluster Argo CD registration and root applications |
+| `platform/` | Cluster-wide controllers, CRDs, and policy |
+| `docs/` | Promotion, rollback, and incident procedures |
+
+## Documentation and safety
+
+Start at the [documentation home](docs/README.md). Read the
+[rollback](docs/rollback.md) procedure before promoting to production.
+
+Never commit secrets. Secret material is referenced by external-secret objects only; a plain
+`Secret` manifest in this repository is a defect.
+
+## Contributing
+
+Read [`CONTRIBUTING.md`](CONTRIBUTING.md) before opening a pull request. Organization-wide
+conventions live in [`mindclade/.github`](https://github.com/mindclade/.github); this
+repository's file adds only what is specific to it. Never bypass Git for routine changes.
+
+## Security
+
+**Do not open a public issue for a vulnerability.** Report through
+[a private security advisory](https://github.com/mindclade/gitops/security/advisories/new)
+or `security@mindclade.com`. Acknowledgement within 2 business days, triage within 5. Full
+policy: [`SECURITY.md`](SECURITY.md).
+
+## License
+
+`LicenseRef-Mindclade-Proprietary` — see [`LICENSE`](LICENSE). First-party configuration
+and policy files carry the shared header defined in
+[`license-header.txt`](license-header.txt).
+
+## Related repositories
+
+| Repository | Holds |
+| --- | --- |
+| [`infrastructure-live`](https://github.com/mindclade/infrastructure-live) | Clusters, networks, workload projects, managed services |
+| [`bootstrap`](https://github.com/mindclade/bootstrap) | Ring-0 state, seed projects, federation, break-glass |
+| [`.github`](https://github.com/mindclade/.github) | Organization-wide conventions and canonical policies |
+
+---
+
+<p align="center">
+  <img alt="" src="docs/assets/brand/mc-submark-96.png" width="24">
+</p>
+<p align="center">
+  <sub>© 2026 Mindclade, LLC · Proprietary and confidential</sub>
+</p>
+
 <!-- mindclade-doc: repository-home@1 -->
 
 <!-- Brand source: mindclade/.github-private/mindclade-brand-assets (MONO family). -->
