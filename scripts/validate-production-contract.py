@@ -240,6 +240,12 @@ for name, workflow in (
 ):
     if 'test "$GITHUB_REF" = refs/heads/main' not in workflow:
         error(f"{name} manual cloud path does not fail before auth off main")
+    if "GITOPS_CONNECTED_VALIDATION" not in workflow:
+        error(f"{name} workflow lacks the governed connected-validation boundary")
+    if "steps.connected.outputs.enabled == 'true'" not in workflow:
+        error(f"{name} workflow does not gate cloud access on connected activation")
+if "pull_request_target:\n    paths:" not in render_workflow:
+    error("render workflow runs connected candidate processing for unrelated pull requests")
 if "merge_group:" not in validate_workflow or "merge_group:" not in contract_workflow:
     error("required GitOps checks do not run for merge-queue groups")
 for context in (
