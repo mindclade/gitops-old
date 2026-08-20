@@ -1,0 +1,43 @@
+# Copyright © 2026 Mindclade, LLC. All Rights Reserved.
+# Mindclade Proprietary and Confidential.
+# SPDX-License-Identifier: LicenseRef-Mindclade-Proprietary
+#
+---
+# Overlay values for production.
+#
+# These are RENDER INPUTS, not manifests. CI reads them when rendering into rendered/production/.
+# Editing this file changes what the next render produces; it does not change the cluster
+# until that render is committed and Argo syncs it.
+#
+# Keep this file small. Anything that differs between environments and is NOT a scale,
+# endpoint, or log-level knob is usually a sign the environments have genuinely diverged —
+# which is the thing the rendered-manifests pattern exists to make visible.
+environment: production
+namespacePrefix: ""
+
+replicas:
+  default: 3
+
+resources:
+  default:
+    requests:
+      cpu: "2"
+      memory: "4Gi"
+    limits:
+      cpu: "2"
+      memory: "4Gi"
+
+logging:
+  level: info
+  format: json
+
+# Honoured by freeze.yml — the UNSCHEDULED freeze switch, for an incident commander who needs
+# to stop production changes in one commit.
+#
+# Normally false. Setting it true blocks every PR touching rendered/production/**, projects/**,
+# or policy/**, which includes the PR that would fix whatever is on fire — so flip it back as
+# soon as the incident is contained rather than leaving it set.
+#
+# Planned freezes (release weeks, holidays) go in overlays/freeze-windows.yaml instead, where
+# they carry a start, an end, and a reason.
+deployFreeze: false

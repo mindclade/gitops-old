@@ -1,0 +1,127 @@
+# Copyright © 2026 Mindclade, LLC. All Rights Reserved.
+# Mindclade Proprietary and Confidential.
+# SPDX-License-Identifier: LicenseRef-Mindclade-Proprietary
+#
+---
+# Replaces the vendored K8sDisallowedTags, which only reads `spec.containers` and was
+# therefore inert on every kind except a bare Pod. See deny-privileged.yaml in this directory
+# for the full account — this is the template the behaviour was demonstrated on:
+#
+#   pod      deny-latest-tag FIRES
+#   deploy   deny-latest-tag SILENT      # same image, same namespace, same constraint
+#
+# Kept alongside require-image-policy even though its digest rule subsumes this one, for the
+# reason the constraint already records: "must not use :latest" tells someone what to fix,
+# while "must be referenced by digest" sends them reading docs.
+apiVersion: templates.gatekeeper.sh/v1
+kind: ConstraintTemplate
+metadata:
+  name: mindcladedisallowedtags
+  annotations:
+    description: >-
+      Container images may not use a mutable tag. Covers workload kinds, not only bare Pods.
+spec:
+  crd:
+    spec:
+      names:
+        kind: MindcladeDisallowedTags
+      validation:
+        openAPIV3Schema:
+          type: object
+          properties:
+            tags:
+              description: Disallowed image tags, without the leading colon.
+              type: array
+              items:
+                type: string
+            exemptImages:
+              description: Images excluded from enforcement. A trailing `*` prefix-matches.
+              type: array
+              items:
+                type: string
+
+  targets:
+    - target: admission.k8s.gatekeeper.sh
+      rego: |
+        package mindcladedisallowedtags
+
+        import future.keywords.contains
+        import future.keywords.if
+        import future.keywords.in
+
+        violation contains {"msg": msg} if {
+          some container in input_containers
+          not is_exempt(container.image)
+          some tag in input.parameters.tags
+          endswith(container.image, sprintf(":%s", [tag]))
+          msg := sprintf(
+            "image %q uses the mutable tag %q. A tag can be repointed at different bytes after review, so what was approved and what runs are not the same thing. Reference it by digest.",
+            [container.image, tag],
+          )
+        }
+
+        # An image with no tag at all resolves to :latest at pull time, which is the same
+        # problem wearing a different hat.
+        violation contains {"msg": msg} if {
+          some container in input_containers
+          not is_exempt(container.image)
+          not has_digest(container.image)
+          not has_tag(container.image)
+          msg := sprintf(
+            "image %q specifies no tag or digest, so it resolves to :latest at pull time.",
+            [container.image],
+          )
+        }
+
+        # THE CONTAINER SET. Identical to require-image-policy.yaml — see deny-privileged.yaml
+        # for why every nesting has to be listed.
+        input_containers contains c if {
+          some c in input.review.object.spec.containers
+        }
+
+        input_containers contains c if {
+          some c in input.review.object.spec.initContainers
+        }
+
+        input_containers contains c if {
+          some c in input.review.object.spec.template.spec.containers
+        }
+
+        input_containers contains c if {
+          some c in input.review.object.spec.template.spec.initContainers
+        }
+
+        input_containers contains c if {
+          some c in input.review.object.spec.jobTemplate.spec.template.spec.containers
+        }
+
+        input_containers contains c if {
+          some c in input.review.object.spec.jobTemplate.spec.template.spec.initContainers
+        }
+
+        has_digest(image) if {
+          contains(image, "@sha256:")
+        }
+
+        # The tag is a colon in the LAST path segment. A registry port — registry:5000/img —
+        # puts a colon in the first segment and is not a tag.
+        has_tag(image) if {
+          parts := split(image, "/")
+          contains(parts[count(parts) - 1], ":")
+        }
+
+        is_exempt(image) if {
+          some pattern in object.get(input.parameters, "exemptImages", [])
+          matches_pattern(image, pattern)
+        }
+
+        matches_pattern(image, pattern) if {
+          endswith(pattern, "*")
+          prefix := trim_suffix(pattern, "*")
+          startswith(image, prefix)
+        }
+
+        matches_pattern(image, pattern) if {
+          not endswith(pattern, "*")
+          image == pattern
+        }

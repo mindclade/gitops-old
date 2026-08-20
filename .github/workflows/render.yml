@@ -1,0 +1,235 @@
+---
+# Copyright © 2026 Mindclade, LLC. All Rights Reserved.
+# Mindclade Proprietary and Confidential.
+# SPDX-License-Identifier: LicenseRef-Mindclade-Proprietary
+#
+# Deterministic GitOps render verification and update.
+#
+# Pull requests are handled by pull_request_target so the workflow implementation is loaded
+# from the protected base branch. Candidate files are checked out as data under .candidate;
+# no candidate script, action, or Nix flake executes while cloud/App credentials are present.
+name: render
+
+on:
+  pull_request_target:
+  push:
+    branches: [main]
+    paths:
+      - 'render-manifest.yaml'
+      - 'scripts/render.sh'
+      - '.github/workflows/render.yml'
+  schedule:
+    - cron: "27 5 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: render-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    if: github.event_name == 'pull_request_target'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - name: Refuse forked candidates
+        env:
+          HEAD_REPOSITORY: ${{ github.event.pull_request.head.repo.full_name }}
+        run: |
+          set -euo pipefail
+          [[ "$HEAD_REPOSITORY" == "$GITHUB_REPOSITORY" ]] || {
+            echo "::error::GitOps control-plane PRs must originate from a branch in ${GITHUB_REPOSITORY}."
+            exit 1
+          }
+
+      - name: Check out trusted base implementation
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          ref: ${{ github.event.pull_request.base.sha }}
+          path: .trusted
+          persist-credentials: false
+
+      - name: Check out candidate as untrusted data
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          path: .candidate
+          persist-credentials: false
+
+      - uses: cachix/install-nix-action@630ae543ea3a38a9a4166f03376c02c50f408342  # v31.11.0
+        with:
+          extra_nix_config: |
+            experimental-features = nix-command flakes
+            accept-flake-config = false
+
+      - id: manifest
+        name: Validate candidate's pinned source using trusted tooling
+        run: |
+          set -euo pipefail
+          repo="$(nix develop ./.trusted#ci --command yq -r '.spec.source.repo' .candidate/render-manifest.yaml)"
+          ref="$(nix develop ./.trusted#ci --command yq -r '.spec.source.ref' .candidate/render-manifest.yaml)"
+          [[ "$repo" == "Mindclade/mindclade-internal-monorepo" ]] || {
+            echo "::error::render source repository is not authorized: $repo"
+            exit 1
+          }
+          [[ "$ref" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ || "$ref" =~ ^[0-9a-f]{40}$ ]] || {
+            echo "::error::render source ref must be a protected full semver tag or commit SHA: $ref"
+            exit 1
+          }
+          {
+            echo "repo=$repo"
+            echo "ref=$ref"
+          } >> "$GITHUB_OUTPUT"
+
+      - uses: google-github-actions/auth@7c6bc770dae815cd3e89ee6cdf493a5fab2cc093  # v3
+        with:
+          workload_identity_provider: ${{ vars.WIF_PROVIDER_PLAN }}
+          service_account: ${{ vars.SA_GITOPS_RENDER }}
+
+      - id: pem
+        uses: google-github-actions/get-secretmanager-secrets@2b5f97c5a4b9c105e64646762ad4fc3f5128e6f5  # v2
+        with:
+          secrets: app_pem:${{ vars.SECRETS_PROJECT_ID }}/github-app-render-pem
+
+      - id: app-token
+        uses: actions/create-github-app-token@fee1f7d63c2ff003460e3d139729b119787bc349  # v2
+        with:
+          app-id: ${{ vars.RENDER_APP_ID }}
+          private-key: ${{ steps.pem.outputs.app_pem }}
+          owner: ${{ vars.MONOREPO_ORG }}
+          repositories: mindclade-internal-monorepo
+
+      - name: Check out pinned monorepo release
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          repository: ${{ steps.manifest.outputs.repo }}
+          ref: ${{ steps.manifest.outputs.ref }}
+          token: ${{ steps.app-token.outputs.token }}
+          path: .monorepo
+          persist-credentials: false
+
+      - name: Verify candidate rendered state with trusted renderer
+        env:
+          MINDCLADE_GITOPS_ROOT: ${{ github.workspace }}/.candidate
+        run: >-
+          nix develop ./.trusted#ci --command
+          ./.trusted/scripts/render.sh --monorepo .monorepo --check
+
+  update:
+    if: github.event_name != 'pull_request_target'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    permissions:
+      contents: write
+      pull-requests: write
+      id-token: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: cachix/install-nix-action@630ae543ea3a38a9a4166f03376c02c50f408342  # v31.11.0
+        with:
+          extra_nix_config: |
+            experimental-features = nix-command flakes
+            accept-flake-config = false
+
+      - id: manifest
+        name: Validate the pinned source ref
+        run: |
+          set -euo pipefail
+          repo="$(nix develop .#ci --command yq -r '.spec.source.repo' render-manifest.yaml)"
+          ref="$(nix develop .#ci --command yq -r '.spec.source.ref' render-manifest.yaml)"
+          [[ "$repo" == "Mindclade/mindclade-internal-monorepo" ]] || {
+            echo "::error::render source repository is not authorized: $repo"
+            exit 1
+          }
+          [[ "$ref" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ || "$ref" =~ ^[0-9a-f]{40}$ ]] || {
+            echo "::error::render source ref must be a protected full semver tag or commit SHA: $ref"
+            exit 1
+          }
+          {
+            echo "repo=$repo"
+            echo "ref=$ref"
+          } >> "$GITHUB_OUTPUT"
+
+      - uses: google-github-actions/auth@7c6bc770dae815cd3e89ee6cdf493a5fab2cc093  # v3
+        with:
+          workload_identity_provider: ${{ vars.WIF_PROVIDER_PLAN }}
+          service_account: ${{ vars.SA_GITOPS_RENDER }}
+
+      - id: pem
+        uses: google-github-actions/get-secretmanager-secrets@2b5f97c5a4b9c105e64646762ad4fc3f5128e6f5  # v2
+        with:
+          secrets: app_pem:${{ vars.SECRETS_PROJECT_ID }}/github-app-render-pem
+
+      - id: app-token
+        uses: actions/create-github-app-token@fee1f7d63c2ff003460e3d139729b119787bc349  # v2
+        with:
+          app-id: ${{ vars.RENDER_APP_ID }}
+          private-key: ${{ steps.pem.outputs.app_pem }}
+          owner: ${{ vars.MONOREPO_ORG }}
+          repositories: mindclade-internal-monorepo
+
+      - name: Check out the monorepo at the pinned ref
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          repository: ${{ steps.manifest.outputs.repo }}
+          ref: ${{ steps.manifest.outputs.ref }}
+          token: ${{ steps.app-token.outputs.token }}
+          path: .monorepo
+          persist-credentials: false
+
+      - name: Render desired state
+        run: nix develop .#ci --command ./scripts/render.sh --monorepo .monorepo
+
+      - id: commit
+        name: Commit to the render branch
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          git config user.name "mindclade-render[bot]"
+          git config user.email "mindclade-render[bot]@users.noreply.github.com"
+          git add rendered/
+          if git diff --cached --quiet; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          {
+            echo "stat<<EOF"
+            git diff --cached --stat | tail -1
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
+          echo "changed=true" >> "$GITHUB_OUTPUT"
+          git checkout -B render/auto
+          git commit -m "render: ${{ steps.manifest.outputs.ref }}"
+          git push --force \
+            "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" \
+            render/auto
+
+      - name: Open or update the reviewed render PR
+        if: steps.commit.outputs.changed == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          head='render/auto'
+          body='## Rendered manifests\n\n`rendered/` was regenerated from the pinned monorepo release. The diff is the cluster delta.\n\n'
+          body+='- [ ] Every workload image is digest-pinned.\n'
+          body+='- [ ] Production changes are expected.\n'
+          body+='- [ ] Release evidence and policy checks pass.\n'
+          open="$(gh pr list --state open --head "$head" --json number --jq '.[0].number' --limit 1)"
+          if [[ -n "$open" && "$open" != null ]]; then
+            gh pr edit "$open" --body "$(printf '%b' "$body")"
+          else
+            gh pr create --base main --head "$head" \
+              --title 'render: refresh manifests from pinned monorepo release' \
+              --body "$(printf '%b' "$body")"
+          fi

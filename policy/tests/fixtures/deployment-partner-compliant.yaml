@@ -1,0 +1,28 @@
+---
+# Copyright © 2026 Mindclade, LLC. All Rights Reserved.
+# Mindclade Proprietary and Confidential.
+# SPDX-License-Identifier: LicenseRef-Mindclade-Proprietary
+#
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: partner-compliant
+  namespace: partner-acme
+spec:
+  selector:
+    matchLabels: {app: x}
+  template:
+    metadata:
+      labels: {app: x}
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1001
+        runAsGroup: 1000
+        fsGroup: 1000
+      containers:
+        - name: app
+          image: europe-west4-docker.pkg.dev/mc/containers/app@sha256:0000000000000000000000000000000000000000000000000000000000000000
+          resources:
+            limits: {cpu: "1", memory: 1Gi}
+            requests: {cpu: "1", memory: 1Gi}

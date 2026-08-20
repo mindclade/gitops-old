@@ -1,0 +1,67 @@
+---
+# The flake dev shell must actually build.
+#
+# Every repository here documents `nix develop` as the way to get the toolchain, and the
+# shellHook checks that the pinned terraform matches .terraform-version. None of that helps if
+# the flake itself stopped evaluating three weeks ago and nobody noticed — which is what the
+# weekly schedule below is for.
+name: nix-flake
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "flake.nix"
+      - "flake.lock"
+  pull_request:
+    paths:
+      - "flake.nix"
+      - "flake.lock"
+  workflow_dispatch:
+  schedule:
+    # Weekly. The flake pins a nixpkgs CHANNEL rather than a revision, so it can break without
+    # any file in this repository changing.
+    - cron: "17 2 * * 1"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: nix-flake-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    name: check flake shell
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          persist-credentials: false
+
+      # A PINNED ACTION, not `curl https://install.determinate.systems/... | sh`.
+      #
+      # This step used to pipe a remote script straight into a shell. In a repository whose
+      # entire subject is supply-chain control — SHA-pinned actions, cosign-verified images,
+      # sha256-locked remote bases in gitops/scripts/render.sh — an unpinned installer fetched
+      # over the network and executed was the one place that rule was not applied.
+      #
+      # It also had to hand-source profile scripts afterwards because the installer's PATH
+      # changes do not survive between steps. The action handles the daemon, the profile, and
+      # $GITHUB_PATH itself.
+      - uses: cachix/install-nix-action@630ae543ea3a38a9a4166f03376c02c50f408342  # v31.11.0
+        with:
+          # experimental-features: flakes are still gated behind this. Without it `nix develop`
+          # fails with a message about an experimental feature rather than about the flake.
+          extra_nix_config: |
+            experimental-features = nix-command flakes
+            accept-flake-config = false
+
+      - name: Flake metadata is evaluable
+        # Cheaper than building the shell, and it fails distinctly: a syntax error or an
+        # unresolvable input surfaces here rather than inside a ten-minute build.
+        run: nix flake metadata --no-write-lock-file
+
+      - name: Validate flake dev shell
+        run: nix develop --command bash -lc 'kustomize version'

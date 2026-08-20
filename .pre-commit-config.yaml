@@ -1,0 +1,15 @@
+---
+# Copyright © 2026 Mindclade, LLC. All Rights Reserved.
+# Mindclade Proprietary and Confidential.
+# SPDX-License-Identifier: LicenseRef-Mindclade-Proprietary
+#
+repos:
+  - repo: local
+    hooks:
+      - id: mindclade-license-header
+        name: Mindclade proprietary license header
+        description: Ensure proprietary license comment headers are present on supported source files
+        entry: bash scripts/license-header-check.sh --check
+        language: script
+        pass_filenames: true
+        stages: [pre-commit]

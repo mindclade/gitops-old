@@ -1,0 +1,14 @@
+# rendered/ is CI output. Marking it generated collapses it by default in PR diffs and keeps
+# it out of language statistics — a reviewer looking at a 4,000-line render should be reading
+# the summary, not scrolling.
+#
+# This does NOT stop the diff being available. Expanding it is one click, and for a promotion
+# PR the diff is exactly what needs reading.
+rendered/** linguist-generated=true
+rendered/** -diff
+
+# Keep line endings stable. A CRLF sneaking in changes every line of a rendered file and
+# makes the bit-identical promotion check fail for no real reason.
+*.yaml text eol=lf
+*.yml  text eol=lf
+*.sh   text eol=lf

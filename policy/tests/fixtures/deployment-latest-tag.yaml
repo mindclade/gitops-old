@@ -1,0 +1,25 @@
+---
+# Copyright © 2026 Mindclade, LLC. All Rights Reserved.
+# Mindclade Proprietary and Confidential.
+# SPDX-License-Identifier: LicenseRef-Mindclade-Proprietary
+#
+# A Deployment using a mutable tag. THE fixture this whole suite exists for: the vendored
+# template passed this object because it only read `spec.containers`.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: latest-tag
+  namespace: dev
+spec:
+  selector:
+    matchLabels: {app: x}
+  template:
+    metadata:
+      labels: {app: x}
+    spec:
+      containers:
+        - name: app
+          image: example.com/app:latest
+          resources:
+            limits: {cpu: "1", memory: 1Gi}
+            requests: {cpu: "1", memory: 1Gi}

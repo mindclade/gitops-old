@@ -1,0 +1,385 @@
+---
+# Copyright © 2026 Mindclade, LLC. All Rights Reserved.
+# Mindclade Proprietary and Confidential.
+# SPDX-License-Identifier: LicenseRef-Mindclade-Proprietary
+#
+name: validate
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: validate-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # ---------------------------------------------------------------------------------------
+  # Lint
+  # ---------------------------------------------------------------------------------------
+  # .github/actionlint.yaml and .yamllint.yaml were in this repository with nothing running
+  # either of them. A config with no runner is a description of a standard, not a gate — it
+  # reports nothing, blocks nothing, and reads in review exactly like enforcement.
+  #
+  # The binaries come from `.#ci`, not from a release download. actionlint shells out to
+  # shellcheck, and versions disagree: 0.10.0, which flake.lock pins, reports SC2153 and
+  # SC2015 findings that 0.11.0 does not. A locally installed actionlint can therefore pass
+  # on a change this job fails.
+  lint:
+    name: actionlint + yamllint
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: cachix/install-nix-action@630ae543ea3a38a9a4166f03376c02c50f408342  # v31.11.0
+        with:
+          extra_nix_config: |
+            experimental-features = nix-command flakes
+            accept-flake-config = false
+
+      - name: actionlint
+        run: nix develop .#ci --command actionlint -color
+
+      - name: yamllint
+        run: nix develop .#ci --command yamllint --strict .
+
+  schema:
+    name: kubeconform
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: cachix/install-nix-action@630ae543ea3a38a9a4166f03376c02c50f408342  # v31.11.0
+        with:
+          extra_nix_config: |
+            experimental-features = nix-command flakes
+
+      - name: Validate rendered manifests
+        run: |
+          set -euo pipefail
+          # -strict rejects unknown fields, which is what catches a typo'd key that
+          # Kubernetes would otherwise silently ignore.
+          nix develop .#ci --command kubeconform \
+            -strict \
+            -summary \
+            -kubernetes-version 1.31.0 \
+            -schema-location default \
+            -schema-location 'https://raw.githubusercontent.com/datreeio/CRDs-catalog/main/{{.Group}}/{{.ResourceKind}}_{{.ResourceAPIVersion}}.json' \
+            -ignore-missing-schemas \
+            rendered/
+
+      - name: Validate Argo resources
+        run: |
+          set -euo pipefail
+          nix develop .#ci --command kubeconform -strict -summary -ignore-missing-schemas \
+            applications/ projects/ bootstrap/
+
+  policy:
+    name: gator
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: cachix/install-nix-action@630ae543ea3a38a9a4166f03376c02c50f408342  # v31.11.0
+        with:
+          extra_nix_config: |
+            experimental-features = nix-command flakes
+
+      - name: Every constraint must have a template
+        # A constraint whose ConstraintTemplate is missing does not fail loudly — it fails to
+        # apply, and the control silently does not exist. Catch it here rather than in an
+        # incident review.
+        run: |
+          set -euo pipefail
+          status=0
+          while IFS= read -r kind; do
+            [ -z "$kind" ] && continue
+            if ! grep -qih "kind: ${kind}$" policy/templates/*.yaml policy/templates/vendor/*.yaml; then
+              echo "::error::constraint kind '${kind}' has no ConstraintTemplate."
+              echo "  Write one in policy/templates/, or vendor it — see policy/templates/vendor/README.md"
+              status=1
+            fi
+          done < <(grep -h '^kind:' policy/constraints/*.yaml | awk '{print tolower($2)}' | sort -u)
+          exit "$status"
+
+      - name: Constraints must actually fire
+        # RUNS BEFORE the evaluation below, deliberately.
+        #
+        # `gator test` asks "do the current manifests violate anything?" — and answers "no"
+        # both when the estate is clean and when the policy is broken. Four constraints were
+        # pointed at upstream templates that read only `spec.containers`, so they were inert
+        # against every workload kind except a bare Pod, and that command reported clean for
+        # as long as they had existed.
+        #
+        # `gator verify` asks the other question: given an object that definitely violates,
+        # does the constraint say so? Only that one can fail on a broken template. Running it
+        # first means a green "Evaluate policy" below is a statement about the manifests
+        # rather than about the policy engine.
+        run: nix develop .#ci --command gator verify policy/tests/suite.yaml
+
+      - name: Evaluate policy against rendered manifests
+        run: |
+          set -euo pipefail
+          status=0
+          for env in development staging production; do
+            [ -d "rendered/$env" ] || continue
+            echo "── $env"
+            # gator exits non-zero on a DENY violation. Constraints at enforcementAction
+            # dryrun report without failing, which is what makes the dryrun→deny promotion
+            # process in policy/README.md workable.
+            nix develop .#ci --command gator test \
+              --filename=policy/templates \
+              --filename=policy/constraints \
+              --filename="rendered/$env" || status=1
+          done
+          exit "$status"
+
+  exemptions:
+    name: exemption expiry
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Fail on an expired exemption
+        # Deliberate friction. An exemption that quietly outlives its expiry is a permanent
+        # hole with a date on it; renewing one should require somebody to look at it again.
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import datetime, sys, yaml, pathlib
+
+          path = pathlib.Path("policy/exemptions.yaml")
+          doc = yaml.safe_load(path.read_text()) or {}
+          exemptions = (doc.get("spec") or {}).get("exemptions") or []
+
+          today = datetime.date.today()
+          expired, malformed = [], []
+
+          for e in exemptions:
+              name = f"{e.get('constraint','?')} / {(e.get('scope') or {}).get('workload','?')}"
+              raw = e.get("expires")
+              if not raw:
+                  malformed.append(f"{name}: no expiry")
+                  continue
+              exp = raw if isinstance(raw, datetime.date) else datetime.date.fromisoformat(str(raw))
+              if exp < today:
+                  expired.append(f"{name}: expired {exp}")
+              elif (exp - today).days <= 14:
+                  print(f"::warning::exemption expires in {(exp - today).days} days — {name}")
+              if not e.get("reviewer"):
+                  malformed.append(f"{name}: no reviewer")
+              if not e.get("ticket"):
+                  malformed.append(f"{name}: no ticket")
+
+          for m in malformed:
+              print(f"::error::malformed exemption — {m}")
+          for x in expired:
+              print(f"::error::expired exemption — {x}")
+
+          if expired or malformed:
+              sys.exit(1)
+          print(f"{len(exemptions)} exemption(s), all valid.")
+          PY
+
+  no-drift:
+    name: rendered/ carries generated headers
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Every rendered file must declare its provenance
+        # The AUTHORITATIVE no-drift check is `render.yml`, which re-renders from the pinned
+        # monorepo ref and diffs. It needs cross-org read access, so it lives in its own
+        # workflow with its own App token.
+        #
+        # This is the cheap complement: it needs no credentials, runs in seconds, and catches
+        # the common case of a file added to rendered/ by hand. A file with no header was
+        # certainly not produced by scripts/render.sh.
+        run: |
+          set -euo pipefail
+          status=0
+          count=0
+          while IFS= read -r f; do
+            count=$((count + 1))
+            if ! head -1 "$f" | grep -q "GENERATED by scripts/render.sh"; then
+              echo "::error file=$f::no GENERATED header — hand-written files do not belong in rendered/"
+              status=1
+            fi
+            if ! head -4 "$f" | grep -q '^# ref:'; then
+              echo "::error file=$f::no source ref recorded. Re-run scripts/render.sh."
+              status=1
+            fi
+          done < <(find rendered -name '*.yaml' -type f)
+          echo "Checked $count rendered file(s)."
+          exit "$status"
+
+      - name: Every rendered directory must match an ApplicationSet glob
+        # A directory whose prefix matches no ApplicationSet renders fine and is then silently
+        # ignored by Argo — a confusing way to discover a typo in render-manifest.yaml.
+        run: |
+          set -euo pipefail
+          status=0
+          while IFS= read -r d; do
+            name=$(basename "$d")
+            case "$name" in
+              platform-*|serving-*|research-*|data-*|partner-*) ;;
+              *)
+                echo "::error::rendered/$(basename "$(dirname "$d")")/$name matches no ApplicationSet glob."
+                echo "  Prefixes with an ApplicationSet: platform- serving- research- data- partner-"
+                echo "  Fix the 'out' value in render-manifest.yaml, or add an ApplicationSet."
+                status=1 ;;
+            esac
+          done < <(find rendered -mindepth 2 -maxdepth 2 -type d)
+          exit "$status"
+
+  promotion-integrity:
+    name: promotion is bit-identical
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    if: github.event_name == 'pull_request'
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Compare staging and production for promoted apps
+        # Promotion copies manifests between environments with only a namespace overlay.
+        # Verifying it here is what makes "staging runs the same thing as production" a
+        # checkable claim rather than an assertion.
+        run: |
+          set -euo pipefail
+          changed=$(git diff --name-only "origin/${{ github.base_ref }}...HEAD" -- 'rendered/production/**' || true)
+          if [ -z "$changed" ]; then
+            echo "No production manifests changed."
+            exit 0
+          fi
+
+          status=0
+          for app in $(printf '%s\n' "$changed" | cut -d/ -f3 | sort -u); do
+            if [ ! -d "rendered/staging/$app" ]; then
+              echo "::error::rendered/production/$app has no staging counterpart. Production must be promoted from staging, never rendered directly."
+              status=1
+              continue
+            fi
+            # Normalise the namespace, then require byte equality. Anything else means the
+            # manifests were re-rendered rather than promoted.
+            #
+            # Files are concatenated in a stable sorted order on both sides. The previous
+            # version passed a glob to sed and compared against `cat` of the other glob,
+            # which relied on both shells expanding to the same order — true in practice and
+            # not guaranteed, and a mismatch there would have read as a content difference.
+            normalised=$(
+              find "rendered/staging/$app" -name '*.yaml' -type f | sort \
+                | xargs cat \
+                | sed -e 's/namespace: staging-/namespace: production-/g' \
+                      -e 's/environment: staging/environment: production/g'
+            )
+            actual=$(find "rendered/production/$app" -name '*.yaml' -type f | sort | xargs cat)
+
+            if [ "$normalised" != "$actual" ]; then
+              # FAILS the job. This used to emit ::warning:: and leave $status at 0, so the
+              # check named "promotion is bit-identical" could not fail — a re-rendered
+              # production manifest passed with a warning nobody reads in a green run.
+              #
+              # That is the one claim this repository makes that is worth mechanically
+              # enforcing: "staging runs the same thing as production" is checkable only if
+              # the check can say no.
+              echo "::error::rendered/production/$app differs from staging beyond the namespace overlay."
+              echo "Production must be PROMOTED from staging, never rendered directly — promote.yml"
+              echo "copies bytes so a re-render cannot pick up a different chart version or base image."
+              diff <(printf '%s\n' "$normalised") <(printf '%s\n' "$actual") | head -40 || true
+              status=1
+            fi
+          done
+          exit "$status"
+
+  pre-commit:
+    name: pre-commit
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Cache pre-commit environment
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830  # v4
+        with:
+          path: /home/runner/.cache/pre-commit
+          key: pre-commit-${{ runner.os }}-${{ hashFiles('.pre-commit-config.yaml') }}
+          restore-keys: |
+            pre-commit-${{ runner.os }}-
+
+      - name: Run Mindclade proprietary license header checks
+        uses: pre-commit/action@2c7b3805fd2a0fd8c1884dcaebf91fc102a13ecd
+        with:
+          extra_args: --hook-stage pre-commit --all-files
+
+  dependency-review:
+    name: dependency-review
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    if: github.event_name == 'pull_request'
+    permissions:
+      contents: read
+    steps:
+      - name: Review dependency graph changes
+        uses: actions/dependency-review-action@a1d282b36b6f3519aa1f3fc636f609c47dddb294
+        with:
+          fail-on-severity: high
+
+  trivy:
+    name: trivy fs
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Run Trivy filesystem scan
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25
+        with:
+          scan-type: fs
+          scan-ref: .
+          format: table
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          exit-code: 1
+
+  osv:
+    name: osv-scanner
+    if: github.event_name == 'pull_request'
+    permissions:
+      contents: read
+      actions: read
+      security-events: write
+    uses: google/osv-scanner-action/.github/workflows/osv-scanner-reusable-pr.yml@06b2ab4348248b456ee06c9e953637f55e03504f
+
+  repository-invariants:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with: {persist-credentials: false}
+      - run: python3 scripts/validate-repository.py

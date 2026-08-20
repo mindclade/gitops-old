@@ -1,0 +1,53 @@
+# Copyright © 2026 Mindclade, LLC. All Rights Reserved.
+# Mindclade Proprietary and Confidential.
+# SPDX-License-Identifier: LicenseRef-Mindclade-Proprietary
+#
+---
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: serving
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "0"
+spec:
+  goTemplate: true
+  goTemplateOptions: ["missingkey=error"]
+  generators:
+    - git:
+        repoURL: https://github.com/Mindclade/gitops.git
+        revision: main
+        directories:
+          - path: rendered/staging/serving-*
+  template:
+    metadata:
+      name: 'staging-{{.path.basename}}'
+      labels:
+        mindclade.dev/environment: staging
+        mindclade.dev/domain: serving
+      finalizers:
+        - resources-finalizer.argocd.argoproj.io
+    spec:
+      project: serving
+      source:
+        repoURL: https://github.com/Mindclade/gitops.git
+        targetRevision: main
+        path: '{{.path.path}}'
+        directory:
+          recurse: true
+          include: '*.yaml'
+      destination:
+        server: https://kubernetes.default.svc
+        namespace: '{{.path.basename}}'
+      syncPolicy:
+        automated:
+          prune: false
+          selfHeal: true
+        syncOptions:
+          - CreateNamespace=false
+          - ServerSideApply=true
+          - ApplyOutOfSyncOnly=true
+          - PruneLast=true
+        retry:
+          limit: 5
+          backoff: {duration: 10s, factor: 2, maxDuration: 5m}

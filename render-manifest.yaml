@@ -1,0 +1,35 @@
+# Copyright © 2026 Mindclade, LLC. All Rights Reserved.
+# Mindclade Proprietary and Confidential.
+# SPDX-License-Identifier: LicenseRef-Mindclade-Proprietary
+#
+---
+# Active desired-state render inventory.
+#
+# Only sources with committed, independently reviewable rendered output belong here. Workloads
+# are added in the same reviewed change that introduces an immutable release digest and fresh
+# rendered output. This deliberately prevents a planned-but-unreleased service from becoming
+# implicit cluster intent.
+apiVersion: mindclade.dev/v1
+kind: RenderManifest
+spec:
+  source:
+    repo: Mindclade/mindclade-internal-monorepo
+    # Protected immutable release tag. github-config protects v* tags from movement/deletion.
+    ref: v0.1.1
+
+  targets:
+    # Environment contract: namespaces, quotas, service-account and policy baselines.
+    - source: infra/gitops/environments/{env}
+      out: platform-core
+      project: platform
+      environments: [development, staging, production]
+
+  # TLS and Gateway activation is intentionally fail-closed. The monorepo currently contains
+  # cert-manager/Gateway source, but this repository does not activate it until the certificate
+  # controller or cloud Certificate Manager ownership path is qualified end to end. Activating
+  # those targets requires a reviewed render-manifest change, fresh deterministic renders, and
+  # successful staging qualification. See docs/gateway-activation.md.
+
+  # Remote bases fetched by the renderer must be checked against the monorepo lock before use.
+  lockfiles:
+    - infra/gitops/argocd/bootstrap/argocd.lock.yaml

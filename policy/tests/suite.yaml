@@ -1,0 +1,169 @@
+# Copyright © 2026 Mindclade, LLC. All Rights Reserved.
+# Mindclade Proprietary and Confidential.
+# SPDX-License-Identifier: LicenseRef-Mindclade-Proprietary
+#
+---
+# Does each constraint actually fire on each kind it claims to match?
+#
+# WHY THIS EXISTS. Four constraints were pointed at upstream Gatekeeper library templates
+# whose rego reads containers from one place only:
+#
+#   input_containers[c] { c := input.review.object.spec.containers[_] }
+#
+# That is the Pod shape. Every constraint matched `Pod, Deployment, StatefulSet, DaemonSet,
+# Job, CronJob` — and on all of those except Pod the containers live under
+# `spec.template.spec.containers`. The rule found nothing and reported clean. `deny-privileged`,
+# `deny-latest-tag`, `require-resource-limits` and `partner-namespace-isolation` were inert
+# against every workload Argo actually syncs, for as long as they had existed.
+#
+# Nothing detected it. `gator test` passed, the constraints were present, the templates were
+# present, and review saw a correct-looking policy. It surfaced only because a `:latest` image
+# reached `rendered/production` and someone went looking for why the gate had not caught it.
+#
+# WHAT MAKES THIS SUITE DIFFERENT FROM `gator test`. That command asks "do the current
+# manifests violate anything?" — a question whose answer is "no" both when the estate is clean
+# and when the policy is broken. These cases ask the other question: "given an object that
+# definitely violates, does the constraint say so?" Only the second one can fail on a broken
+# template.
+#
+# THE NEGATIVE CASES ARE NOT PADDING. `deny-privileged` currently reports zero violations
+# against the real manifests. Without a case proving it CAN fire, that zero is unreadable —
+# it means either "no privileged containers exist" or "still broken", and those need to look
+# different. Equally, a rule that fires on everything is as useless as one that fires on
+# nothing, which is what the `-compliant` fixtures pin down.
+#
+#   gator verify policy/tests/suite.yaml
+kind: Suite
+apiVersion: test.gatekeeper.sh/v1alpha1
+metadata:
+  name: mindclade-policy
+tests:
+  # -------------------------------------------------------------------------------------
+  # deny-latest-tag
+  # -------------------------------------------------------------------------------------
+  # The constraint the bug was demonstrated on: identical image, FIRES as a Pod and SILENT
+  # as a Deployment. Every workload kind it claims is covered below.
+  - name: deny-latest-tag
+    template: ../templates/deny-latest-tag.yaml
+    constraint: ../constraints/deny-latest-tag.yaml
+    cases:
+      - name: deployment-with-latest-is-denied
+        object: fixtures/deployment-latest-tag.yaml
+        assertions:
+          - violations: "yes"
+      - name: statefulset-with-latest-is-denied
+        object: fixtures/statefulset-latest-tag.yaml
+        assertions:
+          - violations: "yes"
+      - name: daemonset-with-latest-is-denied
+        object: fixtures/daemonset-latest-tag.yaml
+        assertions:
+          - violations: "yes"
+      - name: cronjob-with-latest-is-denied
+        object: fixtures/cronjob-latest-tag.yaml
+        assertions:
+          - violations: "yes"
+      - name: pod-with-latest-is-denied
+        object: fixtures/pod-latest-tag.yaml
+        assertions:
+          - violations: "yes"
+      - name: digest-pinned-deployment-is-allowed
+        object: fixtures/deployment-compliant.yaml
+        assertions:
+          - violations: "no"
+
+  # -------------------------------------------------------------------------------------
+  # deny-privileged
+  # -------------------------------------------------------------------------------------
+  - name: deny-privileged
+    template: ../templates/deny-privileged.yaml
+    constraint: ../constraints/deny-privileged.yaml
+    cases:
+      - name: privileged-deployment-is-denied
+        object: fixtures/deployment-privileged.yaml
+        assertions:
+          - violations: "yes"
+      # The case that makes the real-world zero readable.
+      - name: unprivileged-deployment-is-allowed
+        object: fixtures/deployment-compliant.yaml
+        assertions:
+          - violations: "no"
+
+  # -------------------------------------------------------------------------------------
+  # require-resource-limits
+  # -------------------------------------------------------------------------------------
+  - name: require-resource-limits
+    template: ../templates/require-resource-limits.yaml
+    constraint: ../constraints/require-resource-limits.yaml
+    cases:
+      - name: deployment-without-limits-is-denied
+        object: fixtures/deployment-no-limits.yaml
+        assertions:
+          - violations: "yes"
+      # `resources: {}` — present but empty, which is what a Helm chart emits when its values
+      # file has no resource stanza. Pinned as a case because "the block exists" is an easy
+      # thing for a future rewrite to mistake for "the block is populated".
+      - name: empty-resources-block-is-denied
+        object: fixtures/deployment-empty-resources.yaml
+        assertions:
+          - violations: "yes"
+      # Requests without limits. Schedulable, and free to consume the whole node once
+      # running — on a GPU node that is the expensive failure this constraint exists for, so
+      # requests alone must not satisfy it.
+      - name: requests-without-limits-is-denied
+        object: fixtures/deployment-requests-only.yaml
+        assertions:
+          - violations: "yes"
+      - name: fully-resourced-deployment-is-allowed
+        object: fixtures/deployment-compliant.yaml
+        assertions:
+          - violations: "no"
+
+  # -------------------------------------------------------------------------------------
+  # require-image-policy
+  # -------------------------------------------------------------------------------------
+  # This one was already correct — it is first-party and reads every nesting. Covered anyway,
+  # because it is the control BinAuthz depends on and "already correct" is a property that
+  # needs re-checking on every edit, not a fact established once.
+  - name: require-image-policy
+    template: ../templates/require-image-policy.yaml
+    constraint: ../constraints/require-image-policy.yaml
+    cases:
+      - name: tag-referenced-deployment-is-denied
+        object: fixtures/deployment-latest-tag.yaml
+        assertions:
+          - violations: "yes"
+      - name: tag-referenced-cronjob-is-denied
+        object: fixtures/cronjob-latest-tag.yaml
+        assertions:
+          - violations: "yes"
+      - name: digest-from-unapproved-registry-is-denied
+        object: fixtures/deployment-unapproved-registry.yaml
+        assertions:
+          - violations: "yes"
+      - name: digest-pinned-deployment-is-allowed
+        object: fixtures/deployment-compliant.yaml
+        assertions:
+          - violations: "no"
+
+  # -------------------------------------------------------------------------------------
+  # partner-namespace-isolation
+  # -------------------------------------------------------------------------------------
+  - name: partner-namespace-isolation
+    template: ../templates/partner-allowed-users.yaml
+    constraint: ../constraints/partner-namespace-isolation.yaml
+    cases:
+      - name: partner-workload-with-no-security-context-is-denied
+        object: fixtures/deployment-partner-root.yaml
+        assertions:
+          - violations: "yes"
+      # The override case. A pod-level-only check passes this while the container runs as
+      # root, which is precisely the shape of miss this suite exists to catch.
+      - name: container-overriding-pod-runasnonroot-is-denied
+        object: fixtures/deployment-partner-container-override.yaml
+        assertions:
+          - violations: "yes"
+      - name: non-root-partner-workload-is-allowed
+        object: fixtures/deployment-partner-compliant.yaml
+        assertions:
+          - violations: "no"

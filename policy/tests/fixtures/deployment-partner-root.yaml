@@ -1,0 +1,25 @@
+---
+# Copyright © 2026 Mindclade, LLC. All Rights Reserved.
+# Mindclade Proprietary and Confidential.
+# SPDX-License-Identifier: LicenseRef-Mindclade-Proprietary
+#
+# A partner-namespace workload with no security context at all: an image whose Dockerfile has
+# no USER runs as root, and nothing in this manifest says so.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: partner-root
+  namespace: partner-acme
+spec:
+  selector:
+    matchLabels: {app: x}
+  template:
+    metadata:
+      labels: {app: x}
+    spec:
+      containers:
+        - name: app
+          image: europe-west4-docker.pkg.dev/mc/containers/app@sha256:0000000000000000000000000000000000000000000000000000000000000000
+          resources:
+            limits: {cpu: "1", memory: 1Gi}
+            requests: {cpu: "1", memory: 1Gi}

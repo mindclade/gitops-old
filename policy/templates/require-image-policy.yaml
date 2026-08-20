@@ -1,0 +1,119 @@
+# Copyright © 2026 Mindclade, LLC. All Rights Reserved.
+# Mindclade Proprietary and Confidential.
+# SPDX-License-Identifier: LicenseRef-Mindclade-Proprietary
+#
+---
+apiVersion: templates.gatekeeper.sh/v1
+kind: ConstraintTemplate
+metadata:
+  name: mindcladerequireimagepolicy
+  annotations:
+    description: >-
+      Every container image must use an immutable digest and an approved registry. Binary
+      Authorization separately enforces cryptographic attestations.
+spec:
+  crd:
+    spec:
+      names:
+        kind: MindcladeRequireImagePolicy
+      validation:
+        openAPIV3Schema:
+          type: object
+          properties:
+            allowedRegistries:
+              type: array
+              items:
+                type: string
+            exemptImages:
+              type: array
+              items:
+                type: string
+
+  targets:
+    - target: admission.k8s.gatekeeper.sh
+      rego: |
+        package mindcladerequireimagepolicy
+
+        # `import future.keywords`, NOT `import rego.v1`.
+        #
+        # Gatekeeper validates ConstraintTemplate imports against an allowlist and rejects
+        # rego.v1 outright: "invalid ConstraintTemplate: invalid import: bad import".
+        # future.keywords gives the same modern syntax — `if`, `contains`, `in` — and is
+        # accepted. Verified with `gator test`, which IS Gatekeeper's own evaluator.
+        import future.keywords.contains
+        import future.keywords.if
+        import future.keywords.in
+
+        # Gatekeeper cannot verify a cryptographic attestation itself — that is Binary
+        # Authorization's job, at the node. What this enforces is the precondition BinAuthz
+        # depends on: the image must be pinned by digest and come from a registry BinAuthz
+        # actually evaluates.
+        #
+        # The digest requirement is the substantive one. BinAuthz resolves a tag at
+        # admission, so the bytes that were attested and the bytes that run can differ if
+        # the tag moved in between. A digest cannot move.
+
+        violation contains {"msg": msg} if {
+          some container in input_containers
+          not is_exempt(container.image)
+          not has_digest(container.image)
+          msg := sprintf(
+            "image %q must be referenced by digest, not tag. BinAuthz resolves tags at admission, so an attested tag can point at different bytes by the time it runs.",
+            [container.image],
+          )
+        }
+
+        violation contains {"msg": msg} if {
+          some container in input_containers
+          not is_exempt(container.image)
+          not from_allowed_registry(container.image)
+          msg := sprintf(
+            "image %q is not from an allowed registry. Allowed: %v",
+            [container.image, input.parameters.allowedRegistries],
+          )
+        }
+
+        input_containers contains c if {
+          some c in input.review.object.spec.containers
+        }
+
+        input_containers contains c if {
+          some c in input.review.object.spec.initContainers
+        }
+
+        input_containers contains c if {
+          some c in input.review.object.spec.template.spec.containers
+        }
+
+        input_containers contains c if {
+          some c in input.review.object.spec.template.spec.initContainers
+        }
+
+        input_containers contains c if {
+          some c in input.review.object.spec.jobTemplate.spec.template.spec.containers
+        }
+
+        has_digest(image) if {
+          contains(image, "@sha256:")
+        }
+
+        from_allowed_registry(image) if {
+          some registry in input.parameters.allowedRegistries
+          startswith(image, registry)
+        }
+
+        is_exempt(image) if {
+          some pattern in input.parameters.exemptImages
+          matches_pattern(image, pattern)
+        }
+
+        matches_pattern(image, pattern) if {
+          endswith(pattern, "*")
+          prefix := trim_suffix(pattern, "*")
+          startswith(image, prefix)
+        }
+
+        matches_pattern(image, pattern) if {
+          not endswith(pattern, "*")
+          image == pattern
+        }

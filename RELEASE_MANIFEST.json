@@ -1,0 +1,8 @@
+{
+  "schema_version": 1,
+  "repository": "gitops",
+  "release": "2026.08.19-production.1",
+  "default_branch": "main",
+  "blueprint": "MINDCLADE_ENTERPRISE_PLATFORM_FOUNDATION_BLUEPRINT.md",
+  "qualification": "source-qualified; connected-system gates required"
+}

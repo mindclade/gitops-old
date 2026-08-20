@@ -1,0 +1,29 @@
+# Copyright © 2026 Mindclade, LLC. All Rights Reserved.
+# Mindclade Proprietary and Confidential.
+# SPDX-License-Identifier: LicenseRef-Mindclade-Proprietary
+#
+---
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: production-workload-policy
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "5"
+spec:
+  project: platform
+  source:
+    repoURL: https://github.com/Mindclade/gitops.git
+    targetRevision: main
+    path: policy/deploy
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: gatekeeper-system
+  syncPolicy:
+    automated:
+      prune: false
+      selfHeal: true
+    syncOptions: [ServerSideApply=true, ApplyOutOfSyncOnly=true]
+    retry:
+      limit: 10
+      backoff: {duration: 15s, factor: 2, maxDuration: 10m}

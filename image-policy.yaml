@@ -1,0 +1,13 @@
+# Copyright © 2026 Mindclade, LLC. All Rights Reserved.
+# Mindclade Proprietary and Confidential.
+# SPDX-License-Identifier: LicenseRef-Mindclade-Proprietary
+#
+# Release-evidence exceptions are intentionally empty. GKE-managed system images are not
+# committed under rendered/ and therefore do not need a GitOps verification bypass. A future
+# third-party workload exception must be an exact digest, carry an owner/reason/expiry, and be
+# validated before this file is expanded.
+---
+apiVersion: mindclade.dev/v1
+kind: ImagePolicy
+spec:
+  unsigned: []

@@ -1,0 +1,28 @@
+# Copyright © 2026 Mindclade, LLC. All Rights Reserved.
+# Mindclade Proprietary and Confidential.
+# SPDX-License-Identifier: LicenseRef-Mindclade-Proprietary
+#
+---
+# Second of two independent controls on the holdout data. The first is an IAM DENY policy in
+# infrastructure-live/5-workloads/<env>/storage/gcs-holdout.
+apiVersion: constraints.gatekeeper.sh/v1beta1
+kind: MindcladeDenyHoldoutMount
+metadata:
+  name: deny-holdout-bucket-mount
+spec:
+  enforcementAction: deny
+  match:
+    kinds:
+      - apiGroups: ["", "apps", "batch"]
+        kinds: ["Pod", "Deployment", "StatefulSet", "Job", "CronJob"]
+    namespaces:
+      - "research-*"
+      - "serving-*"
+  parameters:
+    holdoutBuckets:
+      - mc-holdout-eval
+      - mc-holdout-eval-production
+    # Evaluation jobs only, and they are not training. The distinction is the whole point:
+    # reading the holdout to score a model is fine; reading it during training is not.
+    allowedServiceAccounts:
+      - eval-runner

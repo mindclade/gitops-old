@@ -1,0 +1,32 @@
+# Copyright © 2026 Mindclade, LLC. All Rights Reserved.
+# Mindclade Proprietary and Confidential.
+# SPDX-License-Identifier: LicenseRef-Mindclade-Proprietary
+#
+---
+apiVersion: argoproj.io/v1alpha1
+kind: AppProject
+metadata:
+  name: partner-isolated
+  namespace: argocd
+  annotations: {argocd.argoproj.io/sync-wave: "-15"}
+spec:
+  description: Partner-isolated workloads with no cluster-scoped authority.
+  sourceRepos: [https://github.com/Mindclade/gitops.git]
+  destinations:
+    - {server: https://kubernetes.default.svc, namespace: 'partner-*'}
+  clusterResourceWhitelist: []
+  namespaceResourceWhitelist:
+    - {group: "", kind: "*"}
+    - {group: apps, kind: "*"}
+    - {group: batch, kind: "*"}
+    - {group: autoscaling, kind: "*"}
+    - {group: networking.k8s.io, kind: NetworkPolicy}
+    - {group: policy, kind: PodDisruptionBudget}
+    - {group: monitoring.coreos.com, kind: "*"}
+    - {group: external-secrets.io, kind: ExternalSecret}
+  namespaceResourceBlacklist:
+    - {group: "", kind: Secret}
+    - {group: "", kind: ResourceQuota}
+    - {group: "", kind: LimitRange}
+    - {group: rbac.authorization.k8s.io, kind: "*"}
+  orphanedResources: {warn: true}

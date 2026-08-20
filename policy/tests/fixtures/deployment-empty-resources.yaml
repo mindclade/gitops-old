@@ -1,0 +1,23 @@
+---
+# Copyright © 2026 Mindclade, LLC. All Rights Reserved.
+# Mindclade Proprietary and Confidential.
+# SPDX-License-Identifier: LicenseRef-Mindclade-Proprietary
+#
+# `resources: {}` — present but empty. Distinct from omitting the block entirely, and the
+# shape a Helm chart emits when its values file has no resource stanza.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: empty-resources
+  namespace: dev
+spec:
+  selector:
+    matchLabels: {app: x}
+  template:
+    metadata:
+      labels: {app: x}
+    spec:
+      containers:
+        - name: app
+          image: europe-west4-docker.pkg.dev/mc/containers/app@sha256:0000000000000000000000000000000000000000000000000000000000000000
+          resources: {}

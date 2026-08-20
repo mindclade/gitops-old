@@ -1,0 +1,59 @@
+# Copyright © 2026 Mindclade, LLC. All Rights Reserved.
+# Mindclade Proprietary and Confidential.
+# SPDX-License-Identifier: LicenseRef-Mindclade-Proprietary
+#
+---
+# Expiring, reviewer-signed holes in admission policy.
+#
+# Every entry has an expiry, a named reviewer from @security, a specific reason, and a ticket
+# for the work that removes the need for it. An exemption with no expiry is a deleted
+# constraint with extra steps.
+#
+# `validate.yml` FAILS when an exemption is past its expiry. That friction is deliberate:
+# renewing one should require somebody to look at it again and decide it is still true.
+#
+# Renewing is a PR to this file with @security approval. There is no other path.
+
+apiVersion: mindclade.com/v1
+kind: PolicyExemptions
+metadata:
+  name: exemptions
+
+spec:
+  exemptions: []
+
+  # Shape of an entry:
+  #
+  # - constraint: require-image-policy
+  #   scope:
+  #     namespace: research-pretraining
+  #     workload: legacy-tokenizer-job
+  #   reason: >-
+  #     Vendored image from an upstream research group; no rebuild path exists until the
+  #     tokenizer is reimplemented. Runs against public corpora only, no customer data, no
+  #     network egress.
+  #   risk: >-
+  #     Unverified provenance on one job. Contained by a NetworkPolicy denying all egress and
+  #     a service account with no GCS access.
+  #   granted: 2026-08-13
+  #   expires: 2026-11-13      # 90 days maximum. Longer needs a written argument.
+  #   reviewer: "@Mindclade/security — <name>"
+  #   ticket: https://github.com/Mindclade/gitops/issues/000
+  #   removal: >-
+  #     What has to be true to drop this. "Reimplement the tokenizer" is an answer;
+  #     "revisit later" is not.
+
+# ---------------------------------------------------------------------------------------
+# Never exemptible
+# ---------------------------------------------------------------------------------------
+# Two constraints take no exemption at any expiry, for any reason. Requesting one is a
+# conversation, not a PR.
+#
+#   deny-holdout-bucket-mount
+#     Contamination of the holdout set is undetectable after the fact. There is no
+#     mitigating control that makes a temporary exemption safe, because "temporary" and
+#     "permanent" produce identical, unrecoverable results.
+#
+#   Binary Authorization attestation policy (production)
+#     An unsigned image in production is unverifiable provenance in the path of customer
+#     data. The correct response to a blocked deploy is to sign the image.

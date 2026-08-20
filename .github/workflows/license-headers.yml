@@ -1,0 +1,38 @@
+---
+# Proprietary header policy, enforced on every source file.
+#
+# Cheap and credential-free: it reads the working tree and nothing else, so it holds no token
+# beyond the read-only default and cannot reach the cloud estate at all.
+name: license-headers
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+# Read-only. The default for a workflow with no permissions block is the repository's default
+# token scope, which on an older organization can still be read-write — naming it explicitly
+# is what makes this job's reach a property of the file rather than of an org setting.
+permissions:
+  contents: read
+
+concurrency:
+  group: license-headers-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify-license-headers:
+    name: Verify proprietary license headers
+    # Pinned, not ubuntu-latest. `latest` moves without a diff here, and a runner image change
+    # is indistinguishable from a code change when something starts failing.
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          # No credential left in .git/config. Nothing here pushes, and a token in the config
+          # is readable by every later step including anything a dependency pulls in.
+          persist-credentials: false
+
+      - name: Ensure proprietary header policy
+        run: bash scripts/license-header-check.sh --check

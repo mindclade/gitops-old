@@ -1,0 +1,28 @@
+---
+# Mirrors mindclade/.github/actionlint.yaml.
+self-hosted-runner:
+  labels:
+    - gpu
+
+# Two shellcheck INFO codes are suppressed, and only these two.
+#
+# Nothing here weakens the check that matters: SC1072/SC1073 (shell syntax errors) and every
+# warning- and error-level code still fail the build. Four real syntax errors were found and
+# fixed by that gate — an over-escaped `--jq` expression in four workflows, and an `awk`
+# program using the single-quote-escape idiom inside a double-quoted command substitution.
+# Both took their whole step down at runtime.
+#
+# SC2016 — "expressions don't expand in single quotes". Every hit is a literal `$` that
+#   belongs to the text being built rather than to the shell: a markdown issue body, or a jq
+#   program (`$ENV.MARKER`). Expanding them is exactly what must NOT happen.
+#
+# SC1003 — "want to escape a single quote?". One hit, in bootstrap's drift issue body, where
+#   `'\''` is the correct idiom for embedding a quote inside a single-quoted string.
+#
+# The affected run blocks also carry inline `# shellcheck disable=` comments, so the reason
+# is visible where the code is and `shellcheck` run directly on an extracted block is clean.
+paths:
+  .github/workflows/**/*.yml:
+    ignore:
+      - 'shellcheck reported issue in this script: SC2016:'
+      - 'shellcheck reported issue in this script: SC1003:'

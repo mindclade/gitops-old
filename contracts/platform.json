@@ -1,0 +1,7 @@
+{
+  "contract_version": "1.0.0",
+  "repository": "gitops",
+  "authority": [
+    "see contracts/repository.yaml"
+  ]
+}

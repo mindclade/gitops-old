@@ -1,0 +1,32 @@
+# Copyright © 2026 Mindclade, LLC. All Rights Reserved.
+# Mindclade Proprietary and Confidential.
+# SPDX-License-Identifier: LicenseRef-Mindclade-Proprietary
+#
+---
+# Enforcement point for the entire supply chain. Everything reusable-oci-build.yml does —
+# SBOM, cosign signature, BinAuthz attestation — is inert without this.
+apiVersion: constraints.gatekeeper.sh/v1beta1
+kind: MindcladeRequireImagePolicy
+metadata:
+  name: require-image-policy
+spec:
+  # deny. This one shipped at dryrun and was promoted; see policy/README.md for the process.
+  enforcementAction: deny
+  match:
+    kinds:
+      - apiGroups: ["", "apps", "batch"]
+        kinds: ["Pod", "Deployment", "StatefulSet", "DaemonSet", "Job", "CronJob"]
+    excludedNamespaces:
+      # Cluster components Google manages. Blocking these does not harden anything; it
+      # prevents the node becoming ready.
+      - kube-system
+      - gatekeeper-system
+      - gke-managed-system
+      - gmp-system
+  parameters:
+    allowedRegistries:
+      - europe-west4-docker.pkg.dev/
+      - us-central1-docker.pkg.dev/
+    exemptImages:
+      - "registry.k8s.io/*"
+      - "gke.gcr.io/*"

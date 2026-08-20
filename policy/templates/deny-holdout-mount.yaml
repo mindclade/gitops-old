@@ -1,0 +1,125 @@
+# Copyright © 2026 Mindclade, LLC. All Rights Reserved.
+# Mindclade Proprietary and Confidential.
+# SPDX-License-Identifier: LicenseRef-Mindclade-Proprietary
+#
+---
+apiVersion: templates.gatekeeper.sh/v1
+kind: ConstraintTemplate
+metadata:
+  name: mindcladedenyholdoutmount
+  annotations:
+    description: >-
+      No training workload may reach the held-out evaluation data, by any mount, volume,
+      environment variable, or argument.
+spec:
+  crd:
+    spec:
+      names:
+        kind: MindcladeDenyHoldoutMount
+      validation:
+        openAPIV3Schema:
+          type: object
+          properties:
+            holdoutBuckets:
+              type: array
+              items:
+                type: string
+            allowedServiceAccounts:
+              description: Service accounts permitted to read the holdout data — evaluation only.
+              type: array
+              items:
+                type: string
+
+  targets:
+    - target: admission.k8s.gatekeeper.sh
+      rego: |
+        package mindcladedenyholdoutmount
+
+        # `import future.keywords`, NOT `import rego.v1`.
+        #
+        # Gatekeeper validates ConstraintTemplate imports against an allowlist and rejects
+        # rego.v1 outright: "invalid ConstraintTemplate: invalid import: bad import".
+        # future.keywords gives the same modern syntax — `if`, `contains`, `in` — and is
+        # accepted. Verified with `gator test`, which IS Gatekeeper's own evaluator.
+        import future.keywords.contains
+        import future.keywords.if
+        import future.keywords.in
+
+        # Benchmark numbers are worthless if the holdout set leaked into training, and the
+        # leak is invisible afterwards — the model simply looks better than it is. There is
+        # no post-hoc detection, which is why this blocks at admission rather than auditing
+        # later.
+        #
+        # Second of two independent controls. The first is an IAM DENY policy on the bucket,
+        # in infrastructure-live. Neither is sufficient alone: IAM can be widened by someone
+        # who does not know why it is narrow, and a pod can reach data through a sidecar
+        # that an IAM policy on one service account would not cover.
+
+        violation contains {"msg": msg} if {
+          some volume in input_volumes
+          some bucket in input.parameters.holdoutBuckets
+          volume.csi.volumeAttributes.bucketName == bucket
+          not sa_is_allowed
+          msg := sprintf(
+            "workload mounts holdout bucket %q. Training must never see held-out evaluation data — the contamination is undetectable after the fact.",
+            [bucket],
+          )
+        }
+
+        violation contains {"msg": msg} if {
+          some container in input_containers
+          some env in container.env
+          some bucket in input.parameters.holdoutBuckets
+          contains(env.value, bucket)
+          not sa_is_allowed
+          msg := sprintf(
+            "container %q references holdout bucket %q via env %q.",
+            [container.name, bucket, env.name],
+          )
+        }
+
+        violation contains {"msg": msg} if {
+          some container in input_containers
+          some arg in container.args
+          some bucket in input.parameters.holdoutBuckets
+          contains(arg, bucket)
+          not sa_is_allowed
+          msg := sprintf(
+            "container %q references holdout bucket %q in its arguments.",
+            [container.name, bucket],
+          )
+        }
+
+        sa_is_allowed if {
+          sa := object.get(input.review.object.spec, "serviceAccountName", "")
+          sa in input.parameters.allowedServiceAccounts
+        }
+
+        sa_is_allowed if {
+          sa := object.get(input.review.object.spec.template.spec, "serviceAccountName", "")
+          sa in input.parameters.allowedServiceAccounts
+        }
+
+        input_containers contains c if {
+          some c in input.review.object.spec.containers
+        }
+
+        input_containers contains c if {
+          some c in input.review.object.spec.template.spec.containers
+        }
+
+        input_containers contains c if {
+          some c in input.review.object.spec.jobTemplate.spec.template.spec.containers
+        }
+
+        input_volumes contains v if {
+          some v in input.review.object.spec.volumes
+        }
+
+        input_volumes contains v if {
+          some v in input.review.object.spec.template.spec.volumes
+        }
+
+        input_volumes contains v if {
+          some v in input.review.object.spec.jobTemplate.spec.template.spec.volumes
+        }

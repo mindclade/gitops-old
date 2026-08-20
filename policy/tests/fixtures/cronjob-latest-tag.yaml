@@ -1,0 +1,24 @@
+---
+# Copyright © 2026 Mindclade, LLC. All Rights Reserved.
+# Mindclade Proprietary and Confidential.
+# SPDX-License-Identifier: LicenseRef-Mindclade-Proprietary
+#
+# CronJob nests its pod spec one level deeper than everything else
+# (spec.jobTemplate.spec.template.spec), which is the nesting most templates forget.
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: latest-tag
+  namespace: dev
+spec:
+  schedule: "0 * * * *"
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          containers:
+            - name: app
+              image: example.com/app:latest
+              resources:
+                limits: {cpu: "1", memory: 1Gi}
+                requests: {cpu: "1", memory: 1Gi}

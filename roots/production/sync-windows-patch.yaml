@@ -1,0 +1,22 @@
+# Copyright © 2026 Mindclade, LLC. All Rights Reserved.
+# Mindclade Proprietary and Confidential.
+# SPDX-License-Identifier: LicenseRef-Mindclade-Proprietary
+#
+---
+- op: add
+  path: /spec/syncWindows
+  value:
+    - kind: deny
+      schedule: "0 0 20 12 *"
+      duration: 408h
+      applications: ["*"]
+      manualSync: true
+      timeZone: America/Detroit
+    - kind: deny
+      # Dormant by default: February 31 never occurs. During an incident, change this to
+      # "* * * * *" in the same PR that sets overlays/production.yaml deployFreeze=true.
+      schedule: "0 0 31 2 *"
+      duration: 2h
+      applications: ["*"]
+      manualSync: true
+      timeZone: America/Detroit

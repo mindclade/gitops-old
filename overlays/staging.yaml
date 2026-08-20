@@ -1,0 +1,36 @@
+# Copyright © 2026 Mindclade, LLC. All Rights Reserved.
+# Mindclade Proprietary and Confidential.
+# SPDX-License-Identifier: LicenseRef-Mindclade-Proprietary
+#
+---
+# Overlay values for staging.
+#
+# These are RENDER INPUTS, not manifests. CI reads them when rendering into rendered/staging/.
+# Editing this file changes what the next render produces; it does not change the cluster
+# until that render is committed and Argo syncs it.
+#
+# Keep this file small. Anything that differs between environments and is NOT a scale,
+# endpoint, or log-level knob is usually a sign the environments have genuinely diverged —
+# which is the thing the rendered-manifests pattern exists to make visible.
+environment: staging
+namespacePrefix: ""
+
+replicas:
+  default: 2
+
+resources:
+  default:
+    requests:
+      cpu: "1"
+      memory: "2Gi"
+    limits:
+      cpu: "1"
+      memory: "2Gi"
+
+logging:
+  level: info
+  format: json
+
+# Honoured by freeze.yml. A freeze blocks production changes during release windows,
+# incidents, and holidays.
+deployFreeze: false

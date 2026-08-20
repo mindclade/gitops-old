@@ -1,0 +1,147 @@
+# Copyright © 2026 Mindclade, LLC. All Rights Reserved.
+# Mindclade Proprietary and Confidential.
+# SPDX-License-Identifier: LicenseRef-Mindclade-Proprietary
+#
+---
+# Replaces the vendored K8sRequiredResources for the reason given in full in
+# deny-privileged.yaml: the upstream template reads only `spec.containers`, so it was inert on
+# every kind except a bare Pod while the constraint claimed to cover six.
+#
+# This is the constraint where that mattered most in cost terms. A pod with no limits can
+# consume a whole node; on an A4 node it holds tens of thousands of dollars a month of
+# accelerator hostage while looking like a normal workload — and nothing failed to say so,
+# because the check never ran against the Deployment that declared it.
+#
+# LIMITRANGE DOES NOT SATISFY THIS, and that is deliberate.
+#
+# A LimitRange defaults resources on POD admission, via the LimitRanger plugin. It does not
+# touch a Deployment — so a Deployment declaring no limits is denied here even though the
+# Pods it would eventually create would have been defaulted.
+#
+# That is the intended behaviour rather than an oversight worth working around. `gator test`
+# in CI only ever sees the Deployment, so accepting "a LimitRange will handle it" would mean
+# the pre-merge gate can never assess the workload at all — and the value it defaults to is
+# a namespace-level guess rather than something the workload's author chose. On a GPU node
+# the difference between a default and a considered limit is the whole cost of the node.
+#
+# If a namespace genuinely relies on LimitRange defaults, exclude it on the constraint
+# (`excludedNamespaces`) so the exemption is visible, rather than weakening the rule for
+# everyone.
+#
+# `resources: {}` and requests-without-limits are both denied. Both are pinned as cases in
+# ../tests/suite.yaml, because "the block exists" is an easy thing for a later rewrite to
+# mistake for "the block is populated".
+apiVersion: templates.gatekeeper.sh/v1
+kind: ConstraintTemplate
+metadata:
+  name: mindcladerequiredresources
+  annotations:
+    description: >-
+      Every container must declare the named resource requests and limits. Covers workload
+      kinds, not only bare Pods.
+spec:
+  crd:
+    spec:
+      names:
+        kind: MindcladeRequiredResources
+      validation:
+        openAPIV3Schema:
+          type: object
+          properties:
+            limits:
+              description: Resource names that must appear under resources.limits.
+              type: array
+              items:
+                type: string
+            requests:
+              description: Resource names that must appear under resources.requests.
+              type: array
+              items:
+                type: string
+            exemptImages:
+              type: array
+              items:
+                type: string
+
+  targets:
+    - target: admission.k8s.gatekeeper.sh
+      rego: |
+        package mindcladerequiredresources
+
+        import future.keywords.contains
+        import future.keywords.if
+        import future.keywords.in
+
+        violation contains {"msg": msg} if {
+          some container in input_containers
+          not is_exempt(container.image)
+          some required in object.get(input.parameters, "limits", [])
+          not has_resource(container, "limits", required)
+          msg := sprintf(
+            "container %q declares no %q limit. A container with no limit can consume the whole node — on a GPU node that is the most expensive resource in the estate held by something that looks ordinary.",
+            [container.name, required],
+          )
+        }
+
+        violation contains {"msg": msg} if {
+          some container in input_containers
+          not is_exempt(container.image)
+          some required in object.get(input.parameters, "requests", [])
+          not has_resource(container, "requests", required)
+          msg := sprintf(
+            "container %q declares no %q request, so the scheduler cannot reason about what it needs.",
+            [container.name, required],
+          )
+        }
+
+        has_resource(container, section, name) if {
+          resources := object.get(container, "resources", {})
+          values := object.get(resources, section, {})
+          object.get(values, name, "") != ""
+        }
+
+        # THE CONTAINER SET. Identical to require-image-policy.yaml — see deny-privileged.yaml
+        # for why every nesting has to be listed.
+        #
+        # initContainers are included deliberately: an init container with no limit competes
+        # for the same node capacity, and a long-running one (a model download, a dataset
+        # unpack) is exactly where an unbounded request goes unnoticed.
+        input_containers contains c if {
+          some c in input.review.object.spec.containers
+        }
+
+        input_containers contains c if {
+          some c in input.review.object.spec.initContainers
+        }
+
+        input_containers contains c if {
+          some c in input.review.object.spec.template.spec.containers
+        }
+
+        input_containers contains c if {
+          some c in input.review.object.spec.template.spec.initContainers
+        }
+
+        input_containers contains c if {
+          some c in input.review.object.spec.jobTemplate.spec.template.spec.containers
+        }
+
+        input_containers contains c if {
+          some c in input.review.object.spec.jobTemplate.spec.template.spec.initContainers
+        }
+
+        is_exempt(image) if {
+          some pattern in object.get(input.parameters, "exemptImages", [])
+          matches_pattern(image, pattern)
+        }
+
+        matches_pattern(image, pattern) if {
+          endswith(pattern, "*")
+          prefix := trim_suffix(pattern, "*")
+          startswith(image, prefix)
+        }
+
+        matches_pattern(image, pattern) if {
+          not endswith(pattern, "*")
+          image == pattern
+        }

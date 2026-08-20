@@ -1,0 +1,175 @@
+---
+# Copyright © 2026 Mindclade, LLC. All Rights Reserved.
+# Mindclade Proprietary and Confidential.
+# SPDX-License-Identifier: LicenseRef-Mindclade-Proprietary
+#
+name: freeze
+
+on:
+  pull_request:
+    paths:
+      - 'rendered/production/**'
+      - 'applications/production/**'
+      - 'roots/production/**'
+      - 'bootstrap/argocd-config-production.yaml'
+      - 'projects/**'
+      - 'policy/**'
+      - 'overlays/production.yaml'
+      - 'overlays/freeze-windows.yaml'
+      - 'overlays/freeze-override.yaml'
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          persist-credentials: false
+
+      - id: freeze
+        name: Determine production freeze state
+        run: |
+          set -euo pipefail
+          python3 - <<'PY' >> "$GITHUB_OUTPUT"
+          import datetime
+          import pathlib
+          import yaml
+
+          today = datetime.date.today()
+          active, reason = False, ""
+
+          wpath = pathlib.Path("overlays/freeze-windows.yaml")
+          if wpath.exists():
+              doc = yaml.safe_load(wpath.read_text()) or {}
+
+              for window in doc.get("windows", []):
+                  start = datetime.date.fromisoformat(str(window["start"]))
+                  end = datetime.date.fromisoformat(str(window["end"]))
+                  if start <= today <= end:
+                      active = True
+                      reason = f"{window.get('reason', 'scheduled freeze')} ({start} to {end})"
+                      break
+
+              if not active:
+                  today_mmdd = (today.month, today.day)
+                  for window in doc.get("annual", []):
+                      start = tuple(map(int, str(window["start"]).split("-")))
+                      end = tuple(map(int, str(window["end"]).split("-")))
+                      within = start <= today_mmdd <= end if start <= end else (
+                          today_mmdd >= start or today_mmdd <= end
+                      )
+                      if within:
+                          active = True
+                          reason = f"{window.get('reason', 'annual freeze')} ({window['start']} to {window['end']} annually)"
+                          break
+
+          production = yaml.safe_load(pathlib.Path("overlays/production.yaml").read_text()) or {}
+          if production.get("deployFreeze") is True:
+              active = True
+              reason = "deployFreeze is set in overlays/production.yaml"
+
+          print(f"active={'true' if active else 'false'}")
+          print(f"reason={reason}")
+          PY
+
+      - id: override
+        name: Validate a one-PR emergency override
+        if: steps.freeze.outputs.active == 'true'
+        env:
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          set -euo pipefail
+          python3 - <<'PY' >> "$GITHUB_OUTPUT"
+          import datetime
+          import os
+          import pathlib
+          import re
+          import yaml
+
+          path = pathlib.Path("overlays/freeze-override.yaml")
+          doc = yaml.safe_load(path.read_text()) or {}
+          errors = []
+          today = datetime.date.today()
+
+          if doc.get("active") is not True:
+              errors.append("override is not active")
+          if int(doc.get("pullRequest", 0) or 0) != int(os.environ["PR_NUMBER"]):
+              errors.append("override is not scoped to this pull request")
+          if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._:/-]{2,127}", str(doc.get("ticket", ""))):
+              errors.append("ticket/change reference is missing or invalid")
+          if doc.get("approvedByTeam") not in {"platform", "security", "incident-command"}:
+              errors.append("approvedByTeam must be platform, security, or incident-command")
+          if len(str(doc.get("reason", "")).strip()) < 12:
+              errors.append("reason must be specific")
+          if "gitops-production" not in (doc.get("scope") or []):
+              errors.append("scope must include gitops-production")
+          try:
+              expiry = datetime.date.fromisoformat(str(doc.get("expires", "")))
+              if expiry < today:
+                  errors.append("override is expired")
+              if expiry > today + datetime.timedelta(days=3):
+                  errors.append("override may not last more than three days")
+          except ValueError:
+              errors.append("expires must be an ISO date")
+
+          if errors:
+              print("granted=false")
+              print("detail=" + "; ".join(errors))
+          else:
+              print("granted=true")
+              print("detail=valid one-PR override")
+          PY
+
+      - name: Record approved override
+        if: steps.freeze.outputs.active == 'true' && steps.override.outputs.granted == 'true'
+        run: |
+          echo "::warning::Production freeze overridden for PR #${{ github.event.pull_request.number }} by the reviewed freeze-override manifest."
+          {
+            echo '### Production freeze override'
+            echo
+            echo "${{ steps.freeze.outputs.reason }}"
+            echo
+            echo 'A valid, time-bounded override scoped to this PR is present.'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Comment and fail
+        if: steps.freeze.outputs.active == 'true' && steps.override.outputs.granted != 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REASON: ${{ steps.freeze.outputs.reason }}
+          OVERRIDE_DETAIL: ${{ steps.override.outputs.detail }}
+          ISSUE_NUMBER: ${{ github.event.number }}
+          OWNER_REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          owner="${OWNER_REPO%/*}"
+          repo="${OWNER_REPO#*/}"
+          marker='<!-- freeze-check -->'
+          export MARKER="$marker"
+          body="$marker"
+          body+='\n## Production freeze in effect'
+          body+='\n\n**'"${REASON}"'**'
+          body+='\n\nThis PR changes production desired state or its control boundary and cannot merge while the freeze holds.'
+          body+='\n\n### Emergency path'
+          body+='\nUse `overlays/freeze-override.yaml` to record an incident/change reference, exact PR number, approving team, scope, reason, and expiry. The file is CODEOWNED by platform and security and is valid for this PR only.'
+          body+='\n\nOverride validation: '"${OVERRIDE_DETAIL:-not provided}"'.'
+
+          prior="$(gh api \
+            "repos/$owner/$repo/issues/${ISSUE_NUMBER}/comments" \
+            --jq '.[] | select(.body | contains($ENV.MARKER)) | .id' \
+            --paginate | head -n 1)"
+          if [ -n "$prior" ]; then
+            gh api "repos/$owner/$repo/issues/comments/$prior" --method PATCH --field body="$(printf '%b' "$body")"
+          else
+            gh api "repos/$owner/$repo/issues/${ISSUE_NUMBER}/comments" --method POST --field body="$(printf '%b' "$body")"
+          fi
+
+          echo "::error::Production freeze in effect: ${REASON}. ${OVERRIDE_DETAIL:-No valid override.}"
+          exit 1

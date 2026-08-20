@@ -1,0 +1,22 @@
+# Copyright © 2026 Mindclade, LLC. All Rights Reserved.
+# Mindclade Proprietary and Confidential.
+# SPDX-License-Identifier: LicenseRef-Mindclade-Proprietary
+#
+---
+# A pod with no limits can consume a whole node. On a CPU node that degrades neighbours; on
+# an A4 node it holds tens of thousands of dollars a month of accelerator hostage while
+# looking like a normal workload.
+apiVersion: constraints.gatekeeper.sh/v1beta1
+kind: MindcladeRequiredResources
+metadata:
+  name: require-resource-limits
+spec:
+  enforcementAction: deny
+  match:
+    kinds:
+      - apiGroups: ["", "apps", "batch"]
+        kinds: ["Pod", "Deployment", "StatefulSet", "DaemonSet", "Job", "CronJob"]
+    excludedNamespaces: [kube-system, gatekeeper-system, gmp-system]
+  parameters:
+    limits: ["cpu", "memory"]
+    requests: ["cpu", "memory"]

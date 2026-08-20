@@ -1,0 +1,57 @@
+# Copyright © 2026 Mindclade, LLC. All Rights Reserved.
+# Mindclade Proprietary and Confidential.
+# SPDX-License-Identifier: LicenseRef-Mindclade-Proprietary
+#
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: argocd-cm
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "-20"
+data:
+  url: https://argocd.mindclade.ai
+  application.instanceLabelKey: argocd.argoproj.io/instance
+  admin.enabled: "false"
+  users.anonymous.enabled: "false"
+  timeout.reconciliation: 180s
+  kustomize.buildOptions: --load-restrictor LoadRestrictionsNone
+  resource.exclusions: |
+    - apiGroups: [coordination.k8s.io]
+      kinds: [Lease]
+      clusters: ["*"]
+  dex.config: |
+    connectors:
+      - type: github
+        id: github
+        name: Mindclade GitHub Enterprise
+        config:
+          clientID: $dex.github.clientID
+          clientSecret: $dex.github.clientSecret
+          orgs:
+            - name: Mindclade
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: argocd-rbac-cm
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "-20"
+data:
+  policy.default: role:none
+  policy.matchMode: glob
+  scopes: '[groups, email]'
+  policy.csv: |
+    p, role:platform-admin, applications, *, */*, allow
+    p, role:platform-admin, applicationsets, *, */*, allow
+    p, role:platform-admin, clusters, get, *, allow
+    p, role:platform-admin, repositories, get, *, allow
+    p, role:platform-admin, projects, get, *, allow
+    p, role:security-readonly, applications, get, */*, allow
+    p, role:security-readonly, logs, get, */*, allow
+    p, role:security-readonly, projects, get, *, allow
+    g, Mindclade:platform, role:platform-admin
+    g, Mindclade:incident-command, role:platform-admin
+    g, Mindclade:security, role:security-readonly

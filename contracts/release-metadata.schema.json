@@ -1,0 +1,142 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://mindclade.com/contracts/gitops/release-metadata-2.0.0.schema.json",
+  "title": "Mindclade immutable release metadata",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "contract_version",
+    "release_id",
+    "source_repository",
+    "source_revision",
+    "builder_identity",
+    "build_invocation_id",
+    "image",
+    "sbom",
+    "provenance",
+    "vulnerability",
+    "qualification",
+    "github_attestation",
+    "binary_authorization",
+    "created_at"
+  ],
+  "properties": {
+    "contract_version": {
+      "const": "2.0.0"
+    },
+    "release_id": {
+      "type": "string",
+      "minLength": 3
+    },
+    "source_repository": {
+      "type": "string",
+      "pattern": "^Mindclade/[A-Za-z0-9_.-]+$"
+    },
+    "source_revision": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{40}$"
+    },
+    "builder_identity": {
+      "type": "string",
+      "minLength": 3
+    },
+    "build_invocation_id": {
+      "type": "string",
+      "minLength": 3
+    },
+    "image": {
+      "type": "string",
+      "pattern": "^.+@sha256:[0-9a-f]{64}$"
+    },
+    "sbom": {
+      "$ref": "#/$defs/artifactReference"
+    },
+    "provenance": {
+      "$ref": "#/$defs/artifactReference"
+    },
+    "vulnerability": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["result", "scanner", "evidence"],
+      "properties": {
+        "result": {
+          "enum": ["pass", "approved"]
+        },
+        "scanner": {
+          "type": "string",
+          "minLength": 1
+        },
+        "evidence": {
+          "$ref": "#/$defs/artifactReference"
+        }
+      }
+    },
+    "qualification": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["result", "evidence"],
+      "properties": {
+        "result": {
+          "const": "pass"
+        },
+        "evidence": {
+          "$ref": "#/$defs/artifactReference"
+        }
+      }
+    },
+    "github_attestation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["repository", "signer_workflow"],
+      "properties": {
+        "repository": {
+          "type": "string",
+          "pattern": "^Mindclade/[A-Za-z0-9_.-]+$"
+        },
+        "signer_workflow": {
+          "type": "string",
+          "pattern": "^Mindclade/[A-Za-z0-9_.-]+/.+\\.ya?ml$"
+        }
+      }
+    },
+    "binary_authorization": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["project", "attestor"],
+      "properties": {
+        "project": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9-]{4,28}[a-z0-9]$"
+        },
+        "attestor": {
+          "type": "string",
+          "minLength": 3
+        }
+      }
+    },
+    "created_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "migration": {
+      "type": "object"
+    }
+  },
+  "$defs": {
+    "artifactReference": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["uri", "digest"],
+      "properties": {
+        "uri": {
+          "type": "string",
+          "minLength": 3
+        },
+        "digest": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        }
+      }
+    }
+  }
+}

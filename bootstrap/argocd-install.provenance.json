@@ -1,0 +1,19 @@
+{
+  "schema_version": 1,
+  "upstream_repository": "argoproj/argo-cd",
+  "upstream_ref": "v3.5.1",
+  "artifacts": [
+    {
+      "path": "bootstrap/argocd-install.yaml",
+      "upstream_path": "manifests/install.yaml",
+      "git_blob_sha1": "e7238840ff8b86f2c2429e66fc053c9190c5659c",
+      "sha256": "795a3a972224da6a7f9d32c3e946445f062b60fb46028476715affeb688236e3"
+    },
+    {
+      "path": "bootstrap/argocd-install-ha.yaml",
+      "upstream_path": "manifests/ha/install.yaml",
+      "git_blob_sha1": "cf2aa80117903c00ec02ca24caba89dfbe37553b",
+      "sha256": "1d7b6baa0769ff8a5757c61e2c677ae0939a15e86e149f64df6b12435db5c4b2"
+    }
+  ]
+}

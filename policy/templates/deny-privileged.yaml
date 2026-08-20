@@ -1,0 +1,123 @@
+# Copyright © 2026 Mindclade, LLC. All Rights Reserved.
+# Mindclade Proprietary and Confidential.
+# SPDX-License-Identifier: LicenseRef-Mindclade-Proprietary
+#
+---
+# WHY THIS EXISTS RATHER THAN THE VENDORED K8sPSPPrivilegedContainer
+#
+# The upstream library template reads containers from ONE place:
+#
+#   input_containers[c] { c := input.review.object.spec.containers[_] }
+#
+# That is the Pod shape. Our constraint matches Pod, Deployment, StatefulSet, DaemonSet, Job
+# and CronJob — and on every one of those except Pod the containers live under
+# `spec.template.spec.containers`. The rule found nothing and passed, so a privileged
+# Deployment was reported clean by `gator test`.
+#
+# That is the failure this repository is written to avoid: a control that exists, reviews as
+# correct, and does nothing. It was demonstrated with deny-latest-tag, whose vendored template
+# has the identical shape — the same manifest FIRES as a Pod and is SILENT as a Deployment.
+#
+# In a live cluster the control is not entirely absent: Gatekeeper also admits the Pod the
+# ReplicaSet creates, so the Deployment is accepted and its Pods are then rejected. The
+# workload fails to start instead of the change being refused. But `gator test` in
+# .github/workflows/validate.yml only ever sees the Deployment, so THE PRE-MERGE GATE IS
+# BLIND — which is the half that was supposed to catch this before it reached a cluster.
+#
+# templates/vendor/README.md is explicit about the remedy: "Do not edit these files... If
+# upstream is wrong for us, write our own template in the parent directory instead". This is
+# that. The container-selection logic below is copied verbatim from require-image-policy.yaml
+# so all first-party templates agree on what "the containers in this object" means.
+apiVersion: templates.gatekeeper.sh/v1
+kind: ConstraintTemplate
+metadata:
+  name: mindcladeprivilegedcontainer
+  annotations:
+    description: >-
+      No container may run privileged. Covers workload kinds, not only bare Pods.
+spec:
+  crd:
+    spec:
+      names:
+        kind: MindcladePrivilegedContainer
+      validation:
+        openAPIV3Schema:
+          type: object
+          properties:
+            exemptImages:
+              description: >-
+                Images excluded from enforcement. A trailing `*` prefix-matches. Prefer
+                excludedNamespaces on the constraint — an image exemption applies wherever
+                that image runs.
+              type: array
+              items:
+                type: string
+
+  targets:
+    - target: admission.k8s.gatekeeper.sh
+      rego: |
+        package mindcladeprivilegedcontainer
+
+        # `import future.keywords`, NOT `import rego.v1`. Gatekeeper validates
+        # ConstraintTemplate imports against an allowlist and rejects rego.v1 outright:
+        # "invalid ConstraintTemplate: invalid import: bad import".
+        import future.keywords.contains
+        import future.keywords.if
+        import future.keywords.in
+
+        violation contains {"msg": msg} if {
+          some container in input_containers
+          not is_exempt(container.image)
+          container.securityContext.privileged
+          msg := sprintf(
+            "container %q runs privileged. A privileged container shares the host kernel namespace — it can load modules, read every process, and reach every device on the node.",
+            [container.name],
+          )
+        }
+
+        # THE CONTAINER SET. Identical to require-image-policy.yaml and deny-holdout-mount.yaml.
+        #
+        # Each kind nests its pod spec differently, and missing one makes the rule silently
+        # inert for that kind rather than erroring:
+        #   Pod                              spec.containers
+        #   Deployment/StatefulSet/DaemonSet/Job  spec.template.spec.containers
+        #   CronJob                          spec.jobTemplate.spec.template.spec.containers
+        input_containers contains c if {
+          some c in input.review.object.spec.containers
+        }
+
+        input_containers contains c if {
+          some c in input.review.object.spec.initContainers
+        }
+
+        input_containers contains c if {
+          some c in input.review.object.spec.template.spec.containers
+        }
+
+        input_containers contains c if {
+          some c in input.review.object.spec.template.spec.initContainers
+        }
+
+        input_containers contains c if {
+          some c in input.review.object.spec.jobTemplate.spec.template.spec.containers
+        }
+
+        input_containers contains c if {
+          some c in input.review.object.spec.jobTemplate.spec.template.spec.initContainers
+        }
+
+        is_exempt(image) if {
+          some pattern in object.get(input.parameters, "exemptImages", [])
+          matches_pattern(image, pattern)
+        }
+
+        matches_pattern(image, pattern) if {
+          endswith(pattern, "*")
+          prefix := trim_suffix(pattern, "*")
+          startswith(image, prefix)
+        }
+
+        matches_pattern(image, pattern) if {
+          not endswith(pattern, "*")
+          image == pattern
+        }

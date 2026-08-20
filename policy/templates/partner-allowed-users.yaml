@@ -1,0 +1,257 @@
+# Copyright © 2026 Mindclade, LLC. All Rights Reserved.
+# Mindclade Proprietary and Confidential.
+# SPDX-License-Identifier: LicenseRef-Mindclade-Proprietary
+#
+---
+# Replaces the vendored K8sPSPAllowedUsers — the fourth and last constraint that was pointed
+# at an upstream template reading only `spec.containers`. See deny-privileged.yaml for the
+# full account of that bug and how it was demonstrated.
+#
+# This one is the most consequential of the four to have had inert. It is the runtime half of
+# partner isolation: the partner-isolated AppProject stops Argo creating a cross-namespace
+# resource, and this is what was supposed to stop a workload running as root inside a partner
+# namespace regardless of who created it. Against a Deployment — which is everything Argo
+# actually syncs — it did nothing.
+#
+# TWO PLACES A SECURITY CONTEXT CAN LIVE, and both have to be checked:
+#
+#   pod-level        spec.securityContext        (or spec.template.spec.securityContext)
+#   container-level  container.securityContext
+#
+# A container-level setting overrides the pod-level one, so a pod that declares
+# runAsNonRoot: true is still running as root if one container overrides it with
+# runAsUser: 0. Checking only the pod level is the same class of miss as checking only
+# `spec.containers`.
+apiVersion: templates.gatekeeper.sh/v1
+kind: ConstraintTemplate
+metadata:
+  name: mindcladepartnerallowedusers
+  annotations:
+    description: >-
+      Workloads in a partner namespace must run as a non-root user and within the permitted
+      group ranges. Covers workload kinds, not only bare Pods.
+spec:
+  crd:
+    spec:
+      names:
+        kind: MindcladePartnerAllowedUsers
+      validation:
+        openAPIV3Schema:
+          type: object
+          properties:
+            runAsUser:
+              type: object
+              properties:
+                rule:
+                  type: string
+                  enum: [MustRunAsNonRoot, MustRunAs, RunAsAny]
+                ranges:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      min: {type: integer}
+                      max: {type: integer}
+            runAsGroup:
+              type: object
+              properties:
+                rule:
+                  type: string
+                  enum: [MustRunAs, MayRunAs, RunAsAny]
+                ranges:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      min: {type: integer}
+                      max: {type: integer}
+            supplementalGroups:
+              type: object
+              properties:
+                rule:
+                  type: string
+                  enum: [MustRunAs, MayRunAs, RunAsAny]
+                ranges:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      min: {type: integer}
+                      max: {type: integer}
+            fsGroup:
+              type: object
+              properties:
+                rule:
+                  type: string
+                  enum: [MustRunAs, MayRunAs, RunAsAny]
+                ranges:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      min: {type: integer}
+                      max: {type: integer}
+
+  targets:
+    - target: admission.k8s.gatekeeper.sh
+      rego: |
+        package mindcladepartnerallowedusers
+
+        import future.keywords.contains
+        import future.keywords.if
+        import future.keywords.in
+
+        # ---------------------------------------------------------------------------------
+        # runAsUser
+        # ---------------------------------------------------------------------------------
+        # MustRunAsNonRoot is satisfied by EITHER runAsNonRoot: true OR a non-zero runAsUser,
+        # at container level or inherited from the pod. Anything else — including saying
+        # nothing at all — is a violation, because an image whose Dockerfile has no USER runs
+        # as root and the manifest gives no way to know that.
+        violation contains {"msg": msg} if {
+          input.parameters.runAsUser.rule == "MustRunAsNonRoot"
+          some container in input_containers
+          not runs_as_non_root(container)
+          msg := sprintf(
+            "container %q may run as root in a partner namespace. Set runAsNonRoot: true or a non-zero runAsUser — an image with no USER directive runs as root and the manifest does not say so.",
+            [container.name],
+          )
+        }
+
+        violation contains {"msg": msg} if {
+          input.parameters.runAsUser.rule == "MustRunAs"
+          some container in input_containers
+          uid := effective(container, "runAsUser")
+          not in_ranges(uid, input.parameters.runAsUser.ranges)
+          msg := sprintf(
+            "container %q runs as uid %v, outside the permitted ranges %v.",
+            [container.name, uid, input.parameters.runAsUser.ranges],
+          )
+        }
+
+        # ---------------------------------------------------------------------------------
+        # Group rules
+        # ---------------------------------------------------------------------------------
+        violation contains {"msg": msg} if {
+          input.parameters.runAsGroup.rule == "MustRunAs"
+          some container in input_containers
+          gid := effective(container, "runAsGroup")
+          not in_ranges(gid, input.parameters.runAsGroup.ranges)
+          msg := sprintf(
+            "container %q runs as group %v, outside the permitted ranges %v.",
+            [container.name, gid, input.parameters.runAsGroup.ranges],
+          )
+        }
+
+        # fsGroup and supplementalGroups are pod-level only — there is no container-level
+        # equivalent, so these read the pod spec directly rather than going through
+        # `effective`.
+        violation contains {"msg": msg} if {
+          input.parameters.fsGroup.rule == "MustRunAs"
+          gid := pod_security_context.fsGroup
+          not in_ranges(gid, input.parameters.fsGroup.ranges)
+          msg := sprintf("fsGroup %v is outside the permitted ranges %v.", [gid, input.parameters.fsGroup.ranges])
+        }
+
+        violation contains {"msg": msg} if {
+          input.parameters.supplementalGroups.rule == "MustRunAs"
+          some gid in object.get(pod_security_context, "supplementalGroups", [])
+          not in_ranges(gid, input.parameters.supplementalGroups.ranges)
+          msg := sprintf("supplementalGroup %v is outside the permitted ranges %v.", [gid, input.parameters.supplementalGroups.ranges])
+        }
+
+        # ---------------------------------------------------------------------------------
+        # Helpers
+        # ---------------------------------------------------------------------------------
+        runs_as_non_root(container) if {
+          container.securityContext.runAsNonRoot == true
+        }
+
+        runs_as_non_root(container) if {
+          uid := container.securityContext.runAsUser
+          uid != 0
+        }
+
+        # Inherited from the pod, and only when the container does not override it.
+        runs_as_non_root(container) if {
+          not has_container_run_as(container)
+          pod_security_context.runAsNonRoot == true
+        }
+
+        runs_as_non_root(container) if {
+          not has_container_run_as(container)
+          uid := pod_security_context.runAsUser
+          uid != 0
+        }
+
+        has_container_run_as(container) if {
+          _ := container.securityContext.runAsNonRoot
+        }
+
+        has_container_run_as(container) if {
+          _ := container.securityContext.runAsUser
+        }
+
+        # Container value wins over the pod value — that override is the gap a pod-level-only
+        # check would miss.
+        effective(container, field) := value if {
+          value := object.get(container, ["securityContext", field], null)
+          value != null
+        }
+
+        effective(container, field) := value if {
+          object.get(container, ["securityContext", field], null) == null
+          value := object.get(pod_security_context, field, null)
+          value != null
+        }
+
+        in_ranges(value, ranges) if {
+          some r in ranges
+          value >= r.min
+          value <= r.max
+        }
+
+        # ---------------------------------------------------------------------------------
+        # Object shapes
+        # ---------------------------------------------------------------------------------
+        # Same set as require-image-policy.yaml — see deny-privileged.yaml for why every
+        # nesting has to be listed rather than assuming the Pod shape.
+        pod_security_context := sc if {
+          sc := object.get(input.review.object.spec, "securityContext", {})
+          input.review.object.kind == "Pod"
+        }
+
+        pod_security_context := sc if {
+          input.review.object.kind != "Pod"
+          input.review.object.kind != "CronJob"
+          sc := object.get(input.review.object.spec.template.spec, "securityContext", {})
+        }
+
+        pod_security_context := sc if {
+          input.review.object.kind == "CronJob"
+          sc := object.get(input.review.object.spec.jobTemplate.spec.template.spec, "securityContext", {})
+        }
+
+        input_containers contains c if {
+          some c in input.review.object.spec.containers
+        }
+
+        input_containers contains c if {
+          some c in input.review.object.spec.initContainers
+        }
+
+        input_containers contains c if {
+          some c in input.review.object.spec.template.spec.containers
+        }
+
+        input_containers contains c if {
+          some c in input.review.object.spec.template.spec.initContainers
+        }
+
+        input_containers contains c if {
+          some c in input.review.object.spec.jobTemplate.spec.template.spec.containers
+        }
+
+        input_containers contains c if {
+          some c in input.review.object.spec.jobTemplate.spec.template.spec.initContainers
+        }

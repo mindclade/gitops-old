@@ -1,0 +1,37 @@
+# Copyright © 2026 Mindclade, LLC. All Rights Reserved.
+# Mindclade Proprietary and Confidential.
+# SPDX-License-Identifier: LicenseRef-Mindclade-Proprietary
+#
+---
+apiVersion: argoproj.io/v1alpha1
+kind: AppProject
+metadata:
+  name: serving
+  namespace: argocd
+  annotations: {argocd.argoproj.io/sync-wave: "-15"}
+spec:
+  description: Customer-facing inference and runtime services.
+  sourceRepos: [https://github.com/Mindclade/gitops.git]
+  destinations:
+    - {server: https://kubernetes.default.svc, namespace: 'serving-*'}
+  clusterResourceWhitelist: []
+  namespaceResourceWhitelist:
+    - {group: "", kind: "*"}
+    - {group: apps, kind: "*"}
+    - {group: autoscaling, kind: "*"}
+    - {group: networking.k8s.io, kind: NetworkPolicy}
+    - {group: policy, kind: PodDisruptionBudget}
+    - {group: monitoring.coreos.com, kind: "*"}
+    - {group: external-secrets.io, kind: ExternalSecret}
+    - {group: gateway.networking.k8s.io, kind: "*"}
+  namespaceResourceBlacklist:
+    - {group: "", kind: Secret}
+    - {group: "", kind: ResourceQuota}
+    - {group: "", kind: LimitRange}
+    - {group: rbac.authorization.k8s.io, kind: "*"}
+  roles:
+    - name: operator
+      policies:
+        - "p, proj:serving:operator, applications, sync, serving/*, allow"
+      groups: [Mindclade:model-serving]
+  orphanedResources: {warn: true}

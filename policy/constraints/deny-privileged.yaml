@@ -1,0 +1,22 @@
+# Copyright © 2026 Mindclade, LLC. All Rights Reserved.
+# Mindclade Proprietary and Confidential.
+# SPDX-License-Identifier: LicenseRef-Mindclade-Proprietary
+#
+---
+apiVersion: constraints.gatekeeper.sh/v1beta1
+kind: MindcladePrivilegedContainer
+metadata:
+  name: deny-privileged
+spec:
+  enforcementAction: deny
+  match:
+    kinds:
+      - apiGroups: ["", "apps", "batch"]
+        kinds: ["Pod", "Deployment", "StatefulSet", "DaemonSet", "Job", "CronJob"]
+    excludedNamespaces:
+      - kube-system
+      - gatekeeper-system
+      - gmp-system
+      # The NVIDIA driver installer genuinely needs privileged access to load kernel
+      # modules. Narrowed to that namespace rather than exempting all of kube-system.
+      - gpu-operator

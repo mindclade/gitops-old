@@ -1,0 +1,22 @@
+# Copyright © 2026 Mindclade, LLC. All Rights Reserved.
+# Mindclade Proprietary and Confidential.
+# SPDX-License-Identifier: LicenseRef-Mindclade-Proprietary
+#
+---
+# Subsumed by require-image-policy's digest requirement, and kept anyway because it produces a
+# far clearer error. "must not use :latest" tells someone what to fix; "must be referenced by
+# digest" sends them reading docs.
+apiVersion: constraints.gatekeeper.sh/v1beta1
+kind: MindcladeDisallowedTags
+metadata:
+  name: deny-latest-tag
+spec:
+  enforcementAction: deny
+  match:
+    kinds:
+      - apiGroups: ["", "apps", "batch"]
+        kinds: ["Pod", "Deployment", "StatefulSet", "DaemonSet", "Job", "CronJob"]
+    excludedNamespaces: [kube-system, gatekeeper-system, gmp-system]
+  parameters:
+    tags: ["latest", "master", "main", "dev", "stable"]
+    exemptImages: ["registry.k8s.io/*", "gke.gcr.io/*"]

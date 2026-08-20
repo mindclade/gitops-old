@@ -1,0 +1,52 @@
+{
+  // Matches mindclade/renovate.json5 so both read as one estate.
+  //
+  // This exists because every action in this repo is pinned to a commit SHA. Pinning without
+  // automated bumping is how you stay on a known-vulnerable version for a year — the pin
+  // makes the version reproducible, Renovate makes it current. Neither is sufficient alone.
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": [
+    "config:recommended",
+    // Any action added without a SHA gets one in the first Renovate PR.
+    "helpers:pinGitHubActionDigests",
+  ],
+  "dependencyDashboard": true,
+  "labels": ["dependencies", "renovate"],
+  "timezone": "America/Detroit",
+  "schedule": ["before 5am"],
+  // Seven days. Long enough that a compromised or broken release is usually withdrawn before
+  // it reaches a PR here.
+  "minimumReleaseAge": "7 days",
+  "prConcurrentLimit": 5,
+  "prHourlyLimit": 2,
+  "rangeStrategy": "replace",
+  "rebaseWhen": "conflicted",
+  "separateMajorMinor": true,
+  // Never automerge. Every dependency in this estate is in the path of infrastructure or
+  // admission control; a human reads each one.
+  "automerge": false,
+  "packageRules": [
+    {
+      // flake.lock pins the exact nixpkgs REVISION every CI job resolves its tools from —
+      // terragrunt, kustomize, kubeconform, gator, and yq all come from it now rather than
+      // from an unverified curl. Without this manager enabled the lock is written once and
+      // then silently ages: the tools stay reproducible but stop receiving fixes.
+      //
+      // Grouped into one PR because the revision is a single value; splitting it per tool
+      // would be five PRs that all change the same line.
+      "matchManagers": ["nix"],
+      "groupName": "nix flake inputs",
+      "enabled": true,
+    },
+    {
+      "description": "Keep security-sensitive workflow action upgrades isolated",
+      "matchManagers": ["github-actions"],
+      "groupName": "github actions",
+    },
+    {
+      "description": "Kustomize bases and container digests referenced from rendered/ are CI-written; Renovate must not touch generated output",
+      "matchFileNames": ["rendered/**"],
+      "enabled": false,
+    },
+  ],
+}
