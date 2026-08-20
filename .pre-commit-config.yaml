@@ -10,6 +10,6 @@ repos:
         name: Mindclade proprietary license header
         description: Ensure proprietary license comment headers are present on supported source files
         entry: python3 scripts/license-header-check.py --check
-        language: script
+        language: system
         pass_filenames: true
         stages: [pre-commit]

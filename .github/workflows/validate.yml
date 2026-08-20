@@ -93,6 +93,7 @@ jobs:
             -summary \
             -kubernetes-version "$kubernetes_version" \
             -ignore-filename-pattern 'argocd-install\.provenance\.json$' \
+            -ignore-filename-pattern 'bootstrap/profiles/patches/.*\.yaml$' \
             -ignore-missing-schemas \
             applications/ projects/ bootstrap/
 
