@@ -38,6 +38,7 @@
             # kubectl and OPA — a large closure for a job that needs one binary. `default` stays
             # the full local toolchain; this is what `nix develop .#ci` in a workflow resolves.
             packages = with pkgs; [
+              kubernetes-helm
               kustomize
               kubeconform
               gatekeeper # provides `gator`
