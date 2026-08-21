@@ -9,8 +9,10 @@ from __future__ import annotations
 
 import argparse
 import hashlib
+import os
 import subprocess
 import sys
+import tempfile
 from pathlib import Path
 from typing import Any, Iterator
 
@@ -80,6 +82,25 @@ def render(name: str) -> bytes:
     return result.stdout.rstrip(b"\n") + b"\n"
 
 
+def atomic_write(path: Path, contents: bytes) -> None:
+    """Replace one generated manifest without sharing a temporary name."""
+
+    descriptor, temporary_name = tempfile.mkstemp(
+        dir=path.parent,
+        prefix=f".{path.name}.",
+        suffix=".tmp",
+    )
+    temporary = Path(temporary_name)
+    try:
+        with os.fdopen(descriptor, "wb") as handle:
+            handle.write(contents)
+            handle.flush()
+            os.fsync(handle.fileno())
+        temporary.replace(path)
+    finally:
+        temporary.unlink(missing_ok=True)
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument(
@@ -117,9 +138,7 @@ def main() -> int:
             )
         output_path = ROOT / "arc/rendered" / output_name
         if args.write:
-            temporary = output_path.with_suffix(".yaml.tmp")
-            temporary.write_bytes(generated)
-            temporary.replace(output_path)
+            atomic_write(output_path, generated)
         elif not output_path.is_file() or output_path.read_bytes() != generated:
             failures.append(output_path.relative_to(ROOT).as_posix())
 

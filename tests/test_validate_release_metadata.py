@@ -288,7 +288,10 @@ class ReleaseMetadataContractTest(unittest.TestCase):
 
         result = self.run_schema_validator(schema, {"contract_version": "4.0.0"})
         self.assertNotEqual(result.returncode, 0)
-        self.assertIn("schema violation at <root>", result.stderr)
+        self.assertIn(
+            "producer_evidence must identify the immutable producer input",
+            result.stderr,
+        )
 
     def test_untrusted_signer_fails(self) -> None:
         record = valid_record()
