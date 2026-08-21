@@ -8,6 +8,7 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import sys
 from pathlib import Path
@@ -18,24 +19,35 @@ class TransitionError(ValueError):
     """The candidate policy is not one of the exact reviewed transition policies."""
 
 
-def _policy(workflow_version: str) -> dict[str, Any]:
+QUARANTINED_V3_SCHEMA_SHA256 = (
+    "4e40da787e7fec209721f4a111d501198c52b379b575d46a6672df8a5c77b783"
+)
+QUARANTINED_V3_DEPLOYMENT_SIGNER_WORKFLOW_REF = "mindclade/.github/.github/workflows/reusable-binauthz-sign.yml@refs/tags/v3.0.0"
+
+
+def _signer_refs(workflow_version: str) -> dict[str, str]:
     prefix = "mindclade/.github/.github/workflows"
+    refs = {
+        "build": f"{prefix}/reusable-arc-oci-build.yml@refs/tags/{workflow_version}",
+        "qualification": (
+            f"{prefix}/reusable-arc-qualification-attest.yml@refs/tags/"
+            f"{workflow_version}"
+        ),
+        "deployment": (
+            f"{prefix}/reusable-binauthz-sign.yml@refs/tags/{workflow_version}"
+        ),
+    }
+    if workflow_version == "v3.0.0":
+        refs["deployment"] = QUARANTINED_V3_DEPLOYMENT_SIGNER_WORKFLOW_REF
+    return refs
+
+
+def _policy(workflow_version: str) -> dict[str, Any]:
     return {
         "producer_schema_version": "mindclade.dev/release-evidence/v1",
         "consumer_contract_version": "4.0.0",
         "source_repository": "mindclade/mindclade-internal-monorepo",
-        "signer_workflow_refs": {
-            "build": (
-                f"{prefix}/reusable-arc-oci-build.yml@refs/tags/{workflow_version}"
-            ),
-            "qualification": (
-                f"{prefix}/reusable-arc-qualification-attest.yml@refs/tags/"
-                f"{workflow_version}"
-            ),
-            "deployment": (
-                f"{prefix}/reusable-binauthz-sign.yml@refs/tags/{workflow_version}"
-            ),
-        },
+        "signer_workflow_refs": _signer_refs(workflow_version),
         "evidence_retention": {
             "nonproduction": "P1Y",
             "production": "P7Y",
@@ -59,6 +71,19 @@ APPROVED_POLICIES = {
 def select_policy(path: Path) -> tuple[str, dict[str, str]]:
     try:
         candidate = json.loads(path.read_text(encoding="utf-8"))
+    except FileNotFoundError:
+        schema_path = path.with_name("release-metadata.schema.json")
+        try:
+            schema_bytes = schema_path.read_bytes()
+        except OSError as exc:
+            raise TransitionError(
+                f"cannot read release-handoff policy or quarantine schema: {exc}"
+            ) from exc
+        if hashlib.sha256(schema_bytes).hexdigest() == QUARANTINED_V3_SCHEMA_SHA256:
+            return "v3.0.0", _signer_refs("v3.0.0")
+        raise TransitionError(
+            "missing release-handoff policy is not the exact reviewed v3 quarantine"
+        )
     except (OSError, json.JSONDecodeError) as exc:
         raise TransitionError(f"cannot read release-handoff policy: {exc}") from exc
     for version, approved in APPROVED_POLICIES.items():

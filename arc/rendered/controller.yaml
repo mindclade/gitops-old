@@ -8816,7 +8816,6 @@ spec:
     storage: true
     subresources:
       status: {}
-
 ---
 # Source: gha-runner-scale-set-controller/crds/actions.github.com_autoscalingrunnersets.yaml
 ---
@@ -25382,7 +25381,6 @@ spec:
       storage: true
       subresources:
         status: {}
-
 ---
 # Source: gha-runner-scale-set-controller/crds/actions.github.com_ephemeralrunners.yaml
 ---
@@ -33734,7 +33732,6 @@ spec:
       storage: true
       subresources:
         status: {}
-
 ---
 # Source: gha-runner-scale-set-controller/crds/actions.github.com_ephemeralrunnersets.yaml
 ---
@@ -42070,7 +42067,6 @@ spec:
       storage: true
       subresources:
         status: {}
-
 ---
 # Source: gha-runner-scale-set-controller/templates/serviceaccount.yaml
 apiVersion: v1

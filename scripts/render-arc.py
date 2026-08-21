@@ -77,9 +77,16 @@ def render(name: str) -> bytes:
     result = subprocess.run(command, cwd=ROOT, check=True, capture_output=True)
     if not result.stdout:
         raise ValueError(f"ARC render is empty: {output}")
-    # Helm emits an extra terminal blank line. Normalize generated output to one final newline
-    # so the committed manifests satisfy strict yamllint and byte-for-byte drift checks agree.
-    return result.stdout.rstrip(b"\n") + b"\n"
+    return normalize_rendered_yaml(result.stdout)
+
+
+def normalize_rendered_yaml(contents: bytes) -> bytes:
+    """Canonicalize Helm's platform-dependent document-separator whitespace."""
+
+    normalized = contents
+    while b"\n\n---\n" in normalized:
+        normalized = normalized.replace(b"\n\n---\n", b"\n---\n")
+    return normalized.rstrip(b"\n") + b"\n"
 
 
 def atomic_write(path: Path, contents: bytes) -> None:
