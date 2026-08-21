@@ -7,7 +7,7 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: training-init-with-holdout
-  namespace: research-training
+  namespace: mindclade-training-b200
 spec:
   selector:
     matchLabels: {app: trainer}
@@ -15,11 +15,11 @@ spec:
     metadata:
       labels: {app: trainer}
     spec:
-      serviceAccountName: trainer
+      serviceAccountName: mindclade-training-b200
       initContainers:
         - name: stage-data
-          image: europe-west4-docker.pkg.dev/mc/containers/stager@sha256:0000000000000000000000000000000000000000000000000000000000000000
-          command: ["gcloud", "storage", "cp", "gs://mc-holdout-eval/cases.jsonl", "/data/"]
+          image: us-central1-docker.pkg.dev/mc/containers/stager@sha256:0000000000000000000000000000000000000000000000000000000000000000
+          command: ["gcloud", "storage", "cp", "gs://mc-staging-holdout/cases.jsonl", "/data/"]
       containers:
         - name: trainer
-          image: europe-west4-docker.pkg.dev/mc/containers/trainer@sha256:0000000000000000000000000000000000000000000000000000000000000000
+          image: us-central1-docker.pkg.dev/mc/containers/trainer@sha256:0000000000000000000000000000000000000000000000000000000000000000

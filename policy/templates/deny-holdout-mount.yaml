@@ -26,10 +26,19 @@ spec:
               items:
                 type: string
             allowedServiceAccounts:
-              description: Service accounts permitted to read the holdout data — evaluation only.
+              description: Exact namespace/name pairs permitted to read holdout data.
               type: array
               items:
-                type: string
+                type: object
+                additionalProperties: false
+                required:
+                  - namespace
+                  - name
+                properties:
+                  namespace:
+                    type: string
+                  name:
+                    type: string
 
   targets:
     - target: admission.k8s.gatekeeper.sh
@@ -105,17 +114,23 @@ spec:
 
         sa_is_allowed if {
           sa := object.get(input.review.object.spec, "serviceAccountName", "")
-          sa in input.parameters.allowedServiceAccounts
+          some allowed in input.parameters.allowedServiceAccounts
+          allowed.namespace == input.review.object.metadata.namespace
+          allowed.name == sa
         }
 
         sa_is_allowed if {
           sa := object.get(input.review.object.spec.template.spec, "serviceAccountName", "")
-          sa in input.parameters.allowedServiceAccounts
+          some allowed in input.parameters.allowedServiceAccounts
+          allowed.namespace == input.review.object.metadata.namespace
+          allowed.name == sa
         }
 
         sa_is_allowed if {
           sa := object.get(input.review.object.spec.jobTemplate.spec.template.spec, "serviceAccountName", "")
-          sa in input.parameters.allowedServiceAccounts
+          some allowed in input.parameters.allowedServiceAccounts
+          allowed.namespace == input.review.object.metadata.namespace
+          allowed.name == sa
         }
 
         input_containers contains c if {

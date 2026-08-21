@@ -22,7 +22,7 @@ spec:
     infra/kubernetes/policies: kustomize
   qualificationTemplates:
     package: infra/kubernetes/platform/qualification
-    profileOrder: [cpu, h100, h200]
+    profileOrder: [cpu, h100, b200]
     canonicalDigest: sha256:d73ca8be8f74a31fce8782439ab08e00ff7ff57e9fa90bf3c13bc3b6edb5c727
     digestAlgorithm: canonical-json-v1
     sourceLockRef: v0.2.0

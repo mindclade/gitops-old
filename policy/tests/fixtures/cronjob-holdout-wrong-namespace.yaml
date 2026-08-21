@@ -1,15 +1,15 @@
----
 # Copyright © 2026 Mindclade, LLC. All Rights Reserved.
 # Mindclade Proprietary and Confidential.
 # SPDX-License-Identifier: LicenseRef-Mindclade-Proprietary
 
+---
 apiVersion: batch/v1
 kind: CronJob
 metadata:
-  name: holdout-evaluation
-  namespace: mindclade-evaluation
+  name: holdout-evaluation-name-collision
+  namespace: research-evaluation
 spec:
-  schedule: "0 2 * * *"
+  schedule: "0 3 * * *"
   jobTemplate:
     spec:
       template:

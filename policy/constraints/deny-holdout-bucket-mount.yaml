@@ -16,13 +16,19 @@ spec:
       - apiGroups: ["", "apps", "batch"]
         kinds: ["Pod", "Deployment", "StatefulSet", "Job", "CronJob"]
     namespaces:
+      - mindclade-batch-cpu
+      - mindclade-training-h100
+      - mindclade-training-b200
+      - mindclade-evaluation
       - "research-*"
       - "serving-*"
   parameters:
     holdoutBuckets:
-      - mc-holdout-eval
-      - mc-holdout-eval-production
+      - mc-development-holdout
+      - mc-staging-holdout
+      - mc-production-holdout
     # Evaluation jobs only, and they are not training. The distinction is the whole point:
     # reading the holdout to score a model is fine; reading it during training is not.
     allowedServiceAccounts:
-      - eval-runner
+      - namespace: mindclade-evaluation
+        name: mindclade-holdout-evaluator
