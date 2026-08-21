@@ -87,7 +87,7 @@ content matches declared hashes and byte counts. It fails closed on render error
 artifact selections, unsafe output names, and unexpected generated drift.
 
 Development receives newly rendered output. Promotion copies only an approved application's
-immutable repository/digest/release-record selection to the adjacent environment; it never
+immutable release-record selection to the adjacent environment; it never
 copies environment-specific replicas, quotas, configuration, or rendered bytes. Each environment
 then renders independently and CI verifies deterministic output. Argo CD reads this repository
 but cannot write it, and reconciles only its environment. The built-in `default` AppProject is

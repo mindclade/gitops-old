@@ -83,7 +83,7 @@ jobs:
           set -euo pipefail
           if [[ "$REQUESTED" != "true" ]]; then
             echo "enabled=false" >> "$GITHUB_OUTPUT"
-            echo "::notice::Connected evidence remains disabled until its identity and trust roots are applied."
+            echo "::notice::Connected evidence is staged until GITOPS_CONNECTED_VALIDATION=true after identity apply."
             exit 0
           fi
           [[ -n "$ATTESTOR_PROJECT" && -n "$ATTESTOR" ]] || {
@@ -109,9 +109,9 @@ jobs:
           set -euo pipefail
           grep -rhoE 'image: *[^ ]+' .candidate/rendered/ 2>/dev/null \
             | awk '{print $2}' | tr -d '"' > rendered-images.txt || true
-          nix develop ./.trusted#ci --command yq -r \
-            '.spec.applications[]?.images[]? | .repository + "@" + .digest' \
-            .candidate/deployments/*.yaml > selected-images.txt
+          nix develop ./.trusted#ci --command python3 \
+            .trusted/scripts/validate-deployment-selections.py \
+            --root .candidate --print-images > selected-images.txt
           nix develop ./.trusted#ci --command yq -r \
             '.images[] | .name + "@" + .digest' \
             .candidate/bootstrap/components/immutable-images/kustomization.yaml \
