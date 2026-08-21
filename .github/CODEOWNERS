@@ -36,6 +36,9 @@
 /bootstrap/             @mindclade/platform @mindclade/security
 /arc/                   @mindclade/platform @mindclade/security
 /vendor/arc/            @mindclade/platform @mindclade/security
+/roots/ci/              @mindclade/platform @mindclade/security
+/applications/ci/       @mindclade/platform @mindclade/security
+/projects/arc-artifact-authority.yaml @mindclade/platform @mindclade/security
 
 /.github/workflows/     @mindclade/platform @mindclade/security
 

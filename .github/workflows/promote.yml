@@ -142,10 +142,11 @@ jobs:
             printf '## Artifact promotion — %s → %s\n\n' "$FROM_ENV" "$TO_ENV"
             printf 'Applications: `%s`\n\n' "$APPS"
             cat <<'EOF'
-          This PR copies only immutable image repositories, digests, and their bound release
-          records. The target environment keeps its own reviewed replicas, quotas, endpoints,
-          and policy. After merge, the render workflow opens the separate generated-manifest PR
-          containing the exact cluster delta.
+          This PR copies only the application-to-release-record selection. The immutable v4
+          record owns its named images, typed artifacts, qualification graph, compatibility,
+          migration, and rollback lineage. The target environment keeps its own reviewed
+          replicas, quotas, endpoints, and policy. After merge, the render workflow opens the
+          separate generated-manifest PR containing the exact cluster delta.
 
           ### Before approving
 
