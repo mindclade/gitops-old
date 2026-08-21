@@ -30,7 +30,6 @@ spec:
               type: array
               items:
                 type: object
-                additionalProperties: false
                 required:
                   - namespace
                   - name
