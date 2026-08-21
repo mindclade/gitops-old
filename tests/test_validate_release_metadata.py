@@ -16,6 +16,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 VALIDATOR = ROOT / "scripts/validate-release-metadata.py"
+V3_SCHEMA = ROOT / "tests/fixtures/release-metadata-3.0.0.schema.json"
 SOURCE_REPOSITORY = "mindclade/mindclade-internal-monorepo"
 PREFIX = "mindclade/.github/.github/workflows"
 
@@ -83,7 +84,7 @@ class ReleaseMetadataTransitionTest(unittest.TestCase):
         (root / "deployments").mkdir()
         (root / "releases").mkdir()
         (root / "contracts/release-metadata.schema.json").write_bytes(
-            (ROOT / "contracts/release-metadata.schema.json").read_bytes()
+            V3_SCHEMA.read_bytes()
         )
         for environment in ("development", "staging", "production"):
             (root / f"deployments/{environment}.yaml").write_bytes(

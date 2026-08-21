@@ -41,6 +41,13 @@ required_paths:
   - projects
   - projects/argocd-administration.yaml
   - policy
+  - qualification
+  - qualification/schemas/qualification-request-v1.schema.json
+  - qualification/schemas/qualification-report-v2.schema.json
+  - scripts/audit-production-estate.py
+  - scripts/deterministic-qualification-archive.py
+  - scripts/production_qualification.py
+  - .github/workflows/production-qualification-evidence.yml
   - overlays/production.yaml
   - docs/disaster-recovery.md
   - docs/argocd-upgrade.md

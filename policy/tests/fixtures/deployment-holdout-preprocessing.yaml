@@ -1,0 +1,24 @@
+# Copyright © 2026 Mindclade, LLC. All Rights Reserved.
+# Mindclade Proprietary and Confidential.
+# SPDX-License-Identifier: LicenseRef-Mindclade-Proprietary
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: preprocessing-with-holdout
+  namespace: mindclade-batch-cpu
+spec:
+  selector:
+    matchLabels: {app: preprocessing}
+  template:
+    metadata:
+      labels: {app: preprocessing}
+    spec:
+      serviceAccountName: mindclade-batch-cpu
+      containers:
+        - name: preprocessing
+          image: us-central1-docker.pkg.dev/mc/containers/preprocessing@sha256:0000000000000000000000000000000000000000000000000000000000000000
+          env:
+            - name: INPUT_URI
+              value: gs://mc-development-holdout/qualification/cases.jsonl

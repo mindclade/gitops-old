@@ -24,7 +24,7 @@ spec:
         fsGroup: 1000
       containers:
         - name: app
-          image: europe-west4-docker.pkg.dev/mc/containers/app@sha256:0000000000000000000000000000000000000000000000000000000000000000
+          image: us-central1-docker.pkg.dev/mc/containers/app@sha256:0000000000000000000000000000000000000000000000000000000000000000
           securityContext:
             runAsUser: 0
           resources:

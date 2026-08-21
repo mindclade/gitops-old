@@ -14,6 +14,10 @@ from pathlib import Path
 MODULE_PATH = (
     Path(__file__).resolve().parents[1] / "scripts/select-release-handoff-transition.py"
 )
+V3_SCHEMA = (
+    Path(__file__).resolve().parent
+    / "fixtures/release-metadata-3.0.0.schema.json"
+)
 SPEC = importlib.util.spec_from_file_location("release_handoff_transition", MODULE_PATH)
 assert SPEC and SPEC.loader
 transition = importlib.util.module_from_spec(SPEC)
@@ -26,11 +30,7 @@ class ReleaseHandoffTransitionTest(unittest.TestCase):
             contracts = Path(raw_temp) / "contracts"
             contracts.mkdir()
             schema = contracts / "release-metadata.schema.json"
-            repository_schema = (
-                Path(__file__).resolve().parents[1]
-                / "contracts/release-metadata.schema.json"
-            )
-            schema.write_bytes(repository_schema.read_bytes())
+            schema.write_bytes(V3_SCHEMA.read_bytes())
             self.assertEqual(
                 transition.QUARANTINED_V3_SCHEMA_SHA256,
                 hashlib.sha256(schema.read_bytes()).hexdigest(),
