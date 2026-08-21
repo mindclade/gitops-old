@@ -150,6 +150,31 @@ def write_badges(root: Path, contract: dict[str, object]) -> None:
         (target / f"{label}.svg").write_text(badge_svg(label, value), encoding="utf-8")
 
 
+def validate_local_validator(source: Path, root: Path, requested_path: str) -> list[str]:
+    """Require an optional offline mirror to match this released validator exactly."""
+    if not requested_path:
+        return []
+
+    relative = Path(requested_path)
+    if relative.is_absolute():
+        return ["local validator path must be relative to the workspace"]
+
+    workspace = root.resolve()
+    candidate = (workspace / relative).resolve()
+    try:
+        candidate.relative_to(workspace)
+    except ValueError:
+        return [f"local validator path escapes the workspace: {requested_path}"]
+
+    if not candidate.is_file():
+        return [f"local validator mirror does not exist: {requested_path}"]
+    if candidate.read_bytes() != source.resolve().read_bytes():
+        return [
+            f"local validator mirror differs from the released action: {requested_path}"
+        ]
+    return []
+
+
 def validate(root: Path) -> list[str]:
     errors: list[str] = []
     readme_path = root / "README.md"
@@ -305,6 +330,7 @@ def validate(root: Path) -> list[str]:
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--root", type=Path, default=Path.cwd())
+    parser.add_argument("--local-validator-path", default="")
     parser.add_argument("--write-badges", action="store_true")
     args = parser.parse_args()
     root = args.root.resolve()
@@ -315,6 +341,9 @@ def main() -> int:
             return 1
         write_badges(root, parse_contract(contract_path))
     errors = validate(root)
+    errors.extend(
+        validate_local_validator(Path(__file__), root, args.local_validator_path)
+    )
     if errors:
         print("repository-home validation failed:", file=sys.stderr)
         for error in errors:

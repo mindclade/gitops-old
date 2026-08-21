@@ -13,6 +13,7 @@ repository's most important boundary checks run before cluster tooling exists.
 
 from __future__ import annotations
 
+import hashlib
 import json
 import re
 import subprocess
@@ -31,7 +32,7 @@ CONTRACT = json.loads(
     '"required_paths":[".kubernetes-version","bootstrap/argocd-install.yaml","bootstrap/argocd-install.provenance.json","bootstrap/components/immutable-images/kustomization.yaml","bootstrap/components/control-plane-baseline/kustomization.yaml","bootstrap/install-profiles/standard/kustomization.yaml","bootstrap/install-profiles/ha/kustomization.yaml","bootstrap/profiles/standard/kustomization.yaml",'
     '"bootstrap/profiles/ha/kustomization.yaml","bootstrap/root-app.yaml",'
     '"applications","deployments","projects","projects/argocd-administration.yaml","policy","overlays/production.yaml",'
-    '"docs/disaster-recovery.md","docs/argocd-upgrade.md","docs/production-qualification.md","docs/failed-sync.md","docs/freeze-and-emergency.md","docs/rollback.md"],'
+    '"docs/disaster-recovery.md","docs/argocd-upgrade.md","docs/production-qualification.md","docs/failed-sync.md","docs/freeze-and-emergency.md","docs/rollback.md","vendor/arc/provenance.json"],'
     '"visibility":"internal"}'
 )
 ERRORS: list[str] = []
@@ -80,6 +81,99 @@ def tracked_prefix_exists(relative: str) -> bool:
     return prefix in TRACKED_RELATIVE or any(
         path.startswith(prefix + "/") for path in TRACKED_RELATIVE
     )
+
+
+def vendored_tree_sha256(root: Path) -> str:
+    """Hash both relative names and bytes so file moves are provenance changes."""
+    digest = hashlib.sha256()
+    for path in sorted(candidate for candidate in root.rglob("*") if candidate.is_file()):
+        data = path.read_bytes()
+        relative = path.relative_to(root).as_posix().encode("utf-8")
+        digest.update(relative + b"\0")
+        digest.update(str(len(data)).encode("ascii") + b"\0")
+        digest.update(data + b"\0")
+    return "sha256:" + digest.hexdigest()
+
+
+try:
+    arc_provenance = json.loads((ROOT / "vendor/arc/provenance.json").read_text())
+    if arc_provenance.get("schema_version") != 1:
+        error("unsupported ARC vendor provenance schema")
+    artifacts = arc_provenance.get("artifacts")
+    if not isinstance(artifacts, list):
+        artifacts = []
+        error("ARC vendor provenance artifacts must be a list")
+    expected = {
+        "gha-runner-scale-set": "vendor/arc/0.14.2/gha-runner-scale-set",
+        "gha-runner-scale-set-controller": (
+            "vendor/arc/0.14.2/gha-runner-scale-set-controller"
+        ),
+    }
+    records = {
+        str(record.get("name")): record
+        for record in artifacts
+        if isinstance(record, dict)
+    }
+    if set(records) != set(expected) or len(records) != len(artifacts):
+        error("ARC vendor provenance must cover exactly both official charts")
+    for name, vendored_path in expected.items():
+        record = records.get(name, {})
+        if record.get("version") != "0.14.2":
+            error(f"ARC vendor provenance has an unexpected version: {name}")
+        expected_reference = (
+            "oci://ghcr.io/actions/actions-runner-controller-charts/"
+            f"{name}:0.14.2"
+        )
+        if record.get("oci_reference") != expected_reference:
+            error(f"ARC vendor provenance has an unexpected OCI reference: {name}")
+        if record.get("vendored_path") != vendored_path:
+            error(f"ARC vendor provenance has an unexpected local path: {name}")
+        for digest_field in (
+            "oci_manifest_digest",
+            "archive_sha256",
+            "vendored_tree_sha256",
+        ):
+            if not re.fullmatch(
+                r"sha256:[0-9a-f]{64}", str(record.get(digest_field, ""))
+            ):
+                error(f"ARC vendor provenance has an invalid {digest_field}: {name}")
+        chart_root = ROOT / vendored_path
+        if not chart_root.is_dir():
+            error(f"ARC vendored chart is missing: {vendored_path}")
+        else:
+            actual_tree_digest = vendored_tree_sha256(chart_root)
+            if record.get("vendored_tree_sha256") != actual_tree_digest:
+                error(
+                    "ARC vendored chart tree digest mismatch: "
+                    f"{name}: expected {record.get('vendored_tree_sha256')}, "
+                    f"got {actual_tree_digest}"
+                )
+except (OSError, json.JSONDecodeError) as exception:
+    error(f"ARC vendor provenance is unreadable: {exception}")
+
+
+# These names are the GitHub Actions `runs-on` routing contract. A syntactically valid chart
+# with a different scale-set name leaves a protected release job queued forever, so keep the
+# three provisioned labels and their restricted enterprise runner group exact.
+arc_scale_sets = {
+    "canary.yaml": "mindclade-arc-canary",
+    "build.yaml": "mindclade-arc-build-cpu",
+    "qualify.yaml": "mindclade-arc-qualify-cpu",
+}
+for values_file, expected_name in arc_scale_sets.items():
+    path = ROOT / "arc" / "values" / values_file
+    try:
+        values_text = path.read_text(encoding="utf-8")
+    except OSError as exception:
+        error(f"ARC scale-set values are unreadable: {values_file}: {exception}")
+        continue
+    for required_line in (
+        "runnerGroup: mindclade-arc-artifact-authority",
+        f"runnerScaleSetName: {expected_name}",
+        "githubConfigSecret: arc-github-app",
+    ):
+        if required_line not in values_text:
+            error(f"ARC scale-set contract drift in {values_file}: {required_line}")
 
 
 repository_contract = (ROOT / "contracts/repository.yaml").read_text(
@@ -202,6 +296,13 @@ for required in (
         error(f"deployment trust root is not enforced end-to-end: {required}")
 if "scripts/verify-release-evidence.py" not in provenance_workflow:
     error("provenance workflow does not delegate to the cryptographic release verifier")
+if (
+    "validate-deployment-selections.py" not in provenance_workflow
+    or "--print-images" not in provenance_workflow
+):
+    error("provenance workflow does not enumerate images through trusted v2 release selections")
+if ".spec.applications[]?.images" in provenance_workflow:
+    error("provenance workflow still trusts the removed inline deployment image contract")
 for required in (":validateAttestationOccurrence", 'value.get("result") == "VERIFIED"'):
     if required not in release_verifier:
         error(
@@ -227,8 +328,10 @@ for forbidden in (
     if forbidden in provenance_workflow or forbidden in release_verifier:
         error(f"GitOps depends on the wrong artifact authority: {forbidden}")
 for required in (
-    '"const": "3.0.0"',
-    '"supply_chain_attestations"',
+    '"const": "4.0.0"',
+    '"attestations"',
+    '"qualification_epoch"',
+    '"previous_subject_digest"',
     "reusable-binauthz-sign.yml@refs/tags/v4.0.0",
 ):
     if required not in release_schema and required not in release_validator:

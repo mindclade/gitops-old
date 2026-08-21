@@ -1,31 +1,44 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://mindclade.com/contracts/gitops/release-metadata-3.0.0.schema.json",
+  "$id": "https://mindclade.com/contracts/gitops/release-metadata-4.0.0.schema.json",
   "title": "Mindclade immutable release metadata",
   "type": "object",
   "additionalProperties": false,
   "required": [
     "contract_version",
     "release_id",
+    "release_kind",
+    "subject",
     "source_repository",
     "source_revision",
     "builder_identity",
     "build_invocation_id",
-    "image",
-    "sbom",
-    "provenance",
+    "images",
+    "artifacts",
+    "producer_evidence",
     "vulnerability",
-    "qualification",
-    "supply_chain_attestations",
+    "evidence",
+    "attestations",
+    "evidence_retention",
+    "compatibility",
+    "migration",
+    "rollback",
     "created_at"
   ],
   "properties": {
-    "contract_version": {
-      "const": "3.0.0"
+    "contract_version": {"const": "4.0.0"},
+    "release_id": {"$ref": "#/$defs/releaseId"},
+    "release_kind": {
+      "enum": ["application", "bundle", "dataset", "model", "pipeline", "platform"]
     },
-    "release_id": {
-      "type": "string",
-      "minLength": 3
+    "subject": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "digest"],
+      "properties": {
+        "name": {"$ref": "#/$defs/applicationName"},
+        "digest": {"$ref": "#/$defs/sha256"}
+      }
     },
     "source_repository": {
       "type": "string",
@@ -35,122 +48,302 @@
       "type": "string",
       "pattern": "^[0-9a-f]{40}$"
     },
-    "builder_identity": {
-      "type": "string",
-      "minLength": 3
+    "builder_identity": {"type": "string", "minLength": 3},
+    "build_invocation_id": {"type": "string", "minLength": 3},
+    "images": {
+      "type": "object",
+      "minProperties": 1,
+      "propertyNames": {"$ref": "#/$defs/identifier"},
+      "additionalProperties": {
+        "type": "string",
+        "pattern": "^.+@sha256:[0-9a-f]{64}$"
+      }
     },
-    "build_invocation_id": {
-      "type": "string",
-      "minLength": 3
+    "artifacts": {
+      "type": "array",
+      "minItems": 5,
+      "items": {"$ref": "#/$defs/typedArtifact"}
     },
-    "image": {
-      "type": "string",
-      "pattern": "^.+@sha256:[0-9a-f]{64}$"
-    },
-    "sbom": {
-      "$ref": "#/$defs/artifactReference"
-    },
-    "provenance": {
-      "$ref": "#/$defs/artifactReference"
+    "producer_evidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schema_version", "path", "digest"],
+      "properties": {
+        "schema_version": {"const": "mindclade.dev/release-evidence/v1"},
+        "path": {
+          "type": "string",
+          "pattern": "^evidence/(platform|serving|research|data|partner)-[a-z0-9][a-z0-9-]*/v[0-9]+\\.[0-9]+\\.[0-9]+(?:-[a-z0-9-]+)?\\.json$"
+        },
+        "digest": {"$ref": "#/$defs/sha256"}
+      }
     },
     "vulnerability": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["result", "scanner", "evidence"],
+      "required": [
+        "result",
+        "scanner",
+        "scanner_version",
+        "database_digest",
+        "scanned_at",
+        "finding_counts",
+        "exception"
+      ],
       "properties": {
-        "result": {
-          "enum": ["pass", "approved"]
-        },
-        "scanner": {
+        "result": {"enum": ["pass", "approved-exception"]},
+        "scanner": {"$ref": "#/$defs/identifier"},
+        "scanner_version": {
           "type": "string",
-          "minLength": 1
+          "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$"
         },
-        "evidence": {
-          "$ref": "#/$defs/artifactReference"
-        }
-      }
-    },
-    "qualification": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": ["result", "evidence"],
-      "properties": {
-        "result": {
-          "const": "pass"
-        },
-        "evidence": {
-          "$ref": "#/$defs/artifactReference"
-        }
-      }
-    },
-    "supply_chain_attestations": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": ["build", "qualification", "deployment"],
-      "properties": {
-        "build": {
-          "$ref": "#/$defs/attestorReference"
-        },
-        "qualification": {
-          "$ref": "#/$defs/attestorReference"
-        },
-        "deployment": {
+        "database_digest": {"$ref": "#/$defs/sha256"},
+        "scanned_at": {"type": "string", "format": "date-time"},
+        "finding_counts": {
           "type": "object",
           "additionalProperties": false,
-          "required": ["project", "attestor", "signer_workflow_ref"],
+          "required": ["critical", "high", "medium", "low", "unknown"],
           "properties": {
-            "project": {
+            "critical": {"type": "integer", "minimum": 0},
+            "high": {"type": "integer", "minimum": 0},
+            "medium": {"type": "integer", "minimum": 0},
+            "low": {"type": "integer", "minimum": 0},
+            "unknown": {"type": "integer", "minimum": 0}
+          }
+        },
+        "exception": {
+          "oneOf": [
+            {"type": "null"},
+            {"$ref": "#/$defs/vulnerabilityException"}
+          ]
+        }
+      },
+      "allOf": [
+        {
+          "if": {"properties": {"result": {"const": "pass"}}},
+          "then": {"properties": {"exception": {"type": "null"}}}
+        },
+        {
+          "if": {"properties": {"result": {"const": "approved-exception"}}},
+          "then": {"properties": {"exception": {"$ref": "#/$defs/vulnerabilityException"}}}
+        }
+      ]
+    },
+    "evidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["result", "policy", "qualification_epoch", "graph"],
+      "properties": {
+        "result": {"const": "pass"},
+        "policy": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["id", "version", "digest"],
+          "properties": {
+            "id": {"$ref": "#/$defs/identifier"},
+            "version": {
               "type": "string",
-              "pattern": "^[a-z][a-z0-9-]{4,28}[a-z0-9]$"
+              "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$"
             },
-            "attestor": {
-              "type": "string",
-              "minLength": 3
-            },
-            "signer_workflow_ref": {
-              "type": "string",
-              "pattern": "^mindclade/\\.github/\\.github/workflows/reusable-binauthz-sign\\.yml@refs/tags/v[0-9]+\\.[0-9]+\\.[0-9]+$"
+            "digest": {"$ref": "#/$defs/sha256"}
+          }
+        },
+        "qualification_epoch": {"type": "string", "format": "date-time"},
+        "graph": {
+          "type": "array",
+          "minItems": 4,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["subject_digest", "predicate_type", "artifact", "result"],
+            "properties": {
+              "subject_digest": {"$ref": "#/$defs/sha256"},
+              "predicate_type": {
+                "enum": ["build-provenance", "qualification", "sbom", "vulnerability-scan"]
+              },
+              "artifact": {"$ref": "#/$defs/identifier"},
+              "result": {"enum": ["approved", "pass"]}
             }
           }
         }
       }
     },
-    "created_at": {
-      "type": "string",
-      "format": "date-time"
-    },
-    "migration": {
-      "type": "object"
-    }
-  },
-  "$defs": {
-    "attestorReference": {
+    "attestations": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["project", "attestor"],
+      "required": ["build", "qualification", "deployment"],
       "properties": {
-        "project": {
+        "build": {"$ref": "#/$defs/buildAttestorReference"},
+        "qualification": {"$ref": "#/$defs/qualificationAttestorReference"},
+        "deployment": {"$ref": "#/$defs/deploymentAttestorReference"}
+      }
+    },
+    "evidence_retention": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["nonproduction", "production"],
+      "properties": {
+        "nonproduction": {"const": "P1Y"},
+        "production": {"const": "P7Y"}
+      }
+    },
+    "compatibility": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kubernetes", "platform_api", "required_capabilities"],
+      "properties": {
+        "kubernetes": {
           "type": "string",
-          "pattern": "^[a-z][a-z0-9-]{4,28}[a-z0-9]$"
+          "pattern": "^>=1\\.[0-9]+\\.[0-9]+ <1\\.[0-9]+\\.[0-9]+$"
         },
-        "attestor": {
+        "platform_api": {
           "type": "string",
-          "minLength": 3
+          "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$"
+        },
+        "required_capabilities": {
+          "type": "array",
+          "items": {"$ref": "#/$defs/identifier"},
+          "uniqueItems": true
         }
       }
     },
-    "artifactReference": {
+    "migration": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["uri", "digest"],
+      "required": ["required", "artifact"],
       "properties": {
-        "uri": {
-          "type": "string",
-          "minLength": 3
+        "required": {"type": "boolean"},
+        "artifact": {
+          "type": ["string", "null"],
+          "pattern": "^[a-z][a-z0-9-]{1,62}$"
+        }
+      }
+    },
+    "rollback": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["strategy", "previous_release_id", "previous_subject_digest", "artifact"],
+      "properties": {
+        "strategy": {"enum": ["bootstrap", "previous-release"]},
+        "previous_release_id": {
+          "anyOf": [
+            {"$ref": "#/$defs/releaseId"},
+            {"type": "null"}
+          ]
         },
-        "digest": {
-          "type": "string",
+        "previous_subject_digest": {
+          "type": ["string", "null"],
           "pattern": "^sha256:[0-9a-f]{64}$"
+        },
+        "artifact": {"$ref": "#/$defs/identifier"}
+      }
+    },
+    "created_at": {"type": "string", "format": "date-time"}
+  },
+  "$defs": {
+    "applicationName": {
+      "type": "string",
+      "pattern": "^(platform|serving|research|data|partner)-[a-z0-9][a-z0-9-]*$"
+    },
+    "identifier": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9-]{1,62}$"
+    },
+    "projectId": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9-]{4,28}[a-z0-9]$"
+    },
+    "releaseId": {
+      "type": "string",
+      "pattern": "^v[0-9]+\\.[0-9]+\\.[0-9]+(?:-[a-z0-9-]+)?$"
+    },
+    "sha256": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "buildAttestorReference": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["project", "attestor", "signer_workflow_ref"],
+      "properties": {
+        "project": {"$ref": "#/$defs/projectId"},
+        "attestor": {"$ref": "#/$defs/identifier"},
+        "signer_workflow_ref": {
+          "type": "string",
+          "pattern": "^mindclade/\\.github/\\.github/workflows/reusable-arc-oci-build\\.yml@refs/tags/v[0-9]+\\.[0-9]+\\.[0-9]+$"
+        }
+      }
+    },
+    "qualificationAttestorReference": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["project", "attestor", "signer_workflow_ref"],
+      "properties": {
+        "project": {"$ref": "#/$defs/projectId"},
+        "attestor": {"$ref": "#/$defs/identifier"},
+        "signer_workflow_ref": {
+          "type": "string",
+          "pattern": "^mindclade/\\.github/\\.github/workflows/reusable-arc-qualification-attest\\.yml@refs/tags/v[0-9]+\\.[0-9]+\\.[0-9]+$"
+        }
+      }
+    },
+    "deploymentAttestorReference": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["project", "attestor", "signer_workflow_ref"],
+      "properties": {
+        "project": {"$ref": "#/$defs/projectId"},
+        "attestor": {"$ref": "#/$defs/identifier"},
+        "signer_workflow_ref": {
+          "type": "string",
+          "pattern": "^mindclade/\\.github/\\.github/workflows/reusable-binauthz-sign\\.yml@refs/tags/v[0-9]+\\.[0-9]+\\.[0-9]+$"
+        }
+      }
+    },
+    "vulnerabilityException": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "ticket",
+        "approved_by",
+        "approved_at",
+        "expires_at",
+        "justification",
+        "subject_digest"
+      ],
+      "properties": {
+        "ticket": {"type": "string", "minLength": 1},
+        "approved_by": {"const": "@mindclade/security"},
+        "approved_at": {"type": "string", "format": "date-time"},
+        "expires_at": {"type": "string", "format": "date-time"},
+        "justification": {"type": "string", "minLength": 1},
+        "subject_digest": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "typedArtifact": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "type", "uri", "digest", "media_type"],
+      "properties": {
+        "name": {"$ref": "#/$defs/identifier"},
+        "type": {
+          "enum": [
+            "checkpoint",
+            "configuration",
+            "dataset",
+            "migration",
+            "model",
+            "provenance",
+            "qualification",
+            "rollback",
+            "sbom",
+            "vulnerability-scan"
+          ]
+        },
+        "uri": {"type": "string", "pattern": "^(gs://|https://|oci://).+$"},
+        "digest": {"$ref": "#/$defs/sha256"},
+        "media_type": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9!#$&^_.+-]+/[a-z0-9][a-z0-9!#$&^_.+-]+$"
         }
       }
     }

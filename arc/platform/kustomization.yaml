@@ -9,4 +9,3 @@ resources:
   - namespaces.yaml
   - secret-sync.yaml
   - network-policies.yaml
-

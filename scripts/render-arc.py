@@ -75,7 +75,9 @@ def render(name: str) -> bytes:
     result = subprocess.run(command, cwd=ROOT, check=True, capture_output=True)
     if not result.stdout:
         raise ValueError(f"ARC render is empty: {output}")
-    return result.stdout
+    # Helm emits an extra terminal blank line. Normalize generated output to one final newline
+    # so the committed manifests satisfy strict yamllint and byte-for-byte drift checks agree.
+    return result.stdout.rstrip(b"\n") + b"\n"
 
 
 def main() -> int:

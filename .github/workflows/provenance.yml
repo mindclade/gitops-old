@@ -108,9 +108,9 @@ jobs:
           set -euo pipefail
           grep -rhoE 'image: *[^ ]+' .candidate/rendered/ 2>/dev/null \
             | awk '{print $2}' | tr -d '"' > rendered-images.txt || true
-          nix develop ./.trusted#ci --command yq -r \
-            '.spec.applications[]?.images[]? | .repository + "@" + .digest' \
-            .candidate/deployments/*.yaml > selected-images.txt
+          nix develop ./.trusted#ci --command python3 \
+            .trusted/scripts/validate-deployment-selections.py \
+            --root .candidate --print-images > selected-images.txt
           nix develop ./.trusted#ci --command yq -r \
             '.images[] | .name + "@" + .digest' \
             .candidate/bootstrap/components/immutable-images/kustomization.yaml \
