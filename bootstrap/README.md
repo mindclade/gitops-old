@@ -4,6 +4,12 @@ Argo CD v3.5.1 is vendored byte-for-byte from the official release. Both the sta
 manifests have committed SHA-256 files and must not be hand-edited. Production requires the HA
 profile after the production cluster has sufficient multi-zone capacity.
 
+The ARC CI control plane is deliberately not bootstrappable yet. Its reusable-workflow v4
+release, bootstrap identity contract, infrastructure module release, and applied CI cluster must
+all be qualified first. The repository retains the inactive ARC source and release validators,
+but exposes no CI bootstrap configuration, root Application, or AppProject until that coordinated
+activation change is reviewed.
+
 The upstream payloads name versioned container tags. Both cold-start and self-management render
 them through `components/immutable-images`, whose manifest-list digests are bound to the exact
 upstream tags in `argocd-install.provenance.json`. The bootstrap script refuses any rendered Argo
@@ -37,7 +43,6 @@ from immediately reconciling into a standard/hybrid installation (or the reverse
 Run:
 
 ```bash
-./bootstrap/bootstrap.sh --apply --environment ci --profile standard --context mindclade-ci-arc
 ./bootstrap/bootstrap.sh --apply --environment development --profile standard --context mindclade-development
 ./bootstrap/bootstrap.sh --apply --environment staging --profile standard --context mindclade-staging
 MINDCLADE_PRODUCTION_BOOTSTRAP_CONFIRM=production \
