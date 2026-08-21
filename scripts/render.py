@@ -12,6 +12,7 @@ import filecmp
 import hashlib
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -24,6 +25,8 @@ SCRIPT_ROOT = Path(__file__).resolve().parent.parent
 ROOT = Path(os.environ.get("MINDCLADE_GITOPS_ROOT", SCRIPT_ROOT)).resolve()
 MANIFEST = ROOT / "render-manifest.yaml"
 ENVIRONMENTS = {"development", "staging", "production"}
+DNS_LABEL = re.compile(r"^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$")
+RENDERERS = {"helm", "kustomize"}
 
 
 def parse_args() -> argparse.Namespace:
@@ -155,6 +158,76 @@ def apply_artifact_selection(body: str, environment: str, application: str) -> s
     return result.stdout
 
 
+def render_source(
+    target: dict[str, Any], monorepo: Path, environment: str, application: str
+) -> tuple[str, list[str]]:
+    """Render one local source without network access and return provenance headers."""
+
+    source = str(target.get("source", ""))
+    resolved_source = source.replace("{env}", environment)
+    source_path = safe_child(monorepo, resolved_source, "render source")
+    if not source_path.is_dir():
+        raise ValueError(f"render source does not exist: {resolved_source}")
+
+    renderer = str(target.get("renderer", "kustomize"))
+    if renderer not in RENDERERS:
+        raise ValueError(f"unsupported renderer for {application}: {renderer}")
+    provenance = [f"# source: {resolved_source}", f"# render: {renderer}"]
+
+    if renderer == "kustomize":
+        unexpected = sorted(
+            field for field in ("values", "release", "namespace") if field in target
+        )
+        if unexpected:
+            raise ValueError(
+                f"Kustomize target {application} has Helm-only fields: {', '.join(unexpected)}"
+            )
+        command = ["kustomize", "build", str(source_path)]
+    else:
+        if not (source_path / "Chart.yaml").is_file():
+            raise ValueError(f"Helm render source has no Chart.yaml: {resolved_source}")
+        crd_directory = source_path / "crds"
+        if crd_directory.is_dir() and any(crd_directory.rglob("*.yaml")):
+            raise ValueError(
+                f"workload Helm target {application} may not install CRDs incidentally"
+            )
+        release = str(target.get("release", ""))
+        namespace = str(target.get("namespace", ""))
+        if not DNS_LABEL.fullmatch(release):
+            raise ValueError(f"invalid Helm release for {application}: {release}")
+        if not DNS_LABEL.fullmatch(namespace):
+            raise ValueError(f"invalid Helm namespace for {application}: {namespace}")
+        if namespace != application:
+            raise ValueError(
+                f"Helm namespace {namespace} must equal GitOps application {application}"
+            )
+        values = str(target.get("values", "")).replace("{env}", environment)
+        values_path = safe_child(monorepo, values, "Helm values")
+        if not values_path.is_file():
+            raise ValueError(f"Helm values file does not exist: {values}")
+        command = [
+            "helm",
+            "template",
+            release,
+            str(source_path),
+            "--namespace",
+            namespace,
+            "--values",
+            str(values_path),
+            "--skip-tests",
+        ]
+        provenance.extend(
+            (
+                f"# values: {values}",
+                f"# release: {release}",
+                f"# namespace: {namespace}",
+            )
+        )
+
+    result = subprocess.run(command, check=True, text=True, capture_output=True)
+    return result.stdout, provenance
+
+
 def render(
     manifest: dict[str, Any], monorepo: Path, destination: Path, pinned_ref: str
 ) -> None:
@@ -162,7 +235,6 @@ def render(
     total = 0
     empty = 0
     for target in targets:
-        source = str(target.get("source", ""))
         application = str(target.get("out", ""))
         if not application or not any(
             application.startswith(f"{prefix}-")
@@ -172,17 +244,10 @@ def render(
         for environment in target.get("environments") or []:
             if environment not in ENVIRONMENTS:
                 raise ValueError(f"invalid environment: {environment}")
-            resolved_source = source.replace("{env}", environment)
-            source_path = safe_child(monorepo, resolved_source, "render source")
-            if not source_path.is_dir():
-                raise ValueError(f"render source does not exist: {resolved_source}")
-            result = subprocess.run(
-                ["kustomize", "build", str(source_path)],
-                check=True,
-                text=True,
-                capture_output=True,
+            rendered, provenance = render_source(
+                target, monorepo, environment, application
             )
-            body = apply_artifact_selection(result.stdout, environment, application)
+            body = apply_artifact_selection(rendered, environment, application)
             count = sum(1 for line in body.splitlines() if line.startswith("kind:"))
             total += 1
             if count == 0:
@@ -193,9 +258,10 @@ def render(
                 continue
             target_directory = destination / environment / application
             target_directory.mkdir(parents=True, exist_ok=True)
+            provenance_text = "\n".join(provenance)
             content = (
                 "# GENERATED by scripts/render.py — DO NOT EDIT.\n"
-                f"# source: {resolved_source}\n"
+                f"{provenance_text}\n"
                 f"# ref:    {pinned_ref}\n"
                 f"# env:    {environment}\n"
                 "---\n"

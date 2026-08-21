@@ -13,6 +13,8 @@ import subprocess
 import tempfile
 import unittest
 from pathlib import Path
+from types import SimpleNamespace
+from unittest import mock
 
 import yaml
 
@@ -67,6 +69,87 @@ class GitOpsSafetyTest(unittest.TestCase):
             self.assertTrue(RENDER.trees_equal(left, right))
             (right / "extra.yaml").write_text("unexpected", encoding="utf-8")
             self.assertFalse(RENDER.trees_equal(left, right))
+
+    def test_kustomize_is_the_default_renderer(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            source = root / "source"
+            source.mkdir()
+            with mock.patch.object(
+                RENDER.subprocess,
+                "run",
+                return_value=SimpleNamespace(stdout="apiVersion: v1\nkind: ConfigMap\n"),
+            ) as run:
+                body, provenance = RENDER.render_source(
+                    {"source": "source"}, root, "development", "platform-core"
+                )
+            self.assertIn("kind: ConfigMap", body)
+            self.assertEqual(provenance, ["# source: source", "# render: kustomize"])
+            self.assertEqual(
+                run.call_args.args[0], ["kustomize", "build", str(source.resolve())]
+            )
+
+    def test_helm_renderer_is_local_explicit_and_namespaced(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            chart = root / "chart"
+            chart.mkdir()
+            (chart / "Chart.yaml").write_text("apiVersion: v2\nname: test\nversion: 1.0.0\n")
+            values = root / "values-development.yaml"
+            values.write_text("activation:\n  enabled: true\n")
+            target = {
+                "source": "chart",
+                "renderer": "helm",
+                "release": "mindclade",
+                "namespace": "research-mlflow",
+                "values": "values-{env}.yaml",
+            }
+            with mock.patch.object(
+                RENDER.subprocess,
+                "run",
+                return_value=SimpleNamespace(stdout="apiVersion: apps/v1\nkind: Deployment\n"),
+            ) as run:
+                _, provenance = RENDER.render_source(
+                    target, root, "development", "research-mlflow"
+                )
+            self.assertEqual(
+                run.call_args.args[0],
+                [
+                    "helm",
+                    "template",
+                    "mindclade",
+                    str(chart.resolve()),
+                    "--namespace",
+                    "research-mlflow",
+                    "--values",
+                    str(values.resolve()),
+                    "--skip-tests",
+                ],
+            )
+            self.assertIn("# render: helm", provenance)
+            self.assertIn("# values: values-development.yaml", provenance)
+
+    def test_helm_renderer_rejects_namespace_drift_and_incidental_crds(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            chart = root / "chart"
+            (chart / "crds").mkdir(parents=True)
+            (chart / "Chart.yaml").write_text("apiVersion: v2\nname: test\nversion: 1.0.0\n")
+            (chart / "crds" / "unsafe.yaml").write_text("kind: CustomResourceDefinition\n")
+            (root / "values.yaml").write_text("{}\n")
+            target = {
+                "source": "chart",
+                "renderer": "helm",
+                "release": "mindclade",
+                "namespace": "research-other",
+                "values": "values.yaml",
+            }
+            with self.assertRaisesRegex(ValueError, "may not install CRDs"):
+                RENDER.render_source(target, root, "development", "research-mlflow")
+
+            (chart / "crds" / "unsafe.yaml").unlink()
+            with self.assertRaisesRegex(ValueError, "must equal GitOps application"):
+                RENDER.render_source(target, root, "development", "research-mlflow")
 
     def test_release_evidence_tool_has_no_docker_credential_mutation(self) -> None:
         source = (ROOT / "scripts/verify-release-evidence.py").read_text(
