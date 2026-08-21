@@ -22,6 +22,8 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 REPOSITORY = "gitops"
+NIX_QUALIFICATION_WORKFLOW_SHA = "0bdba2a8d06c732a6eb0a09238267dc83e1ca576"
+NIX_QUALIFICATION_WORKFLOW_TREE = "9cf970b06e77ec42f12f935a98f7b57baeefcda4"
 CONTRACT = json.loads(
     '{"authority":["argocd-installation","argocd-configuration",'
     '"kubernetes-desired-state","promotion","admission-policy"],'
@@ -279,9 +281,15 @@ validate_workflow = (workflow_root / "validate.yml").read_text(encoding="utf-8")
 contract_workflow = (workflow_root / "production-contract.yml").read_text(
     encoding="utf-8"
 )
+nix_qualification_workflow = (
+    workflow_root / "nix-qualification.yml"
+).read_text(encoding="utf-8")
 qualification_workflow = (
     workflow_root / "production-qualification-evidence.yml"
 ).read_text(encoding="utf-8")
+qualification_runbook = (ROOT / "docs/production-qualification.md").read_text(
+    encoding="utf-8"
+)
 release_validator = (ROOT / "scripts/validate-release-metadata.py").read_text(
     encoding="utf-8"
 )
@@ -383,6 +391,26 @@ for context in (
         )
 if not re.search(r"(?m)^  contract:\n    name: contract$", contract_workflow):
     error("production-contract workflow does not emit the governed contract context")
+expected_nix_qualification_caller = (
+    "uses: mindclade/.github/.github/workflows/"
+    "reusable-nix-qualification.yml@"
+    f"{NIX_QUALIFICATION_WORKFLOW_SHA}"
+)
+if (
+    nix_qualification_workflow.count(
+        "uses: mindclade/.github/.github/workflows/"
+        "reusable-nix-qualification.yml@"
+    )
+    != 1
+    or expected_nix_qualification_caller not in nix_qualification_workflow
+):
+    error("Nix qualification does not use the exact GitHub-verified workflow authority")
+for expected_identity in (
+    NIX_QUALIFICATION_WORKFLOW_SHA,
+    NIX_QUALIFICATION_WORKFLOW_TREE,
+):
+    if expected_identity not in qualification_runbook:
+        error("production qualification runbook omits the governed Nix workflow identity")
 if render_workflow.count('rm -f -- "$GOOGLE_GHA_CREDS_PATH"') < 2:
     error("render workflow retains GCP credentials while processing desired-state data")
 for required in (
