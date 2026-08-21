@@ -45,6 +45,24 @@ REQUIRED = {
     "supply_chain_attestations",
     "created_at",
 }
+REQUIRED_V4 = {
+    "contract_version",
+    "release_id",
+    "release_kind",
+    "subject",
+    "source_repository",
+    "source_revision",
+    "builder_identity",
+    "build_invocation_id",
+    "images",
+    "artifacts",
+    "evidence",
+    "attestations",
+    "compatibility",
+    "migration",
+    "rollback",
+    "created_at",
+}
 DEFAULT_SOURCE_REPOSITORY = "mindclade/mindclade-internal-monorepo"
 DEFAULT_SIGNER_WORKFLOW_REF = (
     "mindclade/.github/.github/workflows/reusable-binauthz-sign.yml@refs/tags/v4.0.0"
@@ -162,6 +180,7 @@ def main() -> int:
         errors.append("--expected-deployment-attestor may not be empty")
     schema_path = root / "contracts/release-metadata.schema.json"
     schema_validator = None
+    schema_version = None
     try:
         schema = json.loads(schema_path.read_text("utf-8"))
         jsonschema.Draft202012Validator.check_schema(schema)
@@ -172,11 +191,18 @@ def main() -> int:
         schema_version = (
             (schema.get("properties") or {}).get("contract_version") or {}
         ).get("const")
-        if schema_version != "3.0.0":
-            errors.append(f"{schema_path}: contract_version const must be 3.0.0")
-        if schema_required != REQUIRED:
+        required_by_version = {
+            "3.0.0": REQUIRED,
+            "4.0.0": REQUIRED_V4,
+        }
+        expected_required = required_by_version.get(schema_version)
+        if expected_required is None:
             errors.append(
-                f"{schema_path}: required fields do not match validator contract"
+                f"{schema_path}: contract_version const must be 3.0.0 or staged 4.0.0"
+            )
+        elif schema_required != expected_required:
+            errors.append(
+                f"{schema_path}: required fields do not match the {schema_version} validator contract"
             )
     except Exception as exc:
         errors.append(f"{schema_path}: invalid or missing schema: {exc}")
@@ -193,6 +219,11 @@ def main() -> int:
             ):
                 location = ".".join(str(part) for part in failure.path) or "<root>"
                 errors.append(f"{p}: schema violation at {location}: {failure.message}")
+        if schema_version == "4.0.0":
+            errors.append(
+                f"{p}: v4 release records require the promoted v4 semantic validator"
+            )
+            continue
         missing = REQUIRED - set(obj)
         if missing:
             errors.append(f"{p}: missing {sorted(missing)}")

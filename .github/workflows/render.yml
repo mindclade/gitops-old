@@ -12,6 +12,13 @@ name: render
 
 on:
   pull_request_target:
+    paths:
+      - 'render-manifest.yaml'
+      - 'deployments/**'
+      - 'overlays/**'
+      - 'scripts/render.py'
+      - 'scripts/apply-artifact-selection.py'
+      - '.github/workflows/render.yml'
   push:
     branches: [main]
     paths:
@@ -90,17 +97,32 @@ jobs:
             echo "ref=$ref"
           } >> "$GITHUB_OUTPUT"
 
+      - id: connected
+        name: Enforce the connected-render activation boundary
+        env:
+          REQUESTED: ${{ vars.GITOPS_CONNECTED_VALIDATION }}
+        run: |
+          if [[ "$REQUESTED" == "true" ]]; then
+            echo "enabled=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "enabled=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::Connected render is staged until GITOPS_CONNECTED_VALIDATION=true after identity apply."
+          fi
+
       - uses: google-github-actions/auth@7c6bc770dae815cd3e89ee6cdf493a5fab2cc093  # v3
+        if: steps.connected.outputs.enabled == 'true'
         with:
           workload_identity_provider: ${{ vars.WIF_PROVIDER_PLAN }}
           service_account: ${{ vars.SA_GITOPS_RENDER }}
 
       - id: pem
+        if: steps.connected.outputs.enabled == 'true'
         uses: google-github-actions/get-secretmanager-secrets@2b5f97c5a4b9c105e64646762ad4fc3f5128e6f5  # v2
         with:
           secrets: app_pem:${{ vars.SECRETS_PROJECT_ID }}/github-app-render-pem
 
       - id: app-token
+        if: steps.connected.outputs.enabled == 'true'
         uses: actions/create-github-app-token@fee1f7d63c2ff003460e3d139729b119787bc349  # v2
         with:
           app-id: ${{ vars.RENDER_APP_ID }}
@@ -109,6 +131,7 @@ jobs:
           repositories: mindclade-internal-monorepo
 
       - name: Check out pinned monorepo release
+        if: steps.connected.outputs.enabled == 'true'
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
         with:
           repository: ${{ steps.manifest.outputs.repo }}
@@ -118,6 +141,7 @@ jobs:
           persist-credentials: false
 
       - name: Drop cloud credentials before processing candidate data
+        if: steps.connected.outputs.enabled == 'true'
         run: |
           set -euo pipefail
           if [ -n "${GOOGLE_GHA_CREDS_PATH:-}" ]; then
@@ -130,6 +154,7 @@ jobs:
           } >> "$GITHUB_ENV"
 
       - name: Verify candidate rendered state with trusted renderer
+        if: steps.connected.outputs.enabled == 'true'
         env:
           MINDCLADE_GITOPS_ROOT: ${{ github.workspace }}/.candidate
         run: >-
@@ -137,7 +162,7 @@ jobs:
           python3 ./.trusted/scripts/render.py --monorepo .monorepo
 
   update:
-    if: github.event_name != 'pull_request_target'
+    if: github.event_name != 'pull_request_target' && vars.GITOPS_CONNECTED_VALIDATION == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     permissions:
