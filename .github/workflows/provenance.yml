@@ -72,25 +72,6 @@ jobs:
           path: .candidate
           persist-credentials: false
 
-      - id: connected
-        name: Enforce the connected-evidence activation boundary
-        env:
-          REQUESTED: ${{ vars.GITOPS_CONNECTED_VALIDATION }}
-          ATTESTOR_PROJECT: ${{ vars.BINAUTHZ_DEPLOYMENT_ATTESTOR_PROJECT }}
-          ATTESTOR: ${{ vars.BINAUTHZ_DEPLOYMENT_ATTESTOR }}
-        run: |
-          set -euo pipefail
-          if [[ "$REQUESTED" != "true" ]]; then
-            echo "enabled=false" >> "$GITHUB_OUTPUT"
-            echo "::notice::Connected evidence is staged until GITOPS_CONNECTED_VALIDATION=true after identity apply."
-            exit 0
-          fi
-          [[ -n "$ATTESTOR_PROJECT" && -n "$ATTESTOR" ]] || {
-            echo "::error::Connected evidence activation requires both Binary Authorization trust-root variables."
-            exit 1
-          }
-          echo "enabled=true" >> "$GITHUB_OUTPUT"
-
       - uses: cachix/install-nix-action@630ae543ea3a38a9a4166f03376c02c50f408342  # v31.11.0
         with:
           extra_nix_config: |
@@ -108,9 +89,9 @@ jobs:
           set -euo pipefail
           grep -rhoE 'image: *[^ ]+' .candidate/rendered/ 2>/dev/null \
             | awk '{print $2}' | tr -d '"' > rendered-images.txt || true
-          nix develop ./.trusted#ci --command python3 \
-            .trusted/scripts/validate-deployment-selections.py \
-            --root .candidate --print-images > selected-images.txt
+          nix develop ./.trusted#ci --command yq -r \
+            '.spec.applications[]?.images[]? | .repository + "@" + .digest' \
+            .candidate/deployments/*.yaml > selected-images.txt
           nix develop ./.trusted#ci --command yq -r \
             '.images[] | .name + "@" + .digest' \
             .candidate/bootstrap/components/immutable-images/kustomization.yaml \
@@ -129,30 +110,22 @@ jobs:
           BINAUTHZ_DEPLOYMENT_ATTESTOR: ${{ vars.BINAUTHZ_DEPLOYMENT_ATTESTOR }}
         run: |
           set -euo pipefail
-          attestor_args=()
-          if [[ "${{ steps.connected.outputs.enabled }}" == "true" ]]; then
-            attestor_args=(
-              --expected-deployment-attestor-project "$BINAUTHZ_DEPLOYMENT_ATTESTOR_PROJECT"
-              --expected-deployment-attestor "$BINAUTHZ_DEPLOYMENT_ATTESTOR"
-            )
-          fi
           nix develop ./.trusted#ci --command python3 \
             .trusted/scripts/validate-release-metadata.py \
             --root .candidate \
             --images-file images.txt \
             --unsigned-exceptions-file unsigned-exceptions.json \
-            "${attestor_args[@]}"
+            --expected-deployment-attestor-project "$BINAUTHZ_DEPLOYMENT_ATTESTOR_PROJECT" \
+            --expected-deployment-attestor "$BINAUTHZ_DEPLOYMENT_ATTESTOR"
 
       # Acquire cloud credentials only after all candidate-controlled YAML and JSON has passed
       # trusted local validation.
       - uses: google-github-actions/auth@7c6bc770dae815cd3e89ee6cdf493a5fab2cc093  # v3
-        if: steps.connected.outputs.enabled == 'true'
         with:
           workload_identity_provider: ${{ vars.WIF_PROVIDER_PLAN }}
           service_account: ${{ vars.SA_GITOPS_VERIFIER }}
 
       - name: Verify Binary Authorization deployment evidence
-        if: steps.connected.outputs.enabled == 'true'
         env:
           BINAUTHZ_DEPLOYMENT_ATTESTOR_PROJECT: ${{ vars.BINAUTHZ_DEPLOYMENT_ATTESTOR_PROJECT }}
           BINAUTHZ_DEPLOYMENT_ATTESTOR: ${{ vars.BINAUTHZ_DEPLOYMENT_ATTESTOR }}

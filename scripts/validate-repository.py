@@ -14,6 +14,28 @@ import yaml
 root = Path(__file__).resolve().parents[1]
 errors = []
 control_plane_images: set[str] = set()
+
+# ARC may be rendered and reviewed offline, but it must not be reachable from an Argo root or
+# a cloud-backed direct workflow until the coordinated v4 workflow/WIF release is complete.
+for deferred_path in (
+    ".github/workflows/dr-evidence.yml",
+    ".github/workflows/nix-qualification.yml",
+    "applications/ci/arc.yaml",
+    "applications/ci/argocd.yaml",
+    "bootstrap/argocd-config-ci.yaml",
+    "projects/arc-artifact-authority.yaml",
+    "roots/ci/kustomization.yaml",
+):
+    if (root / deferred_path).exists():
+        errors.append(f"deferred ARC activation path is present: {deferred_path}")
+
+for workflow in (root / ".github/workflows").glob("*.yml"):
+    if re.search(
+        r"uses:\s*mindclade/\.github/.+@(?:refs/tags/)?v4(?:\.|\b)",
+        workflow.read_text(),
+    ):
+        errors.append(f"active workflow references unpublished v4 source: {workflow.relative_to(root)}")
+
 for n in ["argocd-install.yaml", "argocd-install-ha.yaml"]:
     p = root / "bootstrap" / n
     sp = root / "bootstrap" / (n + ".sha256")
