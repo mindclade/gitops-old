@@ -16,6 +16,10 @@
    and the infrastructure exception contract contain the same four exact digests.
 4. Keep development, staging, and production deployment selections empty. Selecting the HA
    profile or an application workload is a separate production change.
+5. Run Nix qualification only through the GitHub-verified `.github` main commit
+   `0bdba2a8d06c732a6eb0a09238267dc83e1ca576`, whose reviewed tree is
+   `9cf970b06e77ec42f12f935a98f7b57baeefcda4`. The production contract rejects a caller or
+   runbook that names a different reusable-workflow authority.
 
 Source success does not prove an applied policy, admission decision, Argo login, recovery, or
 freeze path. Record it separately from the connected gate.
