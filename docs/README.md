@@ -23,6 +23,8 @@
 - [Initial import and activation](initial-import.md) — validate the repository and activate
   environments in dependency order.
 - [Workload activation](workload-activation.md) — introduce a qualified immutable artifact.
+- [MLflow activation](mlflow-activation.md) — render the activation-gated Helm service without
+  transferring release or serving authority to MLflow.
 - [Gateway and TLS activation](gateway-activation.md) — enable public routing only after its
   controller, cloud, certificate, and rollback gates are met.
 

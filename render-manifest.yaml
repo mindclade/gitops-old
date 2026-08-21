@@ -24,6 +24,11 @@ spec:
       project: platform
       environments: [development, staging, production]
 
+  # Workload Helm charts use renderer: helm with an explicit local values file, release, and
+  # namespace. They remain absent until the pinned monorepo release contains the chart, a release
+  # record selects every rendered image, and the matching generated output is reviewed. The
+  # renderer refuses remote values, namespace drift, and incidental CRD installation.
+
   # TLS and Gateway activation is intentionally fail-closed. The monorepo currently contains
   # cert-manager/Gateway source, but this repository does not activate it until the certificate
   # controller or cloud Certificate Manager ownership path is qualified end to end. Activating
