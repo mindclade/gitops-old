@@ -19,6 +19,7 @@ on:
       - 'bootstrap/install-profiles/**'
       - 'bootstrap/profiles/**'
       - 'policy/constraints/require-image-policy.yaml'
+      - 'contracts/release-handoff-policy.json'
       - '.github/workflows/provenance.yml'
   schedule:
     - cron: "41 4 * * *"
@@ -82,7 +83,7 @@ jobs:
           set -euo pipefail
           if [[ "$REQUESTED" != "true" ]]; then
             echo "enabled=false" >> "$GITHUB_OUTPUT"
-            echo "::notice::Connected evidence is staged until GITOPS_CONNECTED_VALIDATION=true after identity apply."
+            echo "::notice::Connected evidence remains disabled until its identity and trust roots are applied."
             exit 0
           fi
           [[ -n "$ATTESTOR_PROJECT" && -n "$ATTESTOR" ]] || {
@@ -108,9 +109,9 @@ jobs:
           set -euo pipefail
           grep -rhoE 'image: *[^ ]+' .candidate/rendered/ 2>/dev/null \
             | awk '{print $2}' | tr -d '"' > rendered-images.txt || true
-          nix develop ./.trusted#ci --command python3 \
-            .trusted/scripts/validate-deployment-selections.py \
-            --root .candidate --print-images > selected-images.txt
+          nix develop ./.trusted#ci --command yq -r \
+            '.spec.applications[]?.images[]? | .repository + "@" + .digest' \
+            .candidate/deployments/*.yaml > selected-images.txt
           nix develop ./.trusted#ci --command yq -r \
             '.images[] | .name + "@" + .digest' \
             .candidate/bootstrap/components/immutable-images/kustomization.yaml \
@@ -122,6 +123,15 @@ jobs:
             [[ "$img" == *@sha256:* ]] || { echo "::error::$img is not digest-pinned"; status=1; }
           done < images.txt
           exit "$status"
+
+      - id: handoff
+        name: Select an exact reviewed handoff transition
+        run: |
+          set -euo pipefail
+          nix develop ./.trusted#ci --command python3 \
+            .trusted/scripts/select-release-handoff-transition.py \
+            --policy .candidate/contracts/release-handoff-policy.json \
+            --github-output "$GITHUB_OUTPUT"
 
       - name: Validate complete release records for active images
         env:
@@ -141,6 +151,12 @@ jobs:
             --root .candidate \
             --images-file images.txt \
             --unsigned-exceptions-file unsigned-exceptions.json \
+            --expected-build-signer-workflow-ref \
+              "${{ steps.handoff.outputs.build-signer-workflow-ref }}" \
+            --expected-qualification-signer-workflow-ref \
+              "${{ steps.handoff.outputs.qualification-signer-workflow-ref }}" \
+            --expected-deployment-signer-workflow-ref \
+              "${{ steps.handoff.outputs.deployment-signer-workflow-ref }}" \
             "${attestor_args[@]}"
 
       # Acquire cloud credentials only after all candidate-controlled YAML and JSON has passed
