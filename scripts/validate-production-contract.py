@@ -188,6 +188,9 @@ contract_workflow = (workflow_root / "production-contract.yml").read_text(
 release_validator = (ROOT / "scripts/validate-release-metadata.py").read_text(
     encoding="utf-8"
 )
+release_transition = (ROOT / "scripts/select-release-handoff-transition.py").read_text(
+    encoding="utf-8"
+)
 release_verifier = (ROOT / "scripts/verify-release-evidence.py").read_text(
     encoding="utf-8"
 )
@@ -215,8 +218,13 @@ for required in (
     "admissionWhitelistPatterns",
 ):
     if required not in release_verifier:
-        error(f"release verifier omits applied Binary Authorization policy check: {required}")
-if "unsigned-exceptions-file" not in release_validator or "unsigned-exceptions.json" not in provenance_workflow:
+        error(
+            f"release verifier omits applied Binary Authorization policy check: {required}"
+        )
+if (
+    "unsigned-exceptions-file" not in release_validator
+    or "unsigned-exceptions.json" not in provenance_workflow
+):
     error("release metadata path does not consume governed control-plane exceptions")
 for forbidden in (
     "BINAUTHZ_ATTESTOR_PROJECT",
@@ -231,7 +239,11 @@ for required in (
     '"supply_chain_attestations"',
     "reusable-binauthz-sign.yml@refs/tags/v3.0.0",
 ):
-    if required not in release_schema and required not in release_validator:
+    if (
+        required not in release_schema
+        and required not in release_validator
+        and required not in release_transition
+    ):
         error(f"release contract omits governed supply-chain binding: {required}")
 
 for name, workflow in (

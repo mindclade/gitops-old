@@ -17,6 +17,7 @@ metadata:
   annotations:
   finalizers:
     - actions.github.com/cleanup-protection
+
 ---
 # Source: gha-runner-scale-set/templates/manager_role.yaml
 apiVersion: rbac.authorization.k8s.io/v1
@@ -94,6 +95,7 @@ rules:
   - get
   - patch
   - update
+
 ---
 # Source: gha-runner-scale-set/templates/manager_role_binding.yaml
 apiVersion: rbac.authorization.k8s.io/v1
@@ -124,6 +126,7 @@ subjects:
     arc-controller
   namespace: 
     arc-systems
+
 ---
 # Source: gha-runner-scale-set/templates/autoscalingrunnerset.yaml
 apiVersion: actions.github.com/v1alpha1
