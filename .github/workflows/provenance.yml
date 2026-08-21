@@ -19,6 +19,7 @@ on:
       - 'bootstrap/install-profiles/**'
       - 'bootstrap/profiles/**'
       - 'policy/constraints/require-image-policy.yaml'
+      - 'contracts/release-handoff-policy.json'
       - '.github/workflows/provenance.yml'
   schedule:
     - cron: "41 4 * * *"
@@ -104,6 +105,15 @@ jobs:
           done < images.txt
           exit "$status"
 
+      - id: handoff
+        name: Select an exact reviewed handoff transition
+        run: |
+          set -euo pipefail
+          nix develop ./.trusted#ci --command python3 \
+            .trusted/scripts/select-release-handoff-transition.py \
+            --policy .candidate/contracts/release-handoff-policy.json \
+            --github-output "$GITHUB_OUTPUT"
+
       - name: Validate complete release records for active images
         env:
           BINAUTHZ_DEPLOYMENT_ATTESTOR_PROJECT: ${{ vars.BINAUTHZ_DEPLOYMENT_ATTESTOR_PROJECT }}
@@ -115,8 +125,13 @@ jobs:
             --root .candidate \
             --images-file images.txt \
             --unsigned-exceptions-file unsigned-exceptions.json \
-            --expected-deployment-attestor-project "$BINAUTHZ_DEPLOYMENT_ATTESTOR_PROJECT" \
-            --expected-deployment-attestor "$BINAUTHZ_DEPLOYMENT_ATTESTOR"
+            --expected-build-signer-workflow-ref \
+              "${{ steps.handoff.outputs.build-signer-workflow-ref }}" \
+            --expected-qualification-signer-workflow-ref \
+              "${{ steps.handoff.outputs.qualification-signer-workflow-ref }}" \
+            --expected-deployment-signer-workflow-ref \
+              "${{ steps.handoff.outputs.deployment-signer-workflow-ref }}" \
+            "${attestor_args[@]}"
 
       # Acquire cloud credentials only after all candidate-controlled YAML and JSON has passed
       # trusted local validation.
