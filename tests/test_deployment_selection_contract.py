@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import importlib.util
 import json
+import sys
 import tempfile
 import unittest
 from pathlib import Path
@@ -18,6 +19,7 @@ import yaml
 
 
 SCRIPT = Path(__file__).resolve().parents[1] / "scripts/validate-deployment-selections.py"
+sys.path.insert(0, str(SCRIPT.parent))
 SPEC = importlib.util.spec_from_file_location("deployment_selections", SCRIPT)
 assert SPEC and SPEC.loader
 SELECTIONS = importlib.util.module_from_spec(SPEC)
