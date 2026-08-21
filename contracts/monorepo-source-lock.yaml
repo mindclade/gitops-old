@@ -16,7 +16,7 @@ spec:
     reason: protected-v0.2.0-tag-published-and-interface-byte-locked
   interfaceContract:
     path: infra/terraform/governance/module-interfaces.json
-    sha256: 0a8261a2e9686d5dff954ea15bae537f9dd4140c415bf77019d2a665566b8b4a
+    sha256: sha256:0a8261a2e9686d5dff954ea15bae537f9dd4140c415bf77019d2a665566b8b4a
   activation:
     allowed: true
     blocker: null
