@@ -296,6 +296,13 @@ for required in (
         error(f"deployment trust root is not enforced end-to-end: {required}")
 if "scripts/verify-release-evidence.py" not in provenance_workflow:
     error("provenance workflow does not delegate to the cryptographic release verifier")
+if (
+    "validate-deployment-selections.py" not in provenance_workflow
+    or "--print-images" not in provenance_workflow
+):
+    error("provenance workflow does not enumerate images through trusted v2 release selections")
+if ".spec.applications[]?.images" in provenance_workflow:
+    error("provenance workflow still trusts the removed inline deployment image contract")
 for required in (":validateAttestationOccurrence", 'value.get("result") == "VERIFIED"'):
     if required not in release_verifier:
         error(

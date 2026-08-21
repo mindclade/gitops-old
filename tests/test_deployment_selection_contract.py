@@ -23,14 +23,37 @@ assert SPEC and SPEC.loader
 SELECTIONS = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(SELECTIONS)
 
-IMAGE = "us-central1-docker.pkg.dev/mindclade-production/releases/api@sha256:" + "a" * 64
+CANDIDATE = "sha256:" + "c" * 64
+PRODUCER_DIGEST = "sha256:" + "9" * 64
+RELEASE_PATH = "releases/serving-api/v1.2.3.json"
+IMAGE = "us-central1-docker.pkg.dev/mc-common-ci/releases/api@" + CANDIDATE
 
 
 def record(application: str = "serving-api") -> dict:
     return {
         "contract_version": "4.0.0",
-        "subject": {"name": application, "digest": "sha256:" + "b" * 64},
+        "release_id": "v1.2.3",
+        "release_kind": "application",
+        "source_revision": "d" * 40,
+        "subject": {"name": application, "digest": CANDIDATE},
         "images": {"api": IMAGE},
+        "producer_evidence": {
+            "schema_version": "mindclade.dev/release-evidence/v1",
+            "path": "evidence/serving-api/v1.2.3.json",
+            "digest": PRODUCER_DIGEST,
+        },
+        "vulnerability": {
+            "result": "pass",
+            "finding_counts": {
+                "critical": 0,
+                "high": 0,
+                "medium": 0,
+                "low": 0,
+                "unknown": 0,
+            },
+            "exception": None,
+        },
+        "evidence_retention": {"nonproduction": "P1Y", "production": "P7Y"},
     }
 
 
@@ -44,27 +67,36 @@ def selection(application: dict) -> dict:
 
 
 def proposal() -> dict:
-    candidate = "sha256:" + "c" * 64
+    spec = {
+        "target": {
+            "application": "serving-api",
+            "releaseKind": "application",
+            "releaseMetadata": RELEASE_PATH,
+            "imageRef": IMAGE,
+            "subjectDigest": CANDIDATE,
+            "producerEvidenceDigest": PRODUCER_DIGEST,
+        },
+        "sourceRepository": "mindclade/mindclade-internal-monorepo",
+        "sourceRevision": "d" * 40,
+        "previousRelease": {
+            "releaseId": "v1.2.2",
+            "subjectDigest": "sha256:" + "e" * 64,
+        },
+        "targetEnvironment": "development",
+        "requiredEvidence": sorted(SELECTIONS.REQUIRED_PROPOSAL_EVIDENCE),
+    }
     return {
         "apiVersion": "release.mindclade.dev/v1beta1",
         "kind": "PromotionProposal",
-        "metadata": {"name": "v1.2.3"},
-        "spec": {
-            "target": {
-                "application": "serving-api",
-                "releaseKind": "application",
-                "imageRef": "us-central1-docker.pkg.dev/mc-common-ci/releases/api@" + candidate,
-                "subjectDigest": candidate,
+        "metadata": {
+            "name": "v1.2.3",
+            "annotations": {
+                "release.mindclade.dev/consumer-contract": "4.0.0",
+                "release.mindclade.dev/producer-schema": "mindclade.dev/release-evidence/v1",
+                "release.mindclade.dev/spec-digest": SELECTIONS.canonical_spec_digest(spec),
             },
-            "sourceRepository": "mindclade/mindclade-internal-monorepo",
-            "sourceRevision": "d" * 40,
-            "previousRelease": {
-                "releaseId": "v1.2.2",
-                "subjectDigest": "sha256:" + "e" * 64,
-            },
-            "targetEnvironment": "development",
-            "requiredEvidence": sorted(SELECTIONS.REQUIRED_PROPOSAL_EVIDENCE),
         },
+        "spec": spec,
     }
 
 
@@ -78,8 +110,15 @@ class DeploymentSelectionContractTest(unittest.TestCase):
                 yaml.safe_dump(document, sort_keys=False), encoding="utf-8"
             )
             if release is not None:
-                (root / "releases/release.json").write_text(
+                release_path = root / RELEASE_PATH
+                release_path.parent.mkdir(parents=True)
+                release_path.write_text(
                     json.dumps(release), encoding="utf-8"
+                )
+                proposal_path = root / "deployments/proposals/v1.2.3.yaml"
+                proposal_path.parent.mkdir(parents=True)
+                proposal_path.write_text(
+                    yaml.safe_dump(proposal(), sort_keys=False), encoding="utf-8"
                 )
             errors: list[str] = []
             with mock.patch.object(SELECTIONS, "ROOT", root):
@@ -91,7 +130,7 @@ class DeploymentSelectionContractTest(unittest.TestCase):
             selection(
                 {
                     "name": "serving-api",
-                    "releaseMetadata": "releases/release.json",
+                    "releaseMetadata": RELEASE_PATH,
                 }
             ),
             record(),
@@ -115,7 +154,7 @@ class DeploymentSelectionContractTest(unittest.TestCase):
             selection(
                 {
                     "name": "serving-api",
-                    "releaseMetadata": "releases/release.json",
+                    "releaseMetadata": RELEASE_PATH,
                 }
             ),
             record("platform-core"),

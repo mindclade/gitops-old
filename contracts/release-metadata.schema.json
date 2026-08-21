@@ -15,8 +15,11 @@
     "build_invocation_id",
     "images",
     "artifacts",
+    "producer_evidence",
+    "vulnerability",
     "evidence",
     "attestations",
+    "evidence_retention",
     "compatibility",
     "migration",
     "rollback",
@@ -60,6 +63,70 @@
       "type": "array",
       "minItems": 5,
       "items": {"$ref": "#/$defs/typedArtifact"}
+    },
+    "producer_evidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schema_version", "path", "digest"],
+      "properties": {
+        "schema_version": {"const": "mindclade.dev/release-evidence/v1"},
+        "path": {
+          "type": "string",
+          "pattern": "^evidence/(platform|serving|research|data|partner)-[a-z0-9][a-z0-9-]*/v[0-9]+\\.[0-9]+\\.[0-9]+(?:-[a-z0-9-]+)?\\.json$"
+        },
+        "digest": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "vulnerability": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "result",
+        "scanner",
+        "scanner_version",
+        "database_digest",
+        "scanned_at",
+        "finding_counts",
+        "exception"
+      ],
+      "properties": {
+        "result": {"enum": ["pass", "approved-exception"]},
+        "scanner": {"$ref": "#/$defs/identifier"},
+        "scanner_version": {
+          "type": "string",
+          "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$"
+        },
+        "database_digest": {"$ref": "#/$defs/sha256"},
+        "scanned_at": {"type": "string", "format": "date-time"},
+        "finding_counts": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["critical", "high", "medium", "low", "unknown"],
+          "properties": {
+            "critical": {"type": "integer", "minimum": 0},
+            "high": {"type": "integer", "minimum": 0},
+            "medium": {"type": "integer", "minimum": 0},
+            "low": {"type": "integer", "minimum": 0},
+            "unknown": {"type": "integer", "minimum": 0}
+          }
+        },
+        "exception": {
+          "oneOf": [
+            {"type": "null"},
+            {"$ref": "#/$defs/vulnerabilityException"}
+          ]
+        }
+      },
+      "allOf": [
+        {
+          "if": {"properties": {"result": {"const": "pass"}}},
+          "then": {"properties": {"exception": {"type": "null"}}}
+        },
+        {
+          "if": {"properties": {"result": {"const": "approved-exception"}}},
+          "then": {"properties": {"exception": {"$ref": "#/$defs/vulnerabilityException"}}}
+        }
+      ]
     },
     "evidence": {
       "type": "object",
@@ -105,21 +172,18 @@
       "additionalProperties": false,
       "required": ["build", "qualification", "deployment"],
       "properties": {
-        "build": {"$ref": "#/$defs/attestorReference"},
-        "qualification": {"$ref": "#/$defs/attestorReference"},
-        "deployment": {
-          "type": "object",
-          "additionalProperties": false,
-          "required": ["project", "attestor", "signer_workflow_ref"],
-          "properties": {
-            "project": {"$ref": "#/$defs/projectId"},
-            "attestor": {"$ref": "#/$defs/identifier"},
-            "signer_workflow_ref": {
-              "type": "string",
-              "pattern": "^mindclade/\\.github/\\.github/workflows/reusable-binauthz-sign\\.yml@refs/tags/v[0-9]+\\.[0-9]+\\.[0-9]+$"
-            }
-          }
-        }
+        "build": {"$ref": "#/$defs/buildAttestorReference"},
+        "qualification": {"$ref": "#/$defs/qualificationAttestorReference"},
+        "deployment": {"$ref": "#/$defs/deploymentAttestorReference"}
+      }
+    },
+    "evidence_retention": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["nonproduction", "production"],
+      "properties": {
+        "nonproduction": {"const": "P1Y"},
+        "production": {"const": "P7Y"}
       }
     },
     "compatibility": {
@@ -196,13 +260,63 @@
       "type": "string",
       "pattern": "^sha256:[0-9a-f]{64}$"
     },
-    "attestorReference": {
+    "buildAttestorReference": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["project", "attestor"],
+      "required": ["project", "attestor", "signer_workflow_ref"],
       "properties": {
         "project": {"$ref": "#/$defs/projectId"},
-        "attestor": {"$ref": "#/$defs/identifier"}
+        "attestor": {"$ref": "#/$defs/identifier"},
+        "signer_workflow_ref": {
+          "type": "string",
+          "pattern": "^mindclade/\\.github/\\.github/workflows/reusable-arc-oci-build\\.yml@refs/tags/v[0-9]+\\.[0-9]+\\.[0-9]+$"
+        }
+      }
+    },
+    "qualificationAttestorReference": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["project", "attestor", "signer_workflow_ref"],
+      "properties": {
+        "project": {"$ref": "#/$defs/projectId"},
+        "attestor": {"$ref": "#/$defs/identifier"},
+        "signer_workflow_ref": {
+          "type": "string",
+          "pattern": "^mindclade/\\.github/\\.github/workflows/reusable-arc-qualification-attest\\.yml@refs/tags/v[0-9]+\\.[0-9]+\\.[0-9]+$"
+        }
+      }
+    },
+    "deploymentAttestorReference": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["project", "attestor", "signer_workflow_ref"],
+      "properties": {
+        "project": {"$ref": "#/$defs/projectId"},
+        "attestor": {"$ref": "#/$defs/identifier"},
+        "signer_workflow_ref": {
+          "type": "string",
+          "pattern": "^mindclade/\\.github/\\.github/workflows/reusable-binauthz-sign\\.yml@refs/tags/v[0-9]+\\.[0-9]+\\.[0-9]+$"
+        }
+      }
+    },
+    "vulnerabilityException": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "ticket",
+        "approved_by",
+        "approved_at",
+        "expires_at",
+        "justification",
+        "subject_digest"
+      ],
+      "properties": {
+        "ticket": {"type": "string", "minLength": 1},
+        "approved_by": {"const": "@mindclade/security"},
+        "approved_at": {"type": "string", "format": "date-time"},
+        "expires_at": {"type": "string", "format": "date-time"},
+        "justification": {"type": "string", "minLength": 1},
+        "subject_digest": {"$ref": "#/$defs/sha256"}
       }
     },
     "typedArtifact": {

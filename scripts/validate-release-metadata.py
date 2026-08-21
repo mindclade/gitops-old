@@ -14,6 +14,12 @@ import re
 import sys
 from pathlib import Path
 
+from release_contract import (
+    load_policy,
+    projection_errors,
+    validate_vulnerability,
+)
+
 try:
     import jsonschema
 except ImportError:
@@ -25,9 +31,17 @@ SHA40 = re.compile(r"[0-9a-f]{40}")
 DIGEST_IMAGE = re.compile(r"[^\s]+@sha256:[0-9a-f]{64}")
 SHA256 = re.compile(r"sha256:[0-9a-f]{64}")
 MINDCLADE_REPOSITORY = re.compile(r"mindclade/[A-Za-z0-9_.-]+")
-SIGNER_WORKFLOW_REF = re.compile(
-    r"mindclade/\.github/\.github/workflows/reusable-binauthz-sign\.yml@refs/tags/v[0-9]+\.[0-9]+\.[0-9]+"
-)
+SIGNER_WORKFLOW_REFS = {
+    "build": re.compile(
+        r"mindclade/\.github/\.github/workflows/reusable-arc-oci-build\.yml@refs/tags/v[0-9]+\.[0-9]+\.[0-9]+"
+    ),
+    "qualification": re.compile(
+        r"mindclade/\.github/\.github/workflows/reusable-arc-qualification-attest\.yml@refs/tags/v[0-9]+\.[0-9]+\.[0-9]+"
+    ),
+    "deployment": re.compile(
+        r"mindclade/\.github/\.github/workflows/reusable-binauthz-sign\.yml@refs/tags/v[0-9]+\.[0-9]+\.[0-9]+"
+    ),
+}
 REQUIRED = {
     "contract_version",
     "release_id",
@@ -39,8 +53,11 @@ REQUIRED = {
     "build_invocation_id",
     "images",
     "artifacts",
+    "producer_evidence",
+    "vulnerability",
     "evidence",
     "attestations",
+    "evidence_retention",
     "compatibility",
     "migration",
     "rollback",
@@ -54,7 +71,14 @@ PREDICATE_ARTIFACT_TYPES = {
 }
 REQUIRED_ARTIFACT_TYPES = set(PREDICATE_ARTIFACT_TYPES.values()) | {"rollback"}
 DEFAULT_SOURCE_REPOSITORY = "mindclade/mindclade-internal-monorepo"
-DEFAULT_SIGNER_WORKFLOW_REF = (
+DEFAULT_BUILD_SIGNER_WORKFLOW_REF = (
+    "mindclade/.github/.github/workflows/reusable-arc-oci-build.yml@refs/tags/v4.0.0"
+)
+DEFAULT_QUALIFICATION_SIGNER_WORKFLOW_REF = (
+    "mindclade/.github/.github/workflows/"
+    "reusable-arc-qualification-attest.yml@refs/tags/v4.0.0"
+)
+DEFAULT_DEPLOYMENT_SIGNER_WORKFLOW_REF = (
     "mindclade/.github/.github/workflows/reusable-binauthz-sign.yml@refs/tags/v4.0.0"
 )
 
@@ -135,6 +159,7 @@ def validate_record(
     path: Path,
     obj: dict,
     args: argparse.Namespace,
+    policy: dict,
     errors: list[str],
 ) -> tuple[set[str], str, str]:
     """Validate semantic relationships that JSON Schema cannot express."""
@@ -224,8 +249,16 @@ def validate_record(
             errors.append(
                 f"{label}: evidence predicate {predicate!r} must reference a {expected_type!r} artifact"
             )
-        if predicate != "vulnerability-scan" and edge.get("result") != "pass":
-            errors.append(f"{label}: evidence predicate {predicate!r} must pass")
+        expected_result = (
+            "approved"
+            if predicate == "vulnerability-scan"
+            and (obj.get("vulnerability") or {}).get("result") == "approved-exception"
+            else "pass"
+        )
+        if edge.get("result") != expected_result:
+            errors.append(
+                f"{label}: evidence predicate {predicate!r} must be {expected_result}"
+            )
     if seen_predicates != set(PREDICATE_ARTIFACT_TYPES):
         errors.append(f"{label}: evidence graph must cover every required predicate exactly once")
     qualification_epoch = aware_timestamp(evidence.get("qualification_epoch"))
@@ -236,6 +269,14 @@ def validate_record(
         errors.append(f"{label}: created_at must be timezone-aware RFC3339")
     if qualification_epoch and created_at and qualification_epoch > created_at:
         errors.append(f"{label}: qualification_epoch may not be later than created_at")
+    for failure in validate_vulnerability(
+        obj.get("vulnerability"),
+        subject_digest=subject_digest,
+        created_at=created_at,
+        policy=policy,
+        consumer=True,
+    ):
+        errors.append(f"{label}: {failure}")
 
     chain = obj.get("attestations")
     if not isinstance(chain, dict):
@@ -244,22 +285,29 @@ def validate_record(
         build = chain.get("build")
         qualification = chain.get("qualification")
         deployment = chain.get("deployment")
-        workflow_ref = (
-            deployment.get("signer_workflow_ref", "")
-            if isinstance(deployment, dict)
-            else ""
-        )
-        for name, item in (("build", build), ("qualification", qualification)):
-            if not attestor_ref(item):
-                errors.append(f"{label}: attestations.{name} must identify project and attestor")
-        if not attestor_ref(deployment) or not SIGNER_WORKFLOW_REF.fullmatch(str(workflow_ref)):
-            errors.append(
-                f"{label}: attestations.deployment must identify project, attestor, and immutable signer workflow"
+        expected_workflows = {
+            "build": args.expected_build_signer_workflow_ref,
+            "qualification": args.expected_qualification_signer_workflow_ref,
+            "deployment": args.expected_deployment_signer_workflow_ref,
+        }
+        for name, item in (
+            ("build", build),
+            ("qualification", qualification),
+            ("deployment", deployment),
+        ):
+            workflow_ref = (
+                item.get("signer_workflow_ref", "") if isinstance(item, dict) else ""
             )
-        elif workflow_ref != args.expected_signer_workflow_ref:
-            errors.append(
-                f"{label}: deployment signer is not the trusted workflow {args.expected_signer_workflow_ref}"
-            )
+            if not attestor_ref(item) or not SIGNER_WORKFLOW_REFS[name].fullmatch(
+                str(workflow_ref)
+            ):
+                errors.append(
+                    f"{label}: attestations.{name} must identify project, attestor, and immutable signer workflow"
+                )
+            elif workflow_ref != expected_workflows[name]:
+                errors.append(
+                    f"{label}: {name} signer is not the trusted workflow {expected_workflows[name]}"
+                )
         if all(attestor_ref(item) for item in (build, qualification, deployment)):
             roots = {(item["project"], item["attestor"]) for item in (build, qualification, deployment)}
             if len(roots) != 3:
@@ -304,6 +352,11 @@ def validate_record(
         if previous_release is not None or previous_digest is not None:
             errors.append(f"{label}: bootstrap rollback may not claim a previous release")
 
+    if obj.get("evidence_retention") != policy["evidence_retention"]:
+        errors.append(
+            f"{label}: evidence retention must be P1Y nonproduction and P7Y production"
+        )
+
     return image_values, str(obj.get("release_id", "")), subject_name + "@" + subject_digest
 
 
@@ -312,8 +365,20 @@ def main() -> int:
     ap.add_argument("--root", type=Path, default=Path(__file__).resolve().parents[1])
     ap.add_argument("--images-file", type=Path)
     ap.add_argument("--unsigned-exceptions-file", type=Path)
+    ap.add_argument("--handoff-policy", type=Path)
     ap.add_argument("--expected-source-repository", default=DEFAULT_SOURCE_REPOSITORY)
-    ap.add_argument("--expected-signer-workflow-ref", default=DEFAULT_SIGNER_WORKFLOW_REF)
+    ap.add_argument(
+        "--expected-build-signer-workflow-ref",
+        default=DEFAULT_BUILD_SIGNER_WORKFLOW_REF,
+    )
+    ap.add_argument(
+        "--expected-qualification-signer-workflow-ref",
+        default=DEFAULT_QUALIFICATION_SIGNER_WORKFLOW_REF,
+    )
+    ap.add_argument(
+        "--expected-deployment-signer-workflow-ref",
+        default=DEFAULT_DEPLOYMENT_SIGNER_WORKFLOW_REF,
+    )
     ap.add_argument("--expected-deployment-attestor-project")
     ap.add_argument("--expected-deployment-attestor")
     args = ap.parse_args()
@@ -323,10 +388,43 @@ def main() -> int:
     release_ids: dict[str, str] = {}
     subjects: dict[str, str] = {}
     unsigned_images = governed_exception_images(args.unsigned_exceptions_file, errors)
+    policy_path = args.handoff_policy or root / "contracts/release-handoff-policy.json"
+    try:
+        policy = load_policy(policy_path)
+    except (OSError, ValueError, json.JSONDecodeError) as exc:
+        errors.append(f"{policy_path}: invalid or missing release handoff policy: {exc}")
+        policy = {
+            "producer_schema_version": "mindclade.dev/release-evidence/v1",
+            "consumer_contract_version": "4.0.0",
+            "source_repository": DEFAULT_SOURCE_REPOSITORY,
+            "signer_workflow_refs": {
+                "build": DEFAULT_BUILD_SIGNER_WORKFLOW_REF,
+                "qualification": DEFAULT_QUALIFICATION_SIGNER_WORKFLOW_REF,
+                "deployment": DEFAULT_DEPLOYMENT_SIGNER_WORKFLOW_REF,
+            },
+            "evidence_retention": {"nonproduction": "P1Y", "production": "P7Y"},
+            "vulnerability_exception": {
+                "approved_by": "@mindclade/security",
+                "maximum_duration_days": 90,
+            },
+        }
     if not MINDCLADE_REPOSITORY.fullmatch(str(args.expected_source_repository)):
         errors.append("--expected-source-repository must name one Mindclade repository")
-    if not SIGNER_WORKFLOW_REF.fullmatch(str(args.expected_signer_workflow_ref)):
-        errors.append("--expected-signer-workflow-ref must name an immutable Mindclade signer release")
+    elif args.expected_source_repository != policy["source_repository"]:
+        errors.append("--expected-source-repository does not match the release handoff policy")
+    for name, workflow_ref in (
+        ("build", args.expected_build_signer_workflow_ref),
+        ("qualification", args.expected_qualification_signer_workflow_ref),
+        ("deployment", args.expected_deployment_signer_workflow_ref),
+    ):
+        if not SIGNER_WORKFLOW_REFS[name].fullmatch(str(workflow_ref)):
+            errors.append(
+                f"--expected-{name}-signer-workflow-ref must name an immutable Mindclade signer release"
+            )
+        elif workflow_ref != policy["signer_workflow_refs"][name]:
+            errors.append(
+                f"--expected-{name}-signer-workflow-ref does not match the release handoff policy"
+            )
     if args.expected_deployment_attestor_project is not None and not nonempty(args.expected_deployment_attestor_project):
         errors.append("--expected-deployment-attestor-project may not be empty")
     if args.expected_deployment_attestor is not None and not nonempty(args.expected_deployment_attestor):
@@ -367,7 +465,9 @@ def main() -> int:
         missing = REQUIRED - set(obj)
         if missing:
             errors.append(f"{path}: missing {sorted(missing)}")
-        images, release_id, subject = validate_record(path, obj, args, errors)
+        images, release_id, subject = validate_record(path, obj, args, policy, errors)
+        for failure in projection_errors(root, obj, policy):
+            errors.append(f"{path}: {failure}")
         relative = str(path.relative_to(root))
         if release_id in release_ids:
             errors.append(f"{path}: duplicate release_id also declared by {release_ids[release_id]}")

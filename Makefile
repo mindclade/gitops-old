@@ -1,5 +1,5 @@
 .PHONY: license-headers license-headers-fix repository-invariants bootstrap-checks arc-render cert-manager-vendor \
-        yaml-check project-rbac release-metadata release-metadata-tests deployment-selections shell-check \
+        yaml-check project-rbac release-handoff release-metadata release-metadata-tests deployment-selections shell-check \
         validate-production-contract validate-repository-home validate
 
 license-headers:
@@ -26,6 +26,9 @@ yaml-check:
 project-rbac:
 	python3 scripts/validate-project-rbac.py
 
+release-handoff:
+	python3 scripts/validate-release-handoff.py
+
 release-metadata:
 	python3 scripts/validate-release-metadata.py
 
@@ -44,4 +47,4 @@ validate-production-contract:
 validate-repository-home:
 	python3 scripts/validate-repository-home.py --root .
 
-validate: validate-production-contract validate-repository-home repository-invariants bootstrap-checks arc-render cert-manager-vendor yaml-check project-rbac release-metadata deployment-selections release-metadata-tests shell-check
+validate: validate-production-contract validate-repository-home repository-invariants bootstrap-checks arc-render cert-manager-vendor yaml-check project-rbac release-handoff release-metadata deployment-selections release-metadata-tests shell-check
