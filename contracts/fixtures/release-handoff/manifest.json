@@ -1,0 +1,8 @@
+{
+  "producer": "evidence/platform-contract-fixture/v1.0.0-contract-fixture.json",
+  "consumer": "releases/platform-contract-fixture/v1.0.0-contract-fixture.json",
+  "deployment_attestor": {
+    "project": "mc-production-security",
+    "attestor": "deployment-attestor"
+  }
+}
