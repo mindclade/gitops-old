@@ -43,7 +43,6 @@ from immediately reconciling into a standard/hybrid installation (or the reverse
 Run:
 
 ```bash
-./bootstrap/bootstrap.sh --apply --environment ci --profile standard --context mindclade-ci-arc
 ./bootstrap/bootstrap.sh --apply --environment development --profile standard --context mindclade-development
 ./bootstrap/bootstrap.sh --apply --environment staging --profile standard --context mindclade-staging
 MINDCLADE_PRODUCTION_BOOTSTRAP_CONFIRM=production \
