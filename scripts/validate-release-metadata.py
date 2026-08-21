@@ -75,14 +75,14 @@ PREDICATE_ARTIFACT_TYPES = {
 REQUIRED_ARTIFACT_TYPES = set(PREDICATE_ARTIFACT_TYPES.values()) | {"rollback"}
 DEFAULT_SOURCE_REPOSITORY = "mindclade/mindclade-internal-monorepo"
 DEFAULT_BUILD_SIGNER_WORKFLOW_REF = (
-    "mindclade/.github/.github/workflows/reusable-arc-oci-build.yml@refs/tags/v4.0.0"
+    "mindclade/.github/.github/workflows/reusable-arc-oci-build.yml@refs/tags/v5.0.0"
 )
 DEFAULT_QUALIFICATION_SIGNER_WORKFLOW_REF = (
     "mindclade/.github/.github/workflows/"
-    "reusable-arc-qualification-attest.yml@refs/tags/v4.0.0"
+    "reusable-arc-qualification-attest.yml@refs/tags/v5.0.0"
 )
 DEFAULT_DEPLOYMENT_SIGNER_WORKFLOW_REF = (
-    "mindclade/.github/.github/workflows/reusable-binauthz-sign.yml@refs/tags/v4.0.0"
+    "mindclade/.github/.github/workflows/reusable-binauthz-sign.yml@refs/tags/v5.0.0"
 )
 QUARANTINED_V3_SCHEMA_SHA256 = (
     "4e40da787e7fec209721f4a111d501198c52b379b575d46a6672df8a5c77b783"

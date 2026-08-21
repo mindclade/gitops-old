@@ -335,7 +335,7 @@ for required in (
     '"attestations"',
     '"qualification_epoch"',
     '"previous_subject_digest"',
-    "reusable-binauthz-sign.yml@refs/tags/v4.0.0",
+    "reusable-binauthz-sign.yml@refs/tags/v5.0.0",
 ):
     if required not in release_schema and required not in release_validator:
         error(f"release contract omits governed supply-chain binding: {required}")

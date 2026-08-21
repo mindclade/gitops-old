@@ -27,14 +27,14 @@ BUILD_ATTESTOR = "build-attestor"
 QUALIFICATION_ATTESTOR = "qualification-attestor"
 DEPLOYMENT_ATTESTOR = "deployment-attestor"
 BUILD_SIGNER_WORKFLOW_REF = (
-    "mindclade/.github/.github/workflows/reusable-arc-oci-build.yml@refs/tags/v4.0.0"
+    "mindclade/.github/.github/workflows/reusable-arc-oci-build.yml@refs/tags/v5.0.0"
 )
 QUALIFICATION_SIGNER_WORKFLOW_REF = (
     "mindclade/.github/.github/workflows/"
-    "reusable-arc-qualification-attest.yml@refs/tags/v4.0.0"
+    "reusable-arc-qualification-attest.yml@refs/tags/v5.0.0"
 )
 DEPLOYMENT_SIGNER_WORKFLOW_REF = (
-    "mindclade/.github/.github/workflows/reusable-binauthz-sign.yml@refs/tags/v4.0.0"
+    "mindclade/.github/.github/workflows/reusable-binauthz-sign.yml@refs/tags/v5.0.0"
 )
 IMAGE = (
     "us-central1-docker.pkg.dev/mindclade-production/containers/app@sha256:" + "b" * 64
