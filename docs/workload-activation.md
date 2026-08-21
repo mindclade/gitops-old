@@ -24,6 +24,11 @@ Planned services that do not meet those gates remain in the monorepo and are **n
 `render-manifest.yaml`. GitOps does not carry `:latest`, unbuilt-image exceptions, or inactive
 render directories for topology documentation.
 
+The ARC CI control plane and DR-evidence caller follow the same rule. Their v4 contract and
+validators remain reviewable source, but this repository does not publish a CI root, CI
+Application, ARC AppProject, CI bootstrap configuration, or DR caller until the immutable
+workflow/module releases and applied identity handoffs are qualified together.
+
 ## Procedure
 
 1. Confirm the workload package exists at the exact protected monorepo release consumed by this
