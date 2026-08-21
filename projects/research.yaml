@@ -22,6 +22,7 @@ spec:
     - {group: autoscaling, kind: "*"}
     - {group: networking.k8s.io, kind: NetworkPolicy}
     - {group: policy, kind: PodDisruptionBudget}
+    - {group: monitoring.googleapis.com, kind: PodMonitoring}
     - {group: monitoring.coreos.com, kind: "*"}
     - {group: external-secrets.io, kind: ExternalSecret}
     - {group: jobset.x-k8s.io, kind: JobSet}
