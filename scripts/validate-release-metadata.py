@@ -9,10 +9,13 @@ from __future__ import annotations
 
 import argparse
 import datetime as dt
+import hashlib
 import json
 import re
 import sys
 from pathlib import Path
+
+import yaml
 
 from release_contract import (
     load_policy,
@@ -80,6 +83,9 @@ DEFAULT_QUALIFICATION_SIGNER_WORKFLOW_REF = (
 )
 DEFAULT_DEPLOYMENT_SIGNER_WORKFLOW_REF = (
     "mindclade/.github/.github/workflows/reusable-binauthz-sign.yml@refs/tags/v4.0.0"
+)
+QUARANTINED_V3_SCHEMA_SHA256 = (
+    "4e40da787e7fec209721f4a111d501198c52b379b575d46a6672df8a5c77b783"
 )
 
 
@@ -153,6 +159,80 @@ def governed_exception_images(path: Path | None, errors: list[str]) -> set[str]:
         except ValueError:
             errors.append(f"{label} granted/expires must be ISO dates")
     return images
+
+
+def validate_quarantined_v3_contract(
+    root: Path,
+    images_file: Path | None,
+    policy_path: Path,
+    unsigned_images: set[str],
+    errors: list[str],
+) -> bool:
+    """Recognize the exact inert v3 rollback without weakening active v4 validation."""
+
+    schema_path = root / "contracts/release-metadata.schema.json"
+    try:
+        schema_bytes = schema_path.read_bytes()
+        schema = json.loads(schema_bytes)
+    except (OSError, json.JSONDecodeError):
+        return False
+    schema_version = (
+        ((schema.get("properties") or {}).get("contract_version") or {}).get("const")
+        if isinstance(schema, dict)
+        else None
+    )
+    if schema_version != "3.0.0":
+        return False
+
+    if hashlib.sha256(schema_bytes).hexdigest() != QUARANTINED_V3_SCHEMA_SHA256:
+        errors.append(f"{schema_path}: quarantined v3 schema does not match the reviewed bytes")
+    if policy_path.exists():
+        errors.append(
+            f"{policy_path}: v4 release handoff policy must be absent from the v3 quarantine"
+        )
+    release_paths = sorted((root / "releases").rglob("*.json"))
+    if release_paths:
+        errors.append("quarantined v3 contract may not contain release metadata records")
+
+    for environment in ("development", "staging", "production"):
+        path = root / "deployments" / f"{environment}.yaml"
+        try:
+            document = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+        except (OSError, yaml.YAMLError) as exc:
+            errors.append(f"{path}: cannot read the quarantine deployment envelope: {exc}")
+            continue
+        if document.get("apiVersion") != "mindclade.dev/v2" or document.get(
+            "kind"
+        ) != "ArtifactDeploymentSet":
+            errors.append(f"{path}: quarantine deployment envelope must use mindclade.dev/v2")
+        metadata = document.get("metadata") or {}
+        spec = document.get("spec") or {}
+        if metadata.get("name") != environment or spec.get("environment") != environment:
+            errors.append(f"{path}: quarantine deployment envelope identity is invalid")
+        if spec.get("applications") != []:
+            errors.append(f"{path}: quarantine deployment envelope must remain empty")
+
+    if images_file is None:
+        errors.append("quarantined v3 validation requires the complete active-image projection")
+        active_images: set[str] = set()
+    else:
+        try:
+            images = [
+                line.strip()
+                for line in images_file.read_text(encoding="utf-8").splitlines()
+                if line.strip()
+            ]
+        except OSError as exc:
+            errors.append(f"cannot read images file: {exc}")
+            images = []
+        active_images = set(images)
+        if len(active_images) != len(images):
+            errors.append("active-image projection contains duplicates")
+    for image in sorted(active_images - unsigned_images):
+        errors.append(f"v3 quarantine contains a release-bound active image: {image}")
+    for image in sorted(unsigned_images - active_images):
+        errors.append(f"unsigned exception is not an active control-plane image: {image}")
+    return True
 
 
 def validate_record(
@@ -389,6 +469,19 @@ def main() -> int:
     subjects: dict[str, str] = {}
     unsigned_images = governed_exception_images(args.unsigned_exceptions_file, errors)
     policy_path = args.handoff_policy or root / "contracts/release-handoff-policy.json"
+    if validate_quarantined_v3_contract(
+        root,
+        args.images_file,
+        policy_path,
+        unsigned_images,
+        errors,
+    ):
+        if errors:
+            for error in sorted(set(errors)):
+                print(f"ERROR: {error}", file=sys.stderr)
+            return 1
+        print("release metadata validation passed (quarantined v3 contract; 0 records)")
+        return 0
     try:
         policy = load_policy(policy_path)
     except (OSError, ValueError, json.JSONDecodeError) as exc:
