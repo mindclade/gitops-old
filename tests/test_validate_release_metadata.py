@@ -9,6 +9,7 @@
 from __future__ import annotations
 
 import datetime as dt
+import hashlib
 import importlib.util
 import json
 import subprocess
@@ -16,6 +17,7 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -201,6 +203,68 @@ def valid_exception(image: str) -> dict:
 
 
 class ReleaseMetadataContractTest(unittest.TestCase):
+    def test_exact_empty_v3_quarantine_is_fail_closed(self) -> None:
+        schema_bytes = json.dumps(
+            {"properties": {"contract_version": {"const": "3.0.0"}}},
+            sort_keys=True,
+        ).encode("utf-8")
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "contracts").mkdir()
+            (root / "releases").mkdir()
+            (root / "deployments").mkdir()
+            (root / "contracts/release-metadata.schema.json").write_bytes(schema_bytes)
+            for environment in ("development", "staging", "production"):
+                (root / "deployments" / f"{environment}.yaml").write_text(
+                    "\n".join(
+                        (
+                            "apiVersion: mindclade.dev/v2",
+                            "kind: ArtifactDeploymentSet",
+                            "metadata:",
+                            f"  name: {environment}",
+                            "spec:",
+                            f"  environment: {environment}",
+                            "  applications: []",
+                            "",
+                        )
+                    ),
+                    encoding="utf-8",
+                )
+            images = root / "images.txt"
+            images.write_text("", encoding="utf-8")
+            errors: list[str] = []
+            with mock.patch.object(
+                VALIDATOR_MODULE,
+                "QUARANTINED_V3_SCHEMA_SHA256",
+                hashlib.sha256(schema_bytes).hexdigest(),
+            ):
+                recognized = VALIDATOR_MODULE.validate_quarantined_v3_contract(
+                    root,
+                    images,
+                    root / "contracts/release-handoff-policy.json",
+                    set(),
+                    errors,
+                )
+                self.assertTrue(recognized)
+                self.assertEqual(errors, [])
+
+                production = root / "deployments/production.yaml"
+                production.write_text(
+                    production.read_text(encoding="utf-8").replace(
+                        "applications: []", "applications: [{}]"
+                    ),
+                    encoding="utf-8",
+                )
+                errors = []
+                VALIDATOR_MODULE.validate_quarantined_v3_contract(
+                    root,
+                    images,
+                    root / "contracts/release-handoff-policy.json",
+                    set(),
+                    errors,
+                )
+                self.assertTrue(any("must remain empty" in error for error in errors))
+
     def run_schema_validator(
         self, schema: dict, record: dict | None = None
     ) -> subprocess.CompletedProcess[str]:
