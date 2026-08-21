@@ -10,7 +10,6 @@ from __future__ import annotations
 import base64
 import gzip
 import hashlib
-import json
 import shutil
 import subprocess
 import tempfile
