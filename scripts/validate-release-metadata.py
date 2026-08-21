@@ -45,6 +45,27 @@ REQUIRED = {
     "supply_chain_attestations",
     "created_at",
 }
+REQUIRED_V4 = {
+    "contract_version",
+    "release_id",
+    "release_kind",
+    "subject",
+    "source_repository",
+    "source_revision",
+    "builder_identity",
+    "build_invocation_id",
+    "images",
+    "artifacts",
+    "producer_evidence",
+    "vulnerability",
+    "evidence",
+    "attestations",
+    "evidence_retention",
+    "compatibility",
+    "migration",
+    "rollback",
+    "created_at",
+}
 DEFAULT_SOURCE_REPOSITORY = "mindclade/mindclade-internal-monorepo"
 DEFAULT_SIGNER_WORKFLOW_REF = (
     "mindclade/.github/.github/workflows/reusable-binauthz-sign.yml@refs/tags/v3.0.0"
@@ -152,16 +173,20 @@ def main() -> int:
         errors.append(
             "--expected-signer-workflow-ref must name an immutable Mindclade signer release"
         )
-    if args.expected_deployment_attestor_project is not None and not nonempty(
-        args.expected_deployment_attestor_project
+    # The pull_request_target verifier passes repository variables as explicit arguments. Before
+    # connected validation is activated GitHub expands both absent variables to empty strings.
+    # Treat that pair as "not configured" while still rejecting a half-configured trust root.
+    args.expected_deployment_attestor_project = (
+        args.expected_deployment_attestor_project or None
+    )
+    args.expected_deployment_attestor = args.expected_deployment_attestor or None
+    if (args.expected_deployment_attestor_project is None) != (
+        args.expected_deployment_attestor is None
     ):
-        errors.append("--expected-deployment-attestor-project may not be empty")
-    if args.expected_deployment_attestor is not None and not nonempty(
-        args.expected_deployment_attestor
-    ):
-        errors.append("--expected-deployment-attestor may not be empty")
+        errors.append("deployment attestor project and attestor must be configured together")
     schema_path = root / "contracts/release-metadata.schema.json"
     schema_validator = None
+    schema_version = None
     try:
         schema = json.loads(schema_path.read_text("utf-8"))
         jsonschema.Draft202012Validator.check_schema(schema)
@@ -172,16 +197,31 @@ def main() -> int:
         schema_version = (
             (schema.get("properties") or {}).get("contract_version") or {}
         ).get("const")
-        if schema_version != "3.0.0":
-            errors.append(f"{schema_path}: contract_version const must be 3.0.0")
-        if schema_required != REQUIRED:
+        required_by_version = {
+            "3.0.0": REQUIRED,
+            "4.0.0": REQUIRED_V4,
+        }
+        if schema_version not in required_by_version:
+            errors.append(
+                f"{schema_path}: contract_version const must be 3.0.0 or 4.0.0"
+            )
+        elif schema_required != required_by_version[schema_version]:
             errors.append(
                 f"{schema_path}: required fields do not match validator contract"
             )
     except Exception as exc:
         errors.append(f"{schema_path}: invalid or missing schema: {exc}")
     release_root = root / "releases"
-    for p in sorted(release_root.rglob("*.json")) if release_root.exists() else []:
+    release_paths = (
+        sorted(release_root.rglob("*.json")) if release_root.exists() else []
+    )
+    if schema_version == "4.0.0" and release_paths:
+        errors.append(
+            "the migration bridge accepts the v4 schema only while releases/ is empty"
+        )
+    for p in release_paths:
+        if schema_version == "4.0.0":
+            continue
         try:
             obj = json.loads(p.read_text("utf-8"))
         except Exception as exc:
