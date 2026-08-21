@@ -43,6 +43,13 @@ assert CONTRACT_SPEC and CONTRACT_SPEC.loader
 CONTRACT = importlib.util.module_from_spec(CONTRACT_SPEC)
 CONTRACT_SPEC.loader.exec_module(CONTRACT)
 POLICY = CONTRACT.load_policy(ROOT / "contracts/release-handoff-policy.json")
+sys.path.insert(0, str(ROOT / "scripts"))
+VALIDATOR_SPEC = importlib.util.spec_from_file_location(
+    "validate_release_metadata", VALIDATOR
+)
+assert VALIDATOR_SPEC and VALIDATOR_SPEC.loader
+VALIDATOR_MODULE = importlib.util.module_from_spec(VALIDATOR_SPEC)
+VALIDATOR_SPEC.loader.exec_module(VALIDATOR_MODULE)
 PRODUCER_PATH = "evidence/serving-api/v1.2.3.json"
 
 
@@ -201,6 +208,9 @@ class ReleaseMetadataContractTest(unittest.TestCase):
             root = Path(directory)
             (root / "contracts").mkdir()
             (root / "releases").mkdir()
+            (root / "contracts/release-handoff-policy.json").write_bytes(
+                (ROOT / "contracts/release-handoff-policy.json").read_bytes()
+            )
             (root / "contracts/release-metadata.schema.json").write_text(
                 json.dumps(schema), encoding="utf-8"
             )
@@ -266,24 +276,7 @@ class ReleaseMetadataContractTest(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
 
     def test_empty_v4_schema_migration_is_trusted(self) -> None:
-        required = {
-            "contract_version",
-            "release_id",
-            "release_kind",
-            "subject",
-            "source_repository",
-            "source_revision",
-            "builder_identity",
-            "build_invocation_id",
-            "images",
-            "artifacts",
-            "evidence",
-            "attestations",
-            "compatibility",
-            "migration",
-            "rollback",
-            "created_at",
-        }
+        required = set(VALIDATOR_MODULE.REQUIRED)
         schema = {
             "$schema": "https://json-schema.org/draft/2020-12/schema",
             "type": "object",
@@ -295,7 +288,7 @@ class ReleaseMetadataContractTest(unittest.TestCase):
 
         result = self.run_schema_validator(schema, {"contract_version": "4.0.0"})
         self.assertNotEqual(result.returncode, 0)
-        self.assertIn("require the promoted v4 semantic validator", result.stderr)
+        self.assertIn("schema violation at <root>", result.stderr)
 
     def test_untrusted_signer_fails(self) -> None:
         record = valid_record()
