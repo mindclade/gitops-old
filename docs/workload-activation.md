@@ -28,13 +28,11 @@ render directories for topology documentation.
 
 1. Confirm the workload package exists at the exact protected monorepo release consumed by this
    repository.
-2. Add the immutable 4.0 release record that binds the subject, named images, typed artifacts,
-   evidence policy and qualification epoch, independent attestors, compatibility, migration,
-   and exact rollback lineage. Verify its governed Binary Authorization deployment attestation.
+2. Record the immutable image digest and verify its checksummed SBOM, provenance, independent
+   qualification, vulnerability result, and governed Binary Authorization attestation.
 3. Verify the target AppProject already permits only the required destination, namespace, and
    resource kinds. Submit a separate reviewed scope change if it does not.
-4. Add the workload source to `render-manifest.yaml` and select that one release record for the
-   intended application and environment. Do not restate images or artifacts in the selection.
+4. Add the workload source to `render-manifest.yaml` and update the intended environment selection.
 5. Reproduce generated content with the canonical renderer:
 
    ```sh
