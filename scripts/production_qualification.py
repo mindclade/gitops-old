@@ -412,16 +412,6 @@ def assemble(
     shutil.copyfile(audit_path, audit_target)
     artifacts.append({"path": audit_target.name, "sha256": sha256(audit_target)})
     bundle_target = output / "deployment-bundle.json"
-    # gitops' VENDORED policy, not the governed .github copy. build_bundle compares whatever it
-    # is handed against `estate/.github/contracts/evidence/production-controls.json`; passing
-    # that same path made the comparison `X != X`, so the drift guard could never fire and the
-    # two copies were free to diverge silently.
-    #
-    # The vendored copy is the one that matters here: production-qualification-evidence.yml
-    # invokes `records`, `decide` and `verify-response` with
-    # `--policy contracts/evidence/production-controls.json`, so it is what the decision is
-    # actually evaluated against. Comparing it to the governed copy at assembly time is the
-    # check this guard was written to be.
     bundle = production_eligibility.build_bundle(
         request,
         estate,
