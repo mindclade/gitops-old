@@ -103,17 +103,17 @@
     "build": {
       "project": "mc-build-security",
       "attestor": "build-attestor",
-      "signer_workflow_ref": "mindclade/.github/.github/workflows/reusable-arc-oci-build.yml@refs/tags/v4.0.0"
+      "signer_workflow_ref": "mindclade/.github/.github/workflows/reusable-arc-oci-build.yml@refs/tags/v5.0.0"
     },
     "qualification": {
       "project": "mc-qualification-security",
       "attestor": "qualification-attestor",
-      "signer_workflow_ref": "mindclade/.github/.github/workflows/reusable-arc-qualification-attest.yml@refs/tags/v4.0.0"
+      "signer_workflow_ref": "mindclade/.github/.github/workflows/reusable-arc-qualification-attest.yml@refs/tags/v5.0.0"
     },
     "deployment": {
       "project": "mc-production-security",
       "attestor": "deployment-attestor",
-      "signer_workflow_ref": "mindclade/.github/.github/workflows/reusable-binauthz-sign.yml@refs/tags/v4.0.0"
+      "signer_workflow_ref": "mindclade/.github/.github/workflows/reusable-binauthz-sign.yml@refs/tags/v5.0.0"
     }
   },
   "compatibility": {

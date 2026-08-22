@@ -231,6 +231,14 @@ tests:
         object: fixtures/deployment-holdout-init-container.yaml
         assertions:
           - violations: "yes"
+      - name: preprocessing-holdout-reference-is-denied
+        object: fixtures/deployment-holdout-preprocessing.yaml
+        assertions:
+          - violations: "yes"
+      - name: evaluator-name-in-wrong-namespace-is-denied
+        object: fixtures/cronjob-holdout-wrong-namespace.yaml
+        assertions:
+          - violations: "yes"
       - name: evaluation-cronjob-is-allowed
         object: fixtures/cronjob-holdout-evaluation.yaml
         assertions:

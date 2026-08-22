@@ -25,8 +25,8 @@ spec:
       - gmp-system
   parameters:
     allowedRegistries:
-      - europe-west4-docker.pkg.dev/
       - us-central1-docker.pkg.dev/
+      - us-east4-docker.pkg.dev/
     exemptImages:
       - ghcr.io/dexidp/dex@sha256:b8469881d3cb3a73001506f0d3aaefecb9c45d2311c1e0f405d8ac538316c59d
       - public.ecr.aws/docker/library/haproxy@sha256:e11f034e651603f10a365e5ad5a0321825e18eded9620e40c4f4d6ae58419bfe

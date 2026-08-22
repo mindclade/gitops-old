@@ -31,11 +31,15 @@ CONTRACT = json.loads(
     '"repository_class":"production-control",'
     '"required_paths":[".kubernetes-version","bootstrap/argocd-install.yaml","bootstrap/argocd-install.provenance.json","bootstrap/components/immutable-images/kustomization.yaml","bootstrap/components/control-plane-baseline/kustomization.yaml","bootstrap/install-profiles/standard/kustomization.yaml","bootstrap/install-profiles/ha/kustomization.yaml","bootstrap/profiles/standard/kustomization.yaml",'
     '"bootstrap/profiles/ha/kustomization.yaml","bootstrap/root-app.yaml",'
-    '"applications","deployments","projects","projects/argocd-administration.yaml","policy","overlays/production.yaml",'
-    '"docs/disaster-recovery.md","docs/argocd-upgrade.md","docs/production-qualification.md","docs/failed-sync.md","docs/freeze-and-emergency.md","docs/rollback.md","vendor/arc/provenance.json"],'
+    '"applications","deployments","projects","projects/argocd-administration.yaml","policy","qualification","qualification/schemas/qualification-request-v1.schema.json","qualification/schemas/qualification-report-v2.schema.json","scripts/audit-production-estate.py","scripts/deterministic-qualification-archive.py","scripts/production_qualification.py",".github/workflows/production-qualification-evidence.yml",".github/workflows/dr-evidence.yml","overlays/production.yaml",'
+    '"docs/disaster-recovery.md","docs/argocd-upgrade.md","docs/production-qualification.md","docs/failed-sync.md","docs/freeze-and-emergency.md","docs/rollback.md","vendor/arc/provenance.json","vendor/arc/LICENSE","vendor/cert-manager/LICENSE"],'
     '"visibility":"internal"}'
 )
 ERRORS: list[str] = []
+INDEPENDENT_LICENSE_SHA256 = {
+    "vendor/arc/LICENSE": "f79217eb1b3010c0d387f945fb1142a5bc14de8a8b550dfd6b5c16d59b6eadbe",
+    "vendor/cert-manager/LICENSE": "c71d239df91726fc519c6eb72d318ec65820627232b2f796219e87dcf35d0ab4",
+}
 
 
 def error(message: str) -> None:
@@ -232,6 +236,10 @@ def secret_document_has_payload(document: str) -> bool:
 for rel in CONTRACT["required_paths"]:
     if not (ROOT / rel).exists():
         error(f"missing required path: {rel}")
+for rel, expected in INDEPENDENT_LICENSE_SHA256.items():
+    path = ROOT / rel
+    if path.is_file() and hashlib.sha256(path.read_bytes()).hexdigest() != expected:
+        error(f"independently licensed controlling text drifted: {rel}")
 for rel in CONTRACT["forbidden_paths"]:
     if tracked_prefix_exists(rel):
         error(f"forbidden tracked path present: {rel}")
@@ -279,6 +287,9 @@ validate_workflow = (workflow_root / "validate.yml").read_text(encoding="utf-8")
 contract_workflow = (workflow_root / "production-contract.yml").read_text(
     encoding="utf-8"
 )
+qualification_workflow = (
+    workflow_root / "production-qualification-evidence.yml"
+).read_text(encoding="utf-8")
 release_validator = (ROOT / "scripts/validate-release-metadata.py").read_text(
     encoding="utf-8"
 )
@@ -332,7 +343,7 @@ for required in (
     '"attestations"',
     '"qualification_epoch"',
     '"previous_subject_digest"',
-    "reusable-binauthz-sign.yml@refs/tags/v4.0.0",
+    "reusable-binauthz-sign.yml@refs/tags/v5.0.0",
 ):
     if required not in release_schema and required not in release_validator:
         error(f"release contract omits governed supply-chain binding: {required}")
@@ -370,6 +381,38 @@ if not re.search(r"(?m)^  contract:\n    name: contract$", contract_workflow):
     error("production-contract workflow does not emit the governed contract context")
 if render_workflow.count('rm -f -- "$GOOGLE_GHA_CREDS_PATH"') < 2:
     error("render workflow retains GCP credentials while processing desired-state data")
+for required in (
+    'test "$GITHUB_REF" = refs/heads/main',
+    "environment: production",
+    "WIF_PROVIDER_PRODUCTION_QUALIFICATION",
+    "SA_PRODUCTION_QUALIFICATION_READER",
+    "SA_PRODUCTION_QUALIFICATION_WRITER",
+    "PRODUCTION_QUALIFICATION_PRIVATE_KEY_SECRET",
+    "PRODUCTION_QUALIFICATION_BUCKET",
+    "scripts/audit-production-estate.py",
+    "scripts/deterministic-qualification-archive.py",
+    "scripts/production_qualification.py",
+    "request GitOps commit must equal the workflow source commit",
+    "gh api --paginate",
+    "--if-generation-match=0",
+    '--custom-metadata="sha256=$digest"',
+    'gcloud storage cat "$target"',
+):
+    if required not in qualification_workflow:
+        error(f"production qualification workflow omits: {required}")
+for repository in (
+    ".github",
+    ".github-private",
+    "bootstrap",
+    "github-config",
+    "infrastructure-live",
+    "gitops",
+    "mindclade-internal-monorepo",
+):
+    if qualification_workflow.count(repository) < 1:
+        error(f"production qualification workflow omits repository: {repository}")
+if qualification_workflow.count("environment: production") != 2:
+    error("production qualification must independently protect assembly and publication")
 
 secret_patterns = [
     re.compile(r"-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----"),
@@ -444,6 +487,76 @@ for path in ROOT.rglob("*.y*ml"):
         if secret_document_has_payload(document):
             error(f"plaintext Kubernetes Secret payload in {relative}")
             break
+
+# Residency and capacity are authored contracts, not release-time conventions. Both U.S.
+# registries are permitted for primary and recovery operation; no non-U.S. region may enter
+# desired state. Qualification stays fail-closed until connected evidence changes it.
+image_policy = (ROOT / "policy/constraints/require-image-policy.yaml").read_text(
+    "utf-8", errors="ignore"
+)
+for registry in (
+    "us-central1-docker.pkg.dev/",
+    "us-east4-docker.pkg.dev/",
+):
+    if image_policy.count(registry) != 1:
+        error(f"image admission must allow the exact U.S. registry once: {registry}")
+if re.search(
+    r"(?i)\b(?:asia|europe|australia|southamerica|northamerica|me|africa)-[a-z0-9-]+\b",
+    image_policy,
+):
+    error("image admission retains a non-U.S. regional registry")
+
+for authored_root in (
+    "applications",
+    "contracts",
+    "deployments",
+    "overlays",
+    "policy",
+    "projects",
+    "qualification",
+):
+    for authored_path in (ROOT / authored_root).rglob("*.y*ml"):
+        match = re.search(
+            r"(?i)\b(?:asia|europe|australia|southamerica|northamerica|me|africa)-[a-z0-9-]+\b",
+            authored_path.read_text("utf-8", errors="ignore"),
+        )
+        if match:
+            error(
+                f"non-U.S. authored location in {authored_path.relative_to(ROOT)}: "
+                f"{match.group(0)}"
+            )
+
+source_inventory = (
+    ROOT / "contracts/monorepo-kubernetes-source-inventory.yaml"
+).read_text("utf-8", errors="ignore")
+if "profileOrder: [cpu, h100, b200]" not in source_inventory:
+    error("monorepo Kubernetes source inventory omits the CPU/H100/B200 profile order")
+if re.search(r"(?i)\bh200\b", source_inventory):
+    error("source inventory retains the superseded H200 qualification profile")
+
+qualification_runs = (ROOT / "qualification/run-contracts.yaml").read_text(
+    "utf-8", errors="ignore"
+)
+for fail_closed in (
+    "productActivationAllowed: false",
+    "normalKueueMutationAllowed: false",
+    "restoreBeforeNextRun: {namespaceState: blocked, quota: zero, jobs: suspended}",
+):
+    if fail_closed not in qualification_runs:
+        error(f"qualification run inventory omits fail-closed state: {fail_closed}")
+if qualification_runs.count("allowedProfiles: [cpu, h100, b200]") != 3:
+    error("compute qualification profiles must be exactly CPU, H100, and B200")
+if re.search(r"(?i)\bh200\b", qualification_runs):
+    error("qualification run inventory retains the superseded H200 profile")
+
+for environment in ("development", "staging", "production"):
+    selection = (ROOT / f"deployments/{environment}.yaml").read_text(
+        "utf-8", errors="ignore"
+    )
+    if not re.search(r"(?m)^\s*applications:\s*\[\]\s*$", selection):
+        error(
+            f"{environment} deployment selection must remain empty before qualification"
+        )
 
 if ERRORS:
     for message in sorted(set(ERRORS)):

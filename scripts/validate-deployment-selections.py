@@ -44,6 +44,7 @@ REQUIRED_PROPOSAL_EVIDENCE = {
     "provenance",
     "qualification-attestation",
     "release-metadata-4.0.0",
+    "rollback",
     "release-evidence-retention",
     "release-evidence-v1",
     "sbom",
@@ -98,6 +99,27 @@ def validate_selected_proposal(
         errors.append(f"{label}: promotion proposal imageRef is not owned by the selected release")
     if isinstance(spec, dict) and spec.get("sourceRevision") != record.get("source_revision"):
         errors.append(f"{label}: promotion proposal sourceRevision does not bind the selected release")
+    release_rollback = record.get("rollback")
+    if isinstance(spec, dict) and isinstance(release_rollback, dict):
+        strategy = release_rollback.get("strategy")
+        expected_rollback = {
+            "strategy": strategy,
+            "previousRelease": (
+                {
+                    "releaseId": release_rollback.get("previous_release_id"),
+                    "subjectDigest": release_rollback.get("previous_subject_digest"),
+                }
+                if strategy == "previous-release"
+                else None
+            ),
+            "bootstrapAction": (
+                "remove-development-selection-and-restore-blocked-zero-state"
+                if strategy == "bootstrap"
+                else None
+            ),
+        }
+        if spec.get("rollback") != expected_rollback:
+            errors.append(f"{label}: promotion proposal rollback does not bind the selected release")
 
 
 def safe_release_path(value: object) -> Path | None:
@@ -217,7 +239,7 @@ def validate_promotion_proposals(errors: list[str]) -> int:
             errors.append(f"{label}: proposal must be an object")
             continue
         if (
-            document.get("apiVersion") != "release.mindclade.dev/v1beta1"
+            document.get("apiVersion") != "release.mindclade.dev/v1beta2"
             or document.get("kind") != "PromotionProposal"
         ):
             errors.append(f"{label}: invalid apiVersion/kind")
@@ -236,7 +258,7 @@ def validate_promotion_proposals(errors: list[str]) -> int:
             "target",
             "sourceRepository",
             "sourceRevision",
-            "previousRelease",
+            "rollback",
             "targetEnvironment",
             "requiredEvidence",
         }
@@ -278,19 +300,51 @@ def validate_promotion_proposals(errors: list[str]) -> int:
             elif target.get("subjectDigest") != image_match.group("digest"):
                 errors.append(f"{label}: target subjectDigest does not bind imageRef")
 
-        previous = spec.get("previousRelease") or {}
-        expected_previous = {"releaseId", "subjectDigest"}
-        if not isinstance(previous, dict) or set(previous) != expected_previous:
-            errors.append(f"{label}: previousRelease must contain exactly {sorted(expected_previous)}")
+        rollback = spec.get("rollback") or {}
+        expected_rollback = {"strategy", "previousRelease", "bootstrapAction"}
+        if not isinstance(rollback, dict) or set(rollback) != expected_rollback:
+            errors.append(f"{label}: rollback must contain exactly {sorted(expected_rollback)}")
+        elif rollback.get("strategy") == "bootstrap":
+            if (
+                release_id != "v1.0.0"
+                or rollback.get("previousRelease") is not None
+                or rollback.get("bootstrapAction")
+                != "remove-development-selection-and-restore-blocked-zero-state"
+            ):
+                errors.append(f"{label}: bootstrap rollback is malformed")
+        elif rollback.get("strategy") == "previous-release":
+            previous = rollback.get("previousRelease") or {}
+            expected_previous = {"releaseId", "subjectDigest"}
+            if not isinstance(previous, dict) or set(previous) != expected_previous:
+                errors.append(
+                    f"{label}: previousRelease must contain exactly {sorted(expected_previous)}"
+                )
+            else:
+                previous_id = str(previous.get("releaseId", ""))
+                previous_digest = str(previous.get("subjectDigest", ""))
+                candidate_tuple = tuple(int(part) for part in release_id[1:].split("."))
+                previous_tuple = (
+                    tuple(int(part) for part in previous_id[1:].split("."))
+                    if RELEASE.fullmatch(previous_id)
+                    else candidate_tuple
+                )
+                if previous_tuple >= candidate_tuple:
+                    errors.append(
+                        f"{label}: previousRelease.releaseId must be an exact older release"
+                    )
+                if (
+                    not SHA256.fullmatch(previous_digest)
+                    or previous_digest == "sha256:" + "0" * 64
+                ):
+                    errors.append(
+                        f"{label}: previousRelease.subjectDigest must be one nonzero digest"
+                    )
+                if isinstance(target, dict) and previous_digest == target.get("subjectDigest"):
+                    errors.append(f"{label}: candidate and previous subject digests must differ")
+            if rollback.get("bootstrapAction") is not None:
+                errors.append(f"{label}: previous-release rollback forbids bootstrapAction")
         else:
-            previous_id = str(previous.get("releaseId", ""))
-            previous_digest = str(previous.get("subjectDigest", ""))
-            if not RELEASE.fullmatch(previous_id) or previous_id == release_id:
-                errors.append(f"{label}: previousRelease.releaseId must be an exact different release")
-            if not SHA256.fullmatch(previous_digest) or previous_digest == "sha256:" + "0" * 64:
-                errors.append(f"{label}: previousRelease.subjectDigest must be one nonzero digest")
-            if isinstance(target, dict) and previous_digest == target.get("subjectDigest"):
-                errors.append(f"{label}: candidate and previous subject digests must differ")
+            errors.append(f"{label}: rollback strategy is unsupported")
 
         evidence = spec.get("requiredEvidence")
         if (

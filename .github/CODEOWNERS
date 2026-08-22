@@ -17,6 +17,10 @@
 /scripts/validate-release-metadata.py @mindclade/platform @mindclade/security
 /scripts/verify-release-evidence.py @mindclade/platform @mindclade/security
 /scripts/validate-repository.py @mindclade/platform @mindclade/security
+/scripts/audit-production-estate.py @mindclade/platform @mindclade/security
+/scripts/deterministic-qualification-archive.py @mindclade/platform @mindclade/security
+/scripts/production_qualification.py @mindclade/platform @mindclade/security
+/qualification/         @mindclade/platform @mindclade/security
 
 # Admission policy. A constraint change alters what the cluster will accept, which is a
 # security decision regardless of who is making it.

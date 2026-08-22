@@ -7,7 +7,7 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: training-with-holdout
-  namespace: research-training
+  namespace: mindclade-training-h100
 spec:
   selector:
     matchLabels: {app: trainer}
@@ -15,10 +15,10 @@ spec:
     metadata:
       labels: {app: trainer}
     spec:
-      serviceAccountName: trainer
+      serviceAccountName: mindclade-training-h100
       containers:
         - name: trainer
-          image: europe-west4-docker.pkg.dev/mc/containers/trainer@sha256:0000000000000000000000000000000000000000000000000000000000000000
+          image: us-central1-docker.pkg.dev/mc/containers/trainer@sha256:0000000000000000000000000000000000000000000000000000000000000000
           volumeMounts:
             - name: holdout
               mountPath: /data/holdout
@@ -27,4 +27,4 @@ spec:
           csi:
             driver: gcsfuse.csi.storage.gke.io
             volumeAttributes:
-              bucketName: mc-holdout-eval
+              bucketName: mc-production-holdout

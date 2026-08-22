@@ -34,15 +34,9 @@ def repository_root() -> Path:
 
 
 def load_header(root: Path) -> tuple[str, str, str]:
-    candidates = (
-        root / "license-header.txt",
-        Path(__file__).with_name("license-header.txt"),
-    )
-    header_file = next((path for path in candidates if path.is_file()), None)
-    if header_file is None:
-        raise ValueError(
-            f"missing license header file; checked: {', '.join(map(str, candidates))}"
-        )
+    header_file = root / ".github" / "MINDCLADE_PROPRIETARY_SOURCE_HEADER.txt"
+    if not header_file.is_file():
+        raise ValueError(f"missing proprietary source-header template: {header_file}")
     lines = header_file.read_text(encoding="utf-8-sig").splitlines()[:3]
     if len(lines) != 3 or any(not line.rstrip("\r") for line in lines):
         raise ValueError(f"invalid three-line proprietary header: {header_file}")

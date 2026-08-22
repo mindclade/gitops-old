@@ -1,0 +1,284 @@
+---
+# Copyright © 2026 Mindclade, LLC. All Rights Reserved.
+# Mindclade Proprietary and Confidential.
+# SPDX-License-Identifier: LicenseRef-Mindclade-Proprietary
+
+name: Production qualification evidence
+
+on:
+  workflow_dispatch:
+    inputs:
+      request_path:
+        description: Reviewed request below qualification/requests on protected main.
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: production-qualification
+  cancel-in-progress: false
+
+jobs:
+  assemble:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    environment: production
+    permissions:
+      actions: read
+      contents: read
+      id-token: write
+    outputs:
+      qualification-id: ${{ steps.bundle.outputs.qualification-id }}
+      bundle-sha256: ${{ steps.bundle.outputs.bundle-sha256 }}
+      artifact-name: ${{ steps.bundle.outputs.artifact-name }}
+    steps:
+      - name: Require the protected default branch
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REF" = refs/heads/main || {
+            echo "::error::production qualification must run from refs/heads/main"
+            exit 1
+          }
+
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - uses: cachix/install-nix-action@630ae543ea3a38a9a4166f03376c02c50f408342  # v31.11.0
+        with:
+          extra_nix_config: |
+            experimental-features = nix-command flakes
+            accept-flake-config = false
+
+      - id: request
+        name: Validate the protected qualification request
+        env:
+          REQUEST_PATH: ${{ inputs.request_path }}
+        run: |
+          set -euo pipefail
+          absolute="$(realpath "$REQUEST_PATH")"
+          case "$absolute" in
+            "$GITHUB_WORKSPACE"/qualification/requests/*.json) ;;
+            *)
+              echo "::error::request_path must resolve below qualification/requests"
+              exit 1
+              ;;
+          esac
+          python3 scripts/production_qualification.py request "$absolute" > "$RUNNER_TEMP/request.json"
+          test "$(jq -r '.repositories.gitops' "$RUNNER_TEMP/request.json")" = "$GITHUB_SHA" || {
+            echo "::error::request GitOps commit must equal the workflow source commit"
+            exit 1
+          }
+          echo "path=$absolute" >> "$GITHUB_OUTPUT"
+          echo "qualification-id=$(jq -r .qualification_id "$RUNNER_TEMP/request.json")" >> "$GITHUB_OUTPUT"
+
+      - uses: google-github-actions/auth@7c6bc770dae815cd3e89ee6cdf493a5fab2cc093  # v3
+        with:
+          workload_identity_provider: ${{ vars.WIF_PROVIDER_PRODUCTION_QUALIFICATION }}
+          service_account: ${{ vars.SA_PRODUCTION_QUALIFICATION_READER }}
+
+      - id: pem
+        uses: google-github-actions/get-secretmanager-secrets@2b5f97c5a4b9c105e64646762ad4fc3f5128e6f5  # v2
+        with:
+          secrets: app_pem:${{ vars.PRODUCTION_QUALIFICATION_PROJECT }}/${{ vars.PRODUCTION_QUALIFICATION_PRIVATE_KEY_SECRET }}
+
+      - id: app-token
+        uses: actions/create-github-app-token@fee1f7d63c2ff003460e3d139729b119787bc349  # v2
+        with:
+          app-id: ${{ vars.PRODUCTION_QUALIFICATION_APP_ID }}
+          private-key: ${{ steps.pem.outputs.app_pem }}
+          owner: mindclade
+          repositories: .github,.github-private,bootstrap,github-config,infrastructure-live,gitops,mindclade-internal-monorepo
+
+      - name: Fetch exact protected-main sources and evidence
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          REQUEST: ${{ steps.request.outputs.path }}
+        run: |
+          set -euo pipefail
+          estate="$RUNNER_TEMP/estate"
+          evidence="$RUNNER_TEMP/evidence"
+          mkdir -p "$estate" "$evidence"
+          repos=(
+            .github
+            .github-private
+            bootstrap
+            github-config
+            infrastructure-live
+            gitops
+            mindclade-internal-monorepo
+          )
+          for repo in "${repos[@]}"; do
+            sha="$(jq -r --arg repo "$repo" '.repositories[$repo]' "$REQUEST")"
+            gh repo clone "mindclade/$repo" "$estate/$repo" -- \
+              --filter=blob:none --no-checkout
+            git -C "$estate/$repo" fetch --filter=blob:none origin main "$sha"
+            git -C "$estate/$repo" checkout --detach "$sha"
+            git -C "$estate/$repo" merge-base --is-ancestor "$sha" origin/main || {
+              echo "::error::$repo commit is not reachable from protected main"
+              exit 1
+            }
+          done
+
+          jq -c '.evidence_artifacts[]' "$REQUEST" | while IFS= read -r declaration; do
+            key="$(jq -r .key <<<"$declaration")"
+            repo="$(jq -r .repository <<<"$declaration")"
+            run_id="$(jq -r .run_id <<<"$declaration")"
+            name="$(jq -r .artifact_name <<<"$declaration")"
+            expected="$(jq -r .sha256 <<<"$declaration")"
+            run="$(gh api "repos/mindclade/$repo/actions/runs/$run_id")"
+            test "$(jq -r .conclusion <<<"$run")" = success || {
+              echo "::error::evidence run did not conclude successfully: $repo/$run_id"
+              exit 1
+            }
+            test "$(jq -r .head_sha <<<"$run")" = "$(jq -r --arg repo "$repo" '.repositories[$repo]' "$REQUEST")" || {
+              echo "::error::evidence run source differs: $repo/$run_id"
+              exit 1
+            }
+            ids="$(gh api --paginate \
+              "repos/mindclade/$repo/actions/runs/$run_id/artifacts?per_page=100" \
+              --jq ".artifacts[] | select(.name == \"$name\" and .expired == false) | .id")"
+            id_count="$(printf '%s\n' "$ids" | sed '/^$/d' | wc -l | tr -d ' ')"
+            test -n "$ids" && test "$id_count" = 1 || {
+              echo "::error::evidence artifact must resolve exactly once: $key"
+              exit 1
+            }
+            gh api "repos/mindclade/$repo/actions/artifacts/$ids/zip" > "$evidence/$key.zip"
+            actual="$(sha256sum "$evidence/$key.zip" | awk '{print $1}')"
+            test "$actual" = "$expected" || {
+              echo "::error::evidence artifact digest differs: $key"
+              exit 1
+            }
+          done
+
+      - name: Drop source-reader credentials
+        run: |
+          set -euo pipefail
+          if [ -n "${GOOGLE_GHA_CREDS_PATH:-}" ]; then
+            rm -f -- "$GOOGLE_GHA_CREDS_PATH"
+          fi
+          git config --global --unset-all credential.https://github.com.helper || true
+          {
+            echo 'CLOUDSDK_AUTH_CREDENTIAL_FILE_OVERRIDE='
+            echo 'GOOGLE_APPLICATION_CREDENTIALS='
+            echo 'GOOGLE_GHA_CREDS_PATH='
+            echo 'GH_TOKEN='
+          } >> "$GITHUB_ENV"
+
+      - id: bundle
+        name: Audit, archive, and assemble
+        env:
+          REQUEST: ${{ steps.request.outputs.path }}
+          QUALIFICATION_ID: ${{ steps.request.outputs.qualification-id }}
+        run: |
+          set -euo pipefail
+          estate="$RUNNER_TEMP/estate"
+          archives="$RUNNER_TEMP/source-archives"
+          output="$RUNNER_TEMP/qualification-output"
+          mkdir -p "$archives"
+          python3 scripts/audit-production-estate.py "$estate" \
+            --json "$RUNNER_TEMP/estate-audit.json" > /dev/null
+          for repo in .github .github-private bootstrap github-config infrastructure-live gitops mindclade-internal-monorepo; do
+            case "$repo" in
+              .github) name=dot-github ;;
+              .github-private) name=dot-github-private ;;
+              *) name="$repo" ;;
+            esac
+            sha="$(git -C "$estate/$repo" rev-parse HEAD)"
+            python3 scripts/deterministic-qualification-archive.py \
+              "$estate/$repo" "$archives/$name.zip" \
+              --prefix "mindclade-$name-$sha"
+          done
+          digest="$(python3 scripts/production_qualification.py assemble \
+            --request "$REQUEST" \
+            --estate "$estate" \
+            --source-archives "$archives" \
+            --evidence "$RUNNER_TEMP/evidence" \
+            --audit "$RUNNER_TEMP/estate-audit.json" \
+            --output "$output")"
+          python3 scripts/production_qualification.py verify "$output" >/dev/null
+          artifact="production-qualification-$QUALIFICATION_ID-$digest"
+          {
+            echo "qualification-id=$QUALIFICATION_ID"
+            echo "bundle-sha256=$digest"
+            echo "artifact-name=$artifact"
+          } >> "$GITHUB_OUTPUT"
+
+      - uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4  # v5
+        with:
+          name: ${{ steps.bundle.outputs.artifact-name }}
+          path: ${{ runner.temp }}/qualification-output/
+          retention-days: 30
+          if-no-files-found: error
+
+  publish:
+    needs: assemble
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    environment: production
+    permissions:
+      actions: read
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+
+      - uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0  # v5
+        with:
+          name: ${{ needs.assemble.outputs.artifact-name }}
+          path: ${{ runner.temp }}/qualification-output
+
+      - name: Independently verify the downloaded bundle
+        env:
+          EXPECTED: ${{ needs.assemble.outputs.bundle-sha256 }}
+        run: |
+          set -euo pipefail
+          actual="$(python3 scripts/production_qualification.py verify \
+            "$RUNNER_TEMP/qualification-output")"
+          test "$actual" = "$EXPECTED"
+
+      - uses: google-github-actions/auth@7c6bc770dae815cd3e89ee6cdf493a5fab2cc093  # v3
+        with:
+          workload_identity_provider: ${{ vars.WIF_PROVIDER_PRODUCTION_QUALIFICATION }}
+          service_account: ${{ vars.SA_PRODUCTION_QUALIFICATION_WRITER }}
+
+      - uses: google-github-actions/setup-gcloud@9d3a10fd1bfc75d8f4817cce8a2dcd3681293c7a  # v3
+
+      - name: Publish with create-only preconditions and verify metadata
+        env:
+          BUCKET: ${{ vars.PRODUCTION_QUALIFICATION_BUCKET }}
+          QUALIFICATION_ID: ${{ needs.assemble.outputs.qualification-id }}
+          BUNDLE_SHA256: ${{ needs.assemble.outputs.bundle-sha256 }}
+        run: |
+          set -euo pipefail
+          root="$RUNNER_TEMP/qualification-output"
+          prefix="production-qualification/$QUALIFICATION_ID/$BUNDLE_SHA256"
+          while IFS= read -r -d '' path; do
+            relative="${path#"$root/"}"
+            digest="$(sha256sum "$path" | awk '{print $1}')"
+            target="gs://$BUCKET/$prefix/$relative"
+            if remote="$(gcloud storage objects describe "$target" --format=json 2>/dev/null)"; then
+              test "$(jq -r '.metadata.sha256' <<<"$remote")" = "$digest"
+              remote_digest="$(gcloud storage cat "$target" | sha256sum | awk '{print $1}')"
+              test "$remote_digest" = "$digest" || {
+                echo "::error::existing immutable evidence object differs: $target"
+                exit 1
+              }
+            else
+              gcloud storage cp \
+                --if-generation-match=0 \
+                --custom-metadata="sha256=$digest" \
+                "$path" "$target"
+            fi
+            remote="$(gcloud storage objects describe "$target" --format=json)"
+            test "$(jq -r '.metadata.sha256' <<<"$remote")" = "$digest"
+          done < <(find "$root" -type f -print0 | sort -z)
+
+          echo "Published immutable evidence: gs://$BUCKET/$prefix/" >> "$GITHUB_STEP_SUMMARY"

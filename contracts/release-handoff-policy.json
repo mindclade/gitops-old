@@ -3,9 +3,9 @@
   "consumer_contract_version": "4.0.0",
   "source_repository": "mindclade/mindclade-internal-monorepo",
   "signer_workflow_refs": {
-    "build": "mindclade/.github/.github/workflows/reusable-arc-oci-build.yml@refs/tags/v4.0.0",
-    "qualification": "mindclade/.github/.github/workflows/reusable-arc-qualification-attest.yml@refs/tags/v4.0.0",
-    "deployment": "mindclade/.github/.github/workflows/reusable-binauthz-sign.yml@refs/tags/v4.0.0"
+    "build": "mindclade/.github/.github/workflows/reusable-arc-oci-build.yml@refs/tags/v5.0.0",
+    "qualification": "mindclade/.github/.github/workflows/reusable-arc-qualification-attest.yml@refs/tags/v5.0.0",
+    "deployment": "mindclade/.github/.github/workflows/reusable-binauthz-sign.yml@refs/tags/v5.0.0"
   },
   "evidence_retention": {
     "nonproduction": "P1Y",

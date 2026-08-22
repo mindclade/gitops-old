@@ -10,3 +10,8 @@ phase contains the other 43 upstream objects, deletes the Namespace owned by the
 foundation Application, pins all three images by digest, and applies reviewed availability,
 resource, and system-node patches. `scripts/validate-cert-manager-vendor.py` proves phase hashes,
 6+43 parity, normalized 49-object identity, disjointness, Kustomize renderability, and image locks.
+
+The vendored release remains governed by the upstream Apache License 2.0. The
+controlling text is preserved at [LICENSE](LICENSE); the lock file identifies
+the exact release and payload digests. Do not add Mindclade proprietary headers
+to these upstream files.

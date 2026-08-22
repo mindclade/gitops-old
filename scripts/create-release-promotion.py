@@ -40,6 +40,7 @@ REQUIRED_EVIDENCE = sorted(
         "release-evidence-retention",
         "release-evidence-v1",
         "release-metadata-4.0.0",
+        "rollback",
         "sbom",
         "vulnerability-scan",
     }
@@ -60,8 +61,11 @@ def main() -> int:
     parser.add_argument("--image-ref", required=True)
     parser.add_argument("--source-sha", required=True)
     parser.add_argument("--producer-evidence-digest", required=True)
-    parser.add_argument("--previous-release-id", required=True)
-    parser.add_argument("--previous-subject-digest", required=True)
+    parser.add_argument(
+        "--rollback-strategy", choices=("bootstrap", "previous-release"), required=True
+    )
+    parser.add_argument("--previous-release-id")
+    parser.add_argument("--previous-subject-digest")
     args = parser.parse_args()
 
     if not RELEASE.fullmatch(args.release_id):
@@ -70,17 +74,31 @@ def main() -> int:
         raise ValueError("source-sha must be a full lowercase commit SHA")
     if not DIGEST.fullmatch(args.producer_evidence_digest):
         raise ValueError("producer-evidence-digest must be one canonical SHA-256 digest")
-    if not RELEASE.fullmatch(args.previous_release_id):
-        raise ValueError("previous-release-id must be vX.Y.Z")
-    if args.previous_release_id == args.release_id:
-        raise ValueError("previous-release-id must differ from release-id")
-    if (
-        not DIGEST.fullmatch(args.previous_subject_digest)
-        or args.previous_subject_digest == "sha256:" + "0" * 64
-    ):
-        raise ValueError(
-            "previous-subject-digest must be a nonzero canonical SHA-256 digest"
-        )
+    previous_release: dict[str, str] | None = None
+    if args.rollback_strategy == "bootstrap":
+        if args.release_id != "v1.0.0":
+            raise ValueError("bootstrap rollback is permitted only for v1.0.0")
+        if args.previous_release_id is not None or args.previous_subject_digest is not None:
+            raise ValueError("bootstrap rollback forbids previous release lineage")
+    else:
+        if not args.previous_release_id or not RELEASE.fullmatch(args.previous_release_id):
+            raise ValueError("previous-release-id must be vX.Y.Z")
+        candidate = tuple(int(part) for part in args.release_id[1:].split("."))
+        previous = tuple(int(part) for part in args.previous_release_id[1:].split("."))
+        if previous >= candidate:
+            raise ValueError("previous-release-id must be older than release-id")
+        if (
+            not args.previous_subject_digest
+            or not DIGEST.fullmatch(args.previous_subject_digest)
+            or args.previous_subject_digest == "sha256:" + "0" * 64
+        ):
+            raise ValueError(
+                "previous-subject-digest must be a nonzero canonical SHA-256 digest"
+            )
+        previous_release = {
+            "releaseId": args.previous_release_id,
+            "subjectDigest": args.previous_subject_digest,
+        }
     match = IMAGE.fullmatch(args.image_ref)
     if match is None:
         raise ValueError("image-ref must identify one digest in the CI releases repository")
@@ -107,9 +125,14 @@ def main() -> int:
         },
         "sourceRepository": "mindclade/mindclade-internal-monorepo",
         "sourceRevision": args.source_sha,
-        "previousRelease": {
-            "releaseId": args.previous_release_id,
-            "subjectDigest": args.previous_subject_digest,
+        "rollback": {
+            "strategy": args.rollback_strategy,
+            "previousRelease": previous_release,
+            "bootstrapAction": (
+                "remove-development-selection-and-restore-blocked-zero-state"
+                if args.rollback_strategy == "bootstrap"
+                else None
+            ),
         },
         "targetEnvironment": "development",
         "requiredEvidence": REQUIRED_EVIDENCE,
@@ -120,7 +143,7 @@ def main() -> int:
         ).encode("utf-8")
     ).hexdigest()
     proposal = {
-        "apiVersion": "release.mindclade.dev/v1beta1",
+        "apiVersion": "release.mindclade.dev/v1beta2",
         "kind": "PromotionProposal",
         "metadata": {
             "name": args.release_id,

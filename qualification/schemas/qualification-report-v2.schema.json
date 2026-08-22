@@ -1,0 +1,130 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://mindclade.dev/schemas/qualification-report-v2.schema.json",
+  "title": "Mindclade production qualification report v2",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "status",
+    "qualification_id",
+    "change_reference",
+    "generated_at",
+    "qualification_level",
+    "scope",
+    "repositories",
+    "checks",
+    "module_references",
+    "drill_evidence",
+    "connected_boundary",
+    "artifacts"
+  ],
+  "properties": {
+    "schema_version": {"const": 2},
+    "status": {"type": "string", "enum": ["PASS", "FAIL", "BLOCKED"]},
+    "qualification_id": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9-]{5,63}$"
+    },
+    "change_reference": {
+      "type": "string",
+      "pattern": "^(CHG|SEC|DR)-[A-Za-z0-9._-]+$"
+    },
+    "generated_at": {"type": "string", "format": "date-time"},
+    "qualification_level": {"type": "string", "enum": ["diagnostic", "source", "connected-plan", "staging", "production"]},
+    "scope": {"type": "array", "minItems": 1, "items": {"type": "string", "minLength": 1}},
+    "repositories": {
+      "type": "array",
+      "minItems": 7,
+      "maxItems": 7,
+      "uniqueItems": true,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["name", "commit", "clean_before", "clean_after"],
+        "properties": {
+          "name": {
+            "enum": [
+              ".github",
+              ".github-private",
+              "bootstrap",
+              "github-config",
+              "infrastructure-live",
+              "gitops",
+              "mindclade-internal-monorepo"
+            ]
+          },
+          "commit": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
+          "clean_before": {"type": "boolean"},
+          "clean_after": {"type": "boolean"}
+        }
+      }
+    },
+    "checks": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["name", "status", "command", "detail"],
+        "properties": {
+          "name": {"type": "string", "minLength": 1},
+          "status": {"type": "string", "enum": ["pass", "fail", "blocked", "not-run"]},
+          "command": {"type": "string", "minLength": 1},
+          "detail": {"type": "string", "minLength": 1}
+        }
+      }
+    },
+    "module_references": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["unit", "source", "version", "qualified"],
+        "properties": {
+          "unit": {"type": "string", "minLength": 1},
+          "source": {"type": "string", "minLength": 1},
+          "version": {"type": "string", "pattern": "^v[0-9]+[.][0-9]+[.][0-9]+$"},
+          "qualified": {"type": "boolean"}
+        }
+      }
+    },
+    "drill_evidence": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["drill_id", "report_uri", "sha256", "result"],
+        "properties": {
+          "drill_id": {"type": "string", "minLength": 1},
+          "report_uri": {"type": "string", "pattern": "^(gs://|https://github[.]com/).+"},
+          "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+          "result": {"type": "string", "enum": ["pass", "partial", "fail"]}
+        }
+      }
+    },
+    "connected_boundary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["performed", "environments", "mutations", "detail"],
+      "properties": {
+        "performed": {"type": "boolean"},
+        "environments": {"type": "array", "items": {"type": "string", "enum": ["scratch", "development", "staging", "production"]}},
+        "mutations": {"type": "array", "items": {"type": "string", "minLength": 1}},
+        "detail": {"type": "string", "minLength": 1}
+      }
+    },
+    "artifacts": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["path", "sha256"],
+        "properties": {
+          "path": {"type": "string", "minLength": 1},
+          "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+        }
+      }
+    }
+  }
+}

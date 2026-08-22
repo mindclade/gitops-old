@@ -39,13 +39,14 @@ class PromotionTest(unittest.TestCase):
                     "--image-ref", f"us-central1-docker.pkg.dev/mc-common-ci/releases/go-vanity@{digest}",
                     "--source-sha", "a" * 40,
                     "--producer-evidence-digest", EVIDENCE_DIGEST,
+                    "--rollback-strategy", "previous-release",
                     "--previous-release-id", "v1.2.2",
                     "--previous-subject-digest", previous_subject,
                 ),
                 0,
             )
             text = (root / "deployments/proposals/v1.2.3.yaml").read_text()
-            self.assertIn("apiVersion: release.mindclade.dev/v1beta1", text)
+            self.assertIn("apiVersion: release.mindclade.dev/v1beta2", text)
             self.assertIn("application: platform-go-vanity", text)
             self.assertIn("releaseId: v1.2.2", text)
             self.assertIn(f"subjectDigest: {previous_subject}", text)
@@ -65,6 +66,7 @@ class PromotionTest(unittest.TestCase):
                     "--image-ref", "us-central1-docker.pkg.dev/mc-common-ci/releases/injected@sha256:" + "1" * 64,
                     "--source-sha", "a" * 40,
                     "--producer-evidence-digest", EVIDENCE_DIGEST,
+                    "--rollback-strategy", "previous-release",
                     "--previous-release-id", "v1.2.2",
                     "--previous-subject-digest", "sha256:" + "2" * 64,
                 )
@@ -84,13 +86,14 @@ class PromotionTest(unittest.TestCase):
                     "--image-ref", "us-central1-docker.pkg.dev/mc-common-ci/releases/go-vanity@sha256:" + "1" * 64,
                     "--source-sha", "a" * 40,
                     "--producer-evidence-digest", EVIDENCE_DIGEST,
+                    "--rollback-strategy", "previous-release",
                     "--previous-release-id", "v1.2.2",
                     "--previous-subject-digest", "sha256:" + "2" * 64,
                 )
 
     def test_rejects_missing_rollback_lineage(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
-            with self.assertRaisesRegex(ValueError, "previous-release-id must differ"):
+            with self.assertRaisesRegex(ValueError, "previous-release-id must be older"):
                 self.run_main(
                     Path(directory),
                     "--release-id", "v1.2.3",
@@ -99,6 +102,7 @@ class PromotionTest(unittest.TestCase):
                     "--image-ref", "us-central1-docker.pkg.dev/mc-common-ci/releases/go-vanity@sha256:" + "1" * 64,
                     "--source-sha", "a" * 40,
                     "--producer-evidence-digest", EVIDENCE_DIGEST,
+                    "--rollback-strategy", "previous-release",
                     "--previous-release-id", "v1.2.3",
                     "--previous-subject-digest", "sha256:" + "2" * 64,
                 )
@@ -114,6 +118,7 @@ class PromotionTest(unittest.TestCase):
                     "--image-ref", "us-central1-docker.pkg.dev/mc-common-ci/releases/go-vanity@sha256:" + "1" * 64,
                     "--source-sha", "a" * 40,
                     "--producer-evidence-digest", EVIDENCE_DIGEST,
+                    "--rollback-strategy", "previous-release",
                     "--previous-release-id", "v1.2.2",
                     "--previous-subject-digest", "sha256:" + "2" * 64,
                 )
@@ -126,6 +131,7 @@ class PromotionTest(unittest.TestCase):
             "--image-ref", "us-central1-docker.pkg.dev/mc-common-ci/releases/go-vanity@sha256:" + "1" * 64,
             "--source-sha", "a" * 40,
             "--producer-evidence-digest", EVIDENCE_DIGEST,
+            "--rollback-strategy", "previous-release",
             "--previous-release-id", "v1.2.2",
             "--previous-subject-digest", "sha256:" + "2" * 64,
         )
@@ -135,6 +141,31 @@ class PromotionTest(unittest.TestCase):
             first_bytes = Path(first, "deployments/proposals/v1.2.3.yaml").read_bytes()
             second_bytes = Path(second, "deployments/proposals/v1.2.3.yaml").read_bytes()
             self.assertEqual(first_bytes, second_bytes)
+
+    def test_bootstrap_first_release_has_no_previous_lineage(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            digest = "sha256:" + "1" * 64
+            self.assertEqual(
+                self.run_main(
+                    root,
+                    "--release-id", "v1.0.0",
+                    "--application", "platform-go-vanity",
+                    "--release-kind", "application",
+                    "--image-ref", f"us-central1-docker.pkg.dev/mc-common-ci/releases/go-vanity@{digest}",
+                    "--source-sha", "a" * 40,
+                    "--producer-evidence-digest", EVIDENCE_DIGEST,
+                    "--rollback-strategy", "bootstrap",
+                ),
+                0,
+            )
+            text = (root / "deployments/proposals/v1.0.0.yaml").read_text()
+            self.assertIn("strategy: bootstrap", text)
+            self.assertIn("previousRelease: null", text)
+            self.assertIn(
+                "bootstrapAction: remove-development-selection-and-restore-blocked-zero-state",
+                text,
+            )
 
 
 if __name__ == "__main__":

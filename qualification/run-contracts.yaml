@@ -16,13 +16,13 @@ spec:
   clusters:
     - id: development-platform
       qualificationRole: combined
-      allowedProfiles: [cpu, h100, h200]
+      allowedProfiles: [cpu, h100, b200]
       selectedProfile: null
       runId: null
       state: blocked
     - id: production-compute
       qualificationRole: compute
-      allowedProfiles: [cpu, h100, h200]
+      allowedProfiles: [cpu, h100, b200]
       selectedProfile: null
       runId: null
       state: blocked
@@ -34,7 +34,7 @@ spec:
       state: blocked
     - id: staging-compute
       qualificationRole: compute
-      allowedProfiles: [cpu, h100, h200]
+      allowedProfiles: [cpu, h100, b200]
       selectedProfile: null
       runId: null
       state: blocked

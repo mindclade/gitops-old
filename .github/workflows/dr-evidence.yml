@@ -1,0 +1,42 @@
+---
+# Copyright © 2026 Mindclade, LLC. All Rights Reserved.
+# Mindclade Proprietary and Confidential.
+# SPDX-License-Identifier: LicenseRef-Mindclade-Proprietary
+
+name: Publish DR evidence
+
+on:
+  workflow_dispatch:
+    inputs:
+      report_path:
+        description: Repository-relative path to the completed report v2.
+        required: true
+        type: string
+      environment:
+        description: Protected drill environment.
+        required: true
+        type: choice
+        options:
+          - scratch
+          - staging
+      observer_operator:
+        description: GitHub login of the independent drill observer.
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  publish:
+    uses: mindclade/.github/.github/workflows/reusable-dr-evidence.yml@v5.0.0
+    with:
+      report-path: ${{ inputs.report_path }}
+      environment: ${{ inputs.environment }}
+      primary-operator: ${{ github.actor }}
+      observer-operator: ${{ inputs.observer_operator }}
+    permissions:
+      actions: read
+      contents: read
+      id-token: write

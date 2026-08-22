@@ -18,4 +18,4 @@ spec:
       serviceAccountName: app
       containers:
         - name: app
-          image: europe-west4-docker.pkg.dev/mc/containers/app@sha256:not-a-digest
+          image: us-central1-docker.pkg.dev/mc/containers/app@sha256:not-a-digest

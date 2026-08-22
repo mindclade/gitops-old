@@ -1,0 +1,39 @@
+Mindclade, LLC. Proprietary and Third-Party Notice
+
+Document-Control: mindclade-notice@1
+Repository: mindclade/gitops
+Last reviewed: August 21, 2026
+
+Copyright © 2026 Mindclade, LLC. All Rights Reserved.
+
+First-party material in this repository is governed by the accompanying LICENSE
+and identified by SPDX-License-Identifier: LicenseRef-Mindclade-Proprietary.
+No permission to use Mindclade names, logos, marks, or trade dress is granted.
+
+Third-party controllers, charts, container images, tools, actions,
+specifications, and other independently licensed material retain their own
+copyright, license, attribution, patent, and acceptable-use terms. Those terms
+control for that material. Vendored provenance, immutable image selections,
+lockfiles, release SBOMs, and license evidence identify the applicable
+dependency set. An omitted entry in this NOTICE does not relicense third-party
+material or remove an attribution obligation.
+
+Vendored distributions in this repository include:
+
+- GitHub Actions Runner Controller chart release 0.14.2, Apache License 2.0,
+  copyright 2019 Moto Ishizawa. The controlling text is vendor/arc/LICENSE;
+  vendor/arc/provenance.json identifies the immutable upstream artifacts.
+- cert-manager static release v1.19.1, Apache License 2.0. The controlling text
+  is vendor/cert-manager/LICENSE; contracts/cert-manager-v1.19.1.lock.yaml
+  identifies the immutable upstream release and payload digests.
+
+Portions of CODE_OF_CONDUCT.md are adapted from Contributor Covenant version
+2.1, copyright © 2020 Organization for Ethical Source, under Creative Commons
+Attribution 4.0 (https://creativecommons.org/licenses/by/4.0/). Mindclade
+modified the scope, reporting, enforcement, and project-specific language. The
+Creative Commons license controls the upstream portions; the Mindclade LICENSE
+does not narrow the rights granted by that license.
+
+Do not remove or alter copyright, SPDX, attribution, provenance, or license
+notices. Distributed artifacts must carry the LICENSE, this NOTICE, an SBOM,
+and all third-party notices required by their included components.
