@@ -10,6 +10,8 @@ not reconstructed or relabeled here.
 
 ### Added
 
+- Restored a tested source-authority gate that freezes the sole legacy monorepo GitOps package
+  to `v0.1.1` and requires new render targets to use reusable `infra/kubernetes/**` packages.
 - Added the exact estate-wide `LEGAL.md` reliance policy and made it part of
   the repository contract.
 - Preserved and digest-pinned the upstream Apache-2.0 license texts beside the
