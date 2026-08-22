@@ -1,0 +1,21 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://mindclade.dev/contracts/evidence/exception/v1",
+  "title": "Controlled production-evidence exception",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "exception_id", "control_id", "subject_digest", "owner", "scope", "reason", "approved_by", "issued_at", "expires_at", "status"],
+  "properties": {
+    "schema_version": {"const": "mindclade.dev/evidence-exception/v1"},
+    "exception_id": {"type": "string", "pattern": "^exc_[a-z0-9]{16,64}$"},
+    "control_id": {"$ref": "common.schema.json#/$defs/canonicalName"},
+    "subject_digest": {"$ref": "common.schema.json#/$defs/digest"},
+    "owner": {"$ref": "common.schema.json#/$defs/canonicalName"},
+    "scope": {"type": "string", "minLength": 1, "maxLength": 512},
+    "reason": {"type": "string", "minLength": 1, "maxLength": 1024},
+    "approved_by": {"type": "array", "minItems": 2, "maxItems": 8, "uniqueItems": true, "items": {"$ref": "common.schema.json#/$defs/canonicalName"}},
+    "issued_at": {"$ref": "common.schema.json#/$defs/timestamp"},
+    "expires_at": {"$ref": "common.schema.json#/$defs/timestamp"},
+    "status": {"enum": ["active", "revoked"]}
+  }
+}

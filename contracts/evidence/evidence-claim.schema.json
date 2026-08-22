@@ -1,0 +1,21 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://mindclade.dev/contracts/evidence/claim/v1",
+  "title": "Enterprise evidence claim",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "claim_digest", "subject_kind", "subject_digest", "control_id", "owner", "scope", "artifact", "source_authority", "issued_at", "valid_until"],
+  "properties": {
+    "schema_version": {"const": "mindclade.dev/evidence-claim/v1"},
+    "claim_digest": {"$ref": "common.schema.json#/$defs/digest"},
+    "subject_kind": {"$ref": "common.schema.json#/$defs/canonicalName"},
+    "subject_digest": {"$ref": "common.schema.json#/$defs/digest"},
+    "control_id": {"$ref": "common.schema.json#/$defs/canonicalName"},
+    "owner": {"$ref": "common.schema.json#/$defs/canonicalName"},
+    "scope": {"type": "string", "minLength": 1, "maxLength": 512},
+    "artifact": {"$ref": "common.schema.json#/$defs/artifact"},
+    "source_authority": {"$ref": "common.schema.json#/$defs/canonicalName"},
+    "issued_at": {"$ref": "common.schema.json#/$defs/timestamp"},
+    "valid_until": {"$ref": "common.schema.json#/$defs/timestamp"}
+  }
+}

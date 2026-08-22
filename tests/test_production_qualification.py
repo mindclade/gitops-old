@@ -27,6 +27,9 @@ SPEC.loader.exec_module(QUALIFICATION)
 
 def request_payload() -> dict:
     commits = {repository: "a" * 40 for repository in QUALIFICATION.REPOSITORIES}
+    controls = QUALIFICATION.production_eligibility.load_policy(
+        ROOT / "contracts/evidence/production-controls.json"
+    )["controls"]
     return {
         "schema_version": 1,
         "qualification_id": "prod-qualification-20260821",
@@ -36,12 +39,18 @@ def request_payload() -> dict:
         "repositories": commits,
         "checks": [
             {
-                "name": "connected-control-plane",
+                "name": f"connected-{control['id'].replace('_', '-')}",
+                "control_id": control["id"],
                 "status": "pass",
                 "command": "make qualify-connected",
                 "detail": "Protected staging and production checks passed.",
-                "evidence_key": "connected-control-plane",
+                "evidence_key": (
+                    "infrastructure-control-plane-handoff"
+                    if control["id"] == "github_protections"
+                    else "connected-control-plane"
+                ),
             }
+            for control in controls
         ],
         "module_references": [
             {
@@ -72,7 +81,14 @@ def request_payload() -> dict:
                 "run_id": 12345,
                 "artifact_name": "connected-control-plane-12345",
                 "sha256": "c" * 64,
-            }
+            },
+            {
+                "key": "infrastructure-control-plane-handoff",
+                "repository": "infrastructure-live",
+                "run_id": 23456,
+                "artifact_name": "infrastructure-control-plane-handoff-23456",
+                "sha256": "d" * 64,
+            },
         ],
     }
 
@@ -99,6 +115,7 @@ class RequestContractTest(unittest.TestCase):
     def test_request_mutations_fail_closed(self) -> None:
         mutations = (
             ("failed check", lambda value: value["checks"][0].update(status="fail")),
+            ("missing control", lambda value: value["checks"].pop()),
             ("missing repository", lambda value: value["repositories"].pop("bootstrap")),
             (
                 "unsafe artifact name",
@@ -167,7 +184,41 @@ class DeterministicAssemblyTest(unittest.TestCase):
                 self.git(checkout, "config", "user.name", "Qualification Test")
                 self.git(checkout, "config", "user.email", "test@mindclade.invalid")
                 (checkout / "README.md").write_text(repository + "\n", encoding="utf-8")
-                self.git(checkout, "add", "README.md")
+                if repository == ".github":
+                    policy = checkout / "contracts/evidence/production-controls.json"
+                    policy.parent.mkdir(parents=True)
+                    policy.write_bytes(
+                        (ROOT / "contracts/evidence/production-controls.json").read_bytes()
+                    )
+                    manifest = checkout / "contracts/policy-bundle/manifest.json"
+                    manifest.parent.mkdir(parents=True)
+                    manifest.write_text('{"version":"fixture"}\n', encoding="utf-8")
+                if repository == "gitops":
+                    rendered = checkout / "rendered/production"
+                    rendered.mkdir(parents=True)
+                    (rendered / "manifests.yaml").write_text(
+                        "apiVersion: v1\nkind: ConfigMap\nmetadata: {name: fixture}\n",
+                        encoding="utf-8",
+                    )
+                    releases = checkout / "releases/platform-fixture"
+                    releases.mkdir(parents=True)
+                    (releases / "v1.json").write_text(
+                        json.dumps({"subject": {"digest": "sha256:" + "e" * 64}}),
+                        encoding="utf-8",
+                    )
+                    deployments = checkout / "deployments"
+                    deployments.mkdir()
+                    (deployments / "production.yaml").write_text(
+                        "apiVersion: mindclade.dev/v2\n"
+                        "kind: ArtifactDeploymentSet\n"
+                        "spec:\n"
+                        "  environment: production\n"
+                        "  applications:\n"
+                        "    - name: platform-fixture\n"
+                        "      releaseMetadata: releases/platform-fixture/v1.json\n",
+                        encoding="utf-8",
+                    )
+                self.git(checkout, "add", ".")
                 subprocess.run(
                     ["git", "-C", str(checkout), "commit", "-q", "-m", "fixture"],
                     check=True,
@@ -186,6 +237,11 @@ class DeterministicAssemblyTest(unittest.TestCase):
             write_zip(evidence_zip)
             payload["evidence_artifacts"][0]["sha256"] = QUALIFICATION.sha256(
                 evidence_zip
+            )
+            handoff_zip = evidence / "infrastructure-control-plane-handoff.zip"
+            write_zip(handoff_zip, "handoff.json")
+            payload["evidence_artifacts"][1]["sha256"] = QUALIFICATION.sha256(
+                handoff_zip
             )
             request = root / "request.json"
             request.write_text(json.dumps(payload), encoding="utf-8")

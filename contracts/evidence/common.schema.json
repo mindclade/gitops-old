@@ -1,0 +1,19 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://mindclade.dev/contracts/evidence/common/v1",
+  "$defs": {
+    "digest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "canonicalName": {"type": "string", "pattern": "^[a-z][a-z0-9_.-]{1,127}$"},
+    "timestamp": {"type": "string", "format": "date-time"},
+    "artifact": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["uri", "digest", "media_type"],
+      "properties": {
+        "uri": {"type": "string", "pattern": "^(gs|https|oci)://", "maxLength": 2048},
+        "digest": {"$ref": "#/$defs/digest"},
+        "media_type": {"type": "string", "minLength": 3, "maxLength": 128}
+      }
+    }
+  }
+}

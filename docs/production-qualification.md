@@ -65,6 +65,14 @@ IDs, Argo revision/health, SSO and RBAC outcomes, rollback/freeze/recovery resul
 revalidation date in the approved evidence system. Never commit plans, state, credentials, tokens,
 kubeconfigs, or sensitive logs.
 
+The protected workflow converts every successful connected check into a canonical evidence claim
+and policy-bound verification for the exact deployment-bundle digest. The evaluator uses a
+ten-minute keyless IAP credential to submit those records, requests one eligibility decision, and
+accepts only an exact `eligible` result covering every active control. Both the evaluator and the
+separate archive writer verify the Ed25519 signature against the immutable Cloud KMS key version;
+the writer then publishes the response create-only beneath the qualification bundle. A stale,
+revoked, incomplete, tampered, unsigned, or differently keyed decision is a hard failure.
+
 The disposition is `PASS` only when all source and connected gates pass. Use
 `PASS_WITH_DEPLOYMENT_PREFLIGHT` while a protected apply or drill remains, and `BLOCKED` when the
 required protected path or evidence cannot be obtained without weakening a control.
