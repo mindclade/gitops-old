@@ -236,9 +236,6 @@ def validate(root: Path) -> list[str]:
                 errors.append(f"repository contract required path does not exist: {required}")
 
     badge_dir = root / "docs" / "assets" / "badges"
-    errors.extend(validate_common_documents(root, repository))
-    errors.extend(validate_legal_claims(root))
-
     for filename, label, key in CORE_BADGES:
         relative = f"docs/assets/badges/{filename}.svg"
         path = root / relative

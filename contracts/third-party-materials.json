@@ -1,0 +1,46 @@
+{
+  "schemaVersion": 1,
+  "repository": "mindclade/gitops",
+  "inventorySources": [
+    {
+      "type": "vendored-provenance",
+      "path": "vendor/arc/provenance.json",
+      "sha256": "87a041663174b27c119c77382684ce24884ade2a7e1e69406b98ef4b49bbce71"
+    },
+    {
+      "type": "lockfile",
+      "path": "contracts/cert-manager-v1.19.1.lock.yaml",
+      "sha256": "5bbb9bc86670a9501a41e99f1fa11fadd2a4f1e508989e8a4ddbddd7e36ccb55"
+    }
+  ],
+  "materials": [
+    {
+      "name": "GitHub Actions Runner Controller charts",
+      "version": "0.14.2",
+      "licenseExpression": "Apache-2.0",
+      "attribution": "Copyright 2019 Moto Ishizawa and Actions Runner Controller contributors.",
+      "sourceUrl": "https://github.com/actions/actions-runner-controller",
+      "licenseText": {
+        "path": "vendor/arc/LICENSE",
+        "sha256": "f79217eb1b3010c0d387f945fb1142a5bc14de8a8b550dfd6b5c16d59b6eadbe"
+      },
+      "includedPaths": ["vendor/arc/0.14.2/gha-runner-scale-set", "vendor/arc/0.14.2/gha-runner-scale-set-controller"],
+      "evidencePaths": ["vendor/arc/provenance.json"],
+      "sbomNames": ["gha-runner-scale-set", "gha-runner-scale-set-controller"]
+    },
+    {
+      "name": "cert-manager",
+      "version": "v1.19.1",
+      "licenseExpression": "Apache-2.0",
+      "attribution": "Copyright The cert-manager Authors.",
+      "sourceUrl": "https://github.com/cert-manager/cert-manager",
+      "licenseText": {
+        "path": "vendor/cert-manager/LICENSE",
+        "sha256": "c71d239df91726fc519c6eb72d318ec65820627232b2f796219e87dcf35d0ab4"
+      },
+      "includedPaths": ["vendor/cert-manager/v1.19.1"],
+      "evidencePaths": ["contracts/cert-manager-v1.19.1.lock.yaml"],
+      "sbomNames": ["cert-manager"]
+    }
+  ]
+}
