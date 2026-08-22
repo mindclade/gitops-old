@@ -1,0 +1,105 @@
+{
+  "schemaVersion": 1,
+  "bundleId": "mindclade-policy-bundle",
+  "version": "2026.08.21.1",
+  "effectiveDate": "2026-08-21",
+  "canonicalRepository": "mindclade/.github",
+  "licenseExpression": "LicenseRef-Mindclade-Proprietary",
+  "signature": {
+    "required": true,
+    "method": "github-artifact-attestation-sigstore",
+    "workflow": ".github/workflows/publish-policy-bundle.yml",
+    "protectedEnvironment": "workflow-release-security"
+  },
+  "artifacts": [
+    {
+      "name": "proprietary-license",
+      "source": "LICENSE",
+      "sha256": "a3fe40dac91dfc0c71eb8dc8ceb1c7b606ab8bc5fe26e09b8e53f6b9f8c8d57f",
+      "mediaType": "text/plain",
+      "distributions": [
+        {"repository": ".github-private", "path": "LICENSE"},
+        {"repository": "bootstrap", "path": "LICENSE"},
+        {"repository": "github-config", "path": "LICENSE"},
+        {"repository": "gitops", "path": "LICENSE"},
+        {"repository": "infrastructure-live", "path": "LICENSE"},
+        {"repository": "mindclade-internal-monorepo", "path": "LICENSE"}
+      ]
+    },
+    {
+      "name": "legal-and-reliance-policy",
+      "source": "LEGAL.md",
+      "sha256": "65e8f593ad0927cdc5b6c1daceeae8ed14d0ac73f85ff1fc40db046387f01231",
+      "mediaType": "text/markdown",
+      "distributions": [
+        {"repository": ".github-private", "path": "LEGAL.md"},
+        {"repository": "bootstrap", "path": "LEGAL.md"},
+        {"repository": "github-config", "path": "LEGAL.md"},
+        {"repository": "gitops", "path": "LEGAL.md"},
+        {"repository": "infrastructure-live", "path": "LEGAL.md"},
+        {"repository": "mindclade-internal-monorepo", "path": "LEGAL.md"}
+      ]
+    },
+    {
+      "name": "conduct-policy",
+      "source": "CODE_OF_CONDUCT.md",
+      "sha256": "676edfffba55165ce25919f1a2d2a0b336e13a331bb4d5c47c8dcb20ca9872a9",
+      "mediaType": "text/markdown",
+      "distributions": [
+        {"repository": ".github-private", "path": "CODE_OF_CONDUCT.md"},
+        {"repository": "bootstrap", "path": "CODE_OF_CONDUCT.md"},
+        {"repository": "github-config", "path": "CODE_OF_CONDUCT.md"},
+        {"repository": "gitops", "path": "CODE_OF_CONDUCT.md"},
+        {"repository": "infrastructure-live", "path": "CODE_OF_CONDUCT.md"},
+        {"repository": "mindclade-internal-monorepo", "path": "CODE_OF_CONDUCT.md"}
+      ]
+    },
+    {
+      "name": "source-header-template",
+      "source": "contracts/policy-bundle/MINDCLADE_PROPRIETARY_SOURCE_HEADER.txt",
+      "sha256": "0f2b024dbf454c08d57b663d8ad8e469215984a7007ef66bd37d651e046e0029",
+      "mediaType": "text/plain",
+      "distributions": [
+        {"repository": "bootstrap", "path": ".github/MINDCLADE_PROPRIETARY_SOURCE_HEADER.txt"},
+        {"repository": "github-config", "path": ".github/MINDCLADE_PROPRIETARY_SOURCE_HEADER.txt"},
+        {"repository": "gitops", "path": ".github/MINDCLADE_PROPRIETARY_SOURCE_HEADER.txt"},
+        {"repository": "infrastructure-live", "path": ".github/MINDCLADE_PROPRIETARY_SOURCE_HEADER.txt"},
+        {"repository": "mindclade-internal-monorepo", "path": ".github/MINDCLADE_PROPRIETARY_SOURCE_HEADER.txt"}
+      ]
+    },
+    {
+      "name": "repository-home-validator",
+      "source": "actions/validate-repository-home/validate.py",
+      "sha256": "04400d7b57327cf7852e947be20a4dc788b19fc5d1211ae8e1c627e45312da10",
+      "mediaType": "text/x-python",
+      "distributions": [
+        {"repository": ".github-private", "path": "scripts/validate-repository-home.py"},
+        {"repository": "bootstrap", "path": "scripts/validate-repository-home.py"},
+        {"repository": "github-config", "path": "scripts/validate-repository-home.py"},
+        {"repository": "gitops", "path": "scripts/validate-repository-home.py"},
+        {"repository": "infrastructure-live", "path": "scripts/validate-repository-home.py"}
+      ]
+    },
+    {
+      "name": "acceptance-record-schema",
+      "source": "contracts/policy-bundle/acceptance-record.schema.json",
+      "sha256": "77f5928c176657affba2ce21f6bb12fff7a5aef13623d14a24174c485510fa21",
+      "mediaType": "application/json",
+      "distributions": []
+    },
+    {
+      "name": "policy-bundle-schema",
+      "source": "contracts/policy-bundle/policy-bundle.schema.json",
+      "sha256": "c5b8695b8e0b31ec5dcba0c25fd7e1cd14d48b7cd394f9182322235aa14c85bd",
+      "mediaType": "application/json",
+      "distributions": []
+    },
+    {
+      "name": "policy-bundle-validator",
+      "source": "tools/policy_bundle.py",
+      "sha256": "92404b50a6de9a56eaef4093565318f6669f75e72d1e24e44d7b8d285af3a6b3",
+      "mediaType": "text/x-python",
+      "distributions": []
+    }
+  ]
+}
