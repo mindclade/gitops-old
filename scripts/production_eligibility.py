@@ -311,6 +311,37 @@ def validate_bundle(bundle: dict[str, Any]) -> None:
         fail("deployment bundle digest differs from canonical content")
 
 
+GOVERNED_POLICY = ".github/contracts/evidence/production-controls.json"
+
+
+def require_governed_policy(policy: Path, estate: Path) -> None:
+    """The policy a decision is evaluated against must match the governed estate copy.
+
+    Extracted from build_bundle because it was unreachable as written and untestable in place.
+    Its only caller passed `estate/.github/contracts/evidence/production-controls.json` as
+    `policy`, so the comparison was that file against itself -- always equal, never firing, and
+    the two copies were free to diverge silently.
+
+    The copy that matters is gitops' VENDORED
+    contracts/evidence/production-controls.json: production-qualification-evidence.yml invokes
+    `records`, `decide` and `verify-response` with `--policy
+    contracts/evidence/production-controls.json`, so that is what a decision is actually
+    evaluated against. Proving it matches the governed copy at assembly time is the check this
+    was written to be.
+
+    Digests rather than bytes: load_policy canonicalizes, so formatting differences that do not
+    change policy are not reported as drift.
+    """
+    governed = estate / GOVERNED_POLICY
+    if policy.resolve() == governed.resolve():
+        fail(
+            "governed-policy comparison requires the vendored qualification policy, "
+            f"not the governed copy at {GOVERNED_POLICY}"
+        )
+    if load_policy(policy)["digest"] != load_policy(governed)["digest"]:
+        fail("qualification policy differs from the governed estate policy")
+
+
 def build_bundle(
     request: dict[str, Any], estate: Path, audit: Path, policy: Path
 ) -> dict[str, Any]:
@@ -348,11 +379,7 @@ def build_bundle(
             estate / ".github/contracts/policy-bundle/manifest.json"
         ),
     }
-    active_policy = load_policy(policy)
-    if active_policy["digest"] != load_policy(
-        estate / ".github/contracts/evidence/production-controls.json"
-    )["digest"]:
-        fail("qualification policy differs from the governed estate policy")
+    require_governed_policy(policy, estate)
     bundle["bundle_digest"] = digest_bytes(canonical_bundle(bundle))
     validate_bundle(bundle)
     return bundle
@@ -580,6 +607,10 @@ def verify_response(
         or expires > parse_timestamp(policy["valid_until"])
     ):
         fail("production eligibility decision validity window is invalid")
+    # The three checks above establish only that the window is internally coherent -- ordered,
+    # no wider than six hours, and inside the policy's own validity. None of them reads a clock,
+    # so a decision whose window closed weeks ago would satisfy all three and be replayed into
+    # `decide` or `publish-decision` as a currently-valid eligible result.
     if verification_time >= expires:
         fail("production eligibility decision has expired")
     if signature.get("algorithm") != "ed25519" or signature.get("key_id") != key_id:

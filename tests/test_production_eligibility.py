@@ -13,7 +13,7 @@ import importlib.util
 import json
 import tempfile
 import unittest
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 
@@ -239,6 +239,140 @@ class CanonicalEligibilityTest(unittest.TestCase):
                     signature,
                     now=datetime(2026, 8, 22, 12, 30),
                 )
+
+class DecisionExpiryTest(unittest.TestCase):
+    """An expired decision must be refused at the only point that enforces expires_at."""
+
+    def test_expired_decision_is_refused(self) -> None:
+        policy = ELIGIBILITY.load_policy(POLICY_PATH)
+        bundle = bundle_fixture()
+        response = response_fixture(bundle, policy, records_fixture(bundle, policy))
+        with tempfile.TemporaryDirectory() as directory:
+            payload = Path(directory) / "payload.bin"
+            signature = Path(directory) / "signature.bin"
+            with self.assertRaisesRegex(ValueError, "decision has expired"):
+                ELIGIBILITY.verify_response(
+                    response,
+                    bundle,
+                    policy,
+                    "production-eligibility-v1",
+                    payload,
+                    signature,
+                    now=EXPIRED_VERIFICATION_TIME,
+                )
+
+    def test_expiry_boundary_is_exclusive(self) -> None:
+        """expires_at is the first instant the decision is no longer valid."""
+        policy = ELIGIBILITY.load_policy(POLICY_PATH)
+        bundle = bundle_fixture()
+        response = response_fixture(bundle, policy, records_fixture(bundle, policy))
+        with tempfile.TemporaryDirectory() as directory:
+            payload = Path(directory) / "payload.bin"
+            signature = Path(directory) / "signature.bin"
+            just_inside = EXPIRED_VERIFICATION_TIME - timedelta(microseconds=1)
+            self.assertEqual(
+                ELIGIBILITY.verify_response(
+                    response,
+                    bundle,
+                    policy,
+                    "production-eligibility-v1",
+                    payload,
+                    signature,
+                    now=just_inside,
+                ),
+                EXPECTED_DECISION_DIGEST,
+            )
+            with self.assertRaisesRegex(ValueError, "decision has expired"):
+                ELIGIBILITY.verify_response(
+                    response,
+                    bundle,
+                    policy,
+                    "production-eligibility-v1",
+                    payload,
+                    signature,
+                    now=EXPIRED_VERIFICATION_TIME,
+                )
+
+    def test_naive_verification_time_is_refused(self) -> None:
+        policy = ELIGIBILITY.load_policy(POLICY_PATH)
+        bundle = bundle_fixture()
+        response = response_fixture(bundle, policy, records_fixture(bundle, policy))
+        with tempfile.TemporaryDirectory() as directory:
+            payload = Path(directory) / "payload.bin"
+            signature = Path(directory) / "signature.bin"
+            with self.assertRaisesRegex(ValueError, "timezone-aware"):
+                ELIGIBILITY.verify_response(
+                    response,
+                    bundle,
+                    policy,
+                    "production-eligibility-v1",
+                    payload,
+                    signature,
+                    now=datetime(2026, 8, 22, 12, 30),
+                )
+
+
+class GovernedPolicyDriftTest(unittest.TestCase):
+    """The guard that proves the evaluated policy matches the governed estate copy."""
+
+    def estate_with_governed(self, root: Path, payload: bytes) -> Path:
+        estate = root / "estate"
+        governed = estate / ELIGIBILITY.GOVERNED_POLICY
+        governed.parent.mkdir(parents=True)
+        governed.write_bytes(payload)
+        return estate
+
+    def test_matching_vendored_policy_is_accepted(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            payload = POLICY_PATH.read_bytes()
+            estate = self.estate_with_governed(root, payload)
+            vendored = root / "vendored.json"
+            vendored.write_bytes(payload)
+            ELIGIBILITY.require_governed_policy(vendored, estate)
+
+    def test_drifted_vendored_policy_is_refused(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            estate = self.estate_with_governed(root, POLICY_PATH.read_bytes())
+            # Internally VALID but different: load_policy verifies the policy's own embedded
+            # digest first, so a naively edited fixture is rejected before the drift comparison
+            # is ever reached. Recompute the embedded digest so the only difference the guard
+            # can see is the one being tested.
+            drifted = json.loads(POLICY_PATH.read_text(encoding="utf-8"))
+            drifted["epoch"] = int(drifted["epoch"]) + 1
+            encoder = ELIGIBILITY.CanonicalEncoder("production-control-policy/v1")
+            encoder.text("id", drifted["id"])
+            encoder.text("version", drifted["version"])
+            encoder.integer("epoch", drifted["epoch"])
+            encoder.timestamp("valid_until", drifted["valid_until"])
+            encoder.strings(
+                "controls",
+                [
+                    "|".join(
+                        (
+                            control["id"],
+                            control["owner"],
+                            ELIGIBILITY.go_duration(control["maximum_age"]),
+                            str(control["exception_allowed"]).lower(),
+                        )
+                    )
+                    for control in sorted(drifted["controls"], key=lambda c: c["id"])
+                ],
+            )
+            drifted["digest"] = ELIGIBILITY.digest_bytes(encoder.bytes())
+            vendored = root / "vendored.json"
+            vendored.write_text(json.dumps(drifted, indent=2, sort_keys=True) + "\n")
+            with self.assertRaisesRegex(ValueError, "differs from the governed estate policy"):
+                ELIGIBILITY.require_governed_policy(vendored, estate)
+
+    def test_comparing_the_governed_copy_against_itself_is_refused(self) -> None:
+        """The original defect: the caller passed the governed path, so X != X never fired."""
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            estate = self.estate_with_governed(root, POLICY_PATH.read_bytes())
+            with self.assertRaisesRegex(ValueError, "requires the vendored qualification policy"):
+                ELIGIBILITY.require_governed_policy(estate / ELIGIBILITY.GOVERNED_POLICY, estate)
 
 
 if __name__ == "__main__":
