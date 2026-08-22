@@ -41,6 +41,8 @@ EXPECTED_SOURCE_CI_VERIFICATION = (
 EXPECTED_DECISION_DIGEST = (
     "sha256:5f41137dc4380fbb543420c62a515397915fb4956e74cdc6fca1956434141fbd"
 )
+VALID_VERIFICATION_TIME = datetime(2026, 8, 22, 12, 30, tzinfo=timezone.utc)
+EXPIRED_VERIFICATION_TIME = datetime(2026, 8, 22, 13, 0, tzinfo=timezone.utc)
 
 
 def bundle_fixture() -> dict:
@@ -181,6 +183,7 @@ class CanonicalEligibilityTest(unittest.TestCase):
                     "production-eligibility-v1",
                     payload,
                     signature,
+                    now=VALID_VERIFICATION_TIME,
                 ),
                 EXPECTED_DECISION_DIGEST,
             )
@@ -212,7 +215,30 @@ class CanonicalEligibilityTest(unittest.TestCase):
                         "production-eligibility-v1",
                         payload,
                         signature,
+                        now=VALID_VERIFICATION_TIME,
                     )
+
+            with self.assertRaisesRegex(ValueError, "decision has expired"):
+                ELIGIBILITY.verify_response(
+                    response,
+                    bundle,
+                    policy,
+                    "production-eligibility-v1",
+                    payload,
+                    signature,
+                    now=EXPIRED_VERIFICATION_TIME,
+                )
+
+            with self.assertRaisesRegex(ValueError, "timezone-aware"):
+                ELIGIBILITY.verify_response(
+                    response,
+                    bundle,
+                    policy,
+                    "production-eligibility-v1",
+                    payload,
+                    signature,
+                    now=datetime(2026, 8, 22, 12, 30),
+                )
 
 
 if __name__ == "__main__":

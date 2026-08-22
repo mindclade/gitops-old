@@ -416,7 +416,7 @@ def assemble(
         request,
         estate,
         audit_target,
-        estate / ".github/contracts/evidence/production-controls.json",
+        ROOT / "contracts/evidence/production-controls.json",
     )
     bundle_target.write_text(
         json.dumps(bundle, indent=2, sort_keys=True) + "\n", encoding="utf-8"

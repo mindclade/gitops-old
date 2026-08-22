@@ -14,6 +14,7 @@ import tempfile
 import unittest
 import zipfile
 from pathlib import Path
+from unittest import mock
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -257,14 +258,24 @@ class DeterministicAssemblyTest(unittest.TestCase):
             )
 
             digests = []
-            for name in ("first", "second"):
-                output = root / name
-                digests.append(
-                    QUALIFICATION.assemble(
-                        request, estate, sources, evidence, audit, output
+            with mock.patch.object(
+                QUALIFICATION.production_eligibility,
+                "build_bundle",
+                wraps=QUALIFICATION.production_eligibility.build_bundle,
+            ) as build_bundle:
+                for name in ("first", "second"):
+                    output = root / name
+                    digests.append(
+                        QUALIFICATION.assemble(
+                            request, estate, sources, evidence, audit, output
+                        )
                     )
-                )
-                self.assertEqual(QUALIFICATION.verify(output), digests[-1])
+                    self.assertEqual(QUALIFICATION.verify(output), digests[-1])
+            expected_policy = ROOT / "contracts/evidence/production-controls.json"
+            self.assertEqual(
+                [call.args[3] for call in build_bundle.call_args_list],
+                [expected_policy, expected_policy],
+            )
             self.assertEqual(digests[0], digests[1])
 
 
