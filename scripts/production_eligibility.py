@@ -509,7 +509,12 @@ def verify_response(
     key_id: str,
     payload_out: Path,
     signature_out: Path,
+    *,
+    now: datetime | None = None,
 ) -> str:
+    verification_time = now if now is not None else datetime.now(timezone.utc)
+    if verification_time.utcoffset() is None:
+        fail("production eligibility verification time must be timezone-aware")
     validate_bundle(bundle)
     if (
         set(response) != {"signed_decision", "revoked"}
@@ -575,6 +580,8 @@ def verify_response(
         or expires > parse_timestamp(policy["valid_until"])
     ):
         fail("production eligibility decision validity window is invalid")
+    if verification_time >= expires:
+        fail("production eligibility decision has expired")
     if signature.get("algorithm") != "ed25519" or signature.get("key_id") != key_id:
         fail("production eligibility signature identity is invalid")
     try:
