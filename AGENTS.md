@@ -1,4 +1,4 @@
-# Agent operating guide
+# Mindclade · Agent operating guide
 
 ## Purpose and authority
 

@@ -33,11 +33,15 @@ CONTRACT = json.loads(
     '"repository_class":"production-control",'
     '"required_paths":[".kubernetes-version","bootstrap/argocd-install.yaml","bootstrap/argocd-install.provenance.json","bootstrap/components/immutable-images/kustomization.yaml","bootstrap/components/control-plane-baseline/kustomization.yaml","bootstrap/install-profiles/standard/kustomization.yaml","bootstrap/install-profiles/ha/kustomization.yaml","bootstrap/profiles/standard/kustomization.yaml",'
     '"bootstrap/profiles/ha/kustomization.yaml","bootstrap/root-app.yaml",'
-    '"applications","deployments","projects","projects/argocd-administration.yaml","policy","qualification","qualification/schemas/qualification-request-v1.schema.json","qualification/schemas/qualification-report-v2.schema.json","scripts/audit-production-estate.py","scripts/deterministic-qualification-archive.py","scripts/production_qualification.py",".github/workflows/production-qualification-evidence.yml","overlays/production.yaml",'
-    '"docs/disaster-recovery.md","docs/argocd-upgrade.md","docs/production-qualification.md","docs/failed-sync.md","docs/freeze-and-emergency.md","docs/rollback.md","vendor/arc/provenance.json"],'
+    '"applications","deployments","projects","projects/argocd-administration.yaml","policy","qualification","qualification/schemas/qualification-request-v1.schema.json","qualification/schemas/qualification-report-v2.schema.json","scripts/audit-production-estate.py","scripts/deterministic-qualification-archive.py","scripts/production_qualification.py",".github/workflows/production-qualification-evidence.yml",".github/workflows/dr-evidence.yml","overlays/production.yaml",'
+    '"docs/disaster-recovery.md","docs/argocd-upgrade.md","docs/production-qualification.md","docs/failed-sync.md","docs/freeze-and-emergency.md","docs/rollback.md","vendor/arc/provenance.json","vendor/arc/LICENSE","vendor/cert-manager/LICENSE"],'
     '"visibility":"internal"}'
 )
 ERRORS: list[str] = []
+INDEPENDENT_LICENSE_SHA256 = {
+    "vendor/arc/LICENSE": "f79217eb1b3010c0d387f945fb1142a5bc14de8a8b550dfd6b5c16d59b6eadbe",
+    "vendor/cert-manager/LICENSE": "c71d239df91726fc519c6eb72d318ec65820627232b2f796219e87dcf35d0ab4",
+}
 
 
 def error(message: str) -> None:
@@ -234,6 +238,10 @@ def secret_document_has_payload(document: str) -> bool:
 for rel in CONTRACT["required_paths"]:
     if not (ROOT / rel).exists():
         error(f"missing required path: {rel}")
+for rel, expected in INDEPENDENT_LICENSE_SHA256.items():
+    path = ROOT / rel
+    if path.is_file() and hashlib.sha256(path.read_bytes()).hexdigest() != expected:
+        error(f"independently licensed controlling text drifted: {rel}")
 for rel in CONTRACT["forbidden_paths"]:
     if tracked_prefix_exists(rel):
         error(f"forbidden tracked path present: {rel}")
@@ -424,8 +432,11 @@ for required in (
     "scripts/audit-production-estate.py",
     "scripts/deterministic-qualification-archive.py",
     "scripts/production_qualification.py",
+    "request GitOps commit must equal the workflow source commit",
+    "gh api --paginate",
     "--if-generation-match=0",
     '--custom-metadata="sha256=$digest"',
+    'gcloud storage cat "$target"',
 ):
     if required not in qualification_workflow:
         error(f"production qualification workflow omits: {required}")

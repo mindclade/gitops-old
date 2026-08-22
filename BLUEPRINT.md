@@ -1,4 +1,4 @@
-# gitops production blueprint
+# Mindclade · `gitops` production blueprint
 
 **Repository class:** `production-control`  
 **Visibility:** `internal`  

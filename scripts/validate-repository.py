@@ -16,9 +16,8 @@ errors = []
 control_plane_images: set[str] = set()
 
 # ARC may be rendered and reviewed offline, but it must not be reachable from an Argo root or
-# a cloud-backed direct workflow until the coordinated v4 workflow/WIF release is complete.
+# a cloud-backed direct workflow until the coordinated v5 workflow/WIF release is complete.
 for deferred_path in (
-    ".github/workflows/dr-evidence.yml",
     "applications/ci/arc.yaml",
     "applications/ci/argocd.yaml",
     "bootstrap/argocd-config-ci.yaml",
@@ -27,6 +26,13 @@ for deferred_path in (
 ):
     if (root / deferred_path).exists():
         errors.append(f"deferred ARC activation path is present: {deferred_path}")
+
+dr_evidence_workflow = root / ".github/workflows/dr-evidence.yml"
+if not dr_evidence_workflow.is_file() or (
+    "mindclade/.github/.github/workflows/reusable-dr-evidence.yml@v5.0.0"
+    not in dr_evidence_workflow.read_text()
+):
+    errors.append("DR evidence caller must pin the coordinated v5.0.0 workflow")
 
 for workflow in (root / ".github/workflows").glob("*.yml"):
     if re.search(

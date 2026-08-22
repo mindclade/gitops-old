@@ -56,6 +56,12 @@ def record(application: str = "serving-api") -> dict:
             "exception": None,
         },
         "evidence_retention": {"nonproduction": "P1Y", "production": "P7Y"},
+        "rollback": {
+            "strategy": "previous-release",
+            "previous_release_id": "v1.2.2",
+            "previous_subject_digest": "sha256:" + "e" * 64,
+            "artifact": "rollback-plan",
+        },
     }
 
 
@@ -80,15 +86,19 @@ def proposal() -> dict:
         },
         "sourceRepository": "mindclade/mindclade-internal-monorepo",
         "sourceRevision": "d" * 40,
-        "previousRelease": {
-            "releaseId": "v1.2.2",
-            "subjectDigest": "sha256:" + "e" * 64,
+        "rollback": {
+            "strategy": "previous-release",
+            "previousRelease": {
+                "releaseId": "v1.2.2",
+                "subjectDigest": "sha256:" + "e" * 64,
+            },
+            "bootstrapAction": None,
         },
         "targetEnvironment": "development",
         "requiredEvidence": sorted(SELECTIONS.REQUIRED_PROPOSAL_EVIDENCE),
     }
     return {
-        "apiVersion": "release.mindclade.dev/v1beta1",
+        "apiVersion": "release.mindclade.dev/v1beta2",
         "kind": "PromotionProposal",
         "metadata": {
             "name": "v1.2.3",
@@ -192,7 +202,7 @@ class DeploymentSelectionContractTest(unittest.TestCase):
 
     def test_promotion_proposal_cannot_change_previous_lineage(self) -> None:
         value = proposal()
-        value["spec"]["previousRelease"]["subjectDigest"] = value["spec"]["target"]["subjectDigest"]
+        value["spec"]["rollback"]["previousRelease"]["subjectDigest"] = value["spec"]["target"]["subjectDigest"]
         errors = self.validate_proposal(value)
         self.assertTrue(any("candidate and previous" in error for error in errors))
 

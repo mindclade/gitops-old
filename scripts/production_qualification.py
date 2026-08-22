@@ -418,6 +418,8 @@ def assemble(
     report = {
         "schema_version": 2,
         "status": "PASS",
+        "qualification_id": request["qualification_id"],
+        "change_reference": request["change_reference"],
         "generated_at": generated_at,
         "qualification_level": "production",
         "scope": request["scope"],
@@ -475,7 +477,14 @@ def verify(directory: Path) -> str:
             if required not in names:
                 fail(f"qualification bundle omits {required}")
         report = json.loads(archive.read("qualification-report.json"))
-        if report.get("schema_version") != 2 or report.get("status") != "PASS":
+        if (
+            report.get("schema_version") != 2
+            or report.get("status") != "PASS"
+            or not isinstance(report.get("qualification_id"), str)
+            or QUALIFICATION_ID.fullmatch(report["qualification_id"]) is None
+            or not isinstance(report.get("change_reference"), str)
+            or CHANGE_REFERENCE.fullmatch(report["change_reference"]) is None
+        ):
             fail("qualification report is not a production PASS report v2")
         repositories = report.get("repositories")
         if not isinstance(repositories, list) or {

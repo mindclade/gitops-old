@@ -1,17 +1,28 @@
-# Security
+<!-- mindclade-doc: security@1 -->
+
+# Mindclade security policy · `gitops`
+
+| Document control | Value |
+| --- | --- |
+| Owner | Mindclade Security |
+| Version | 1.0 |
+| Last reviewed | August 21, 2026 |
+| Repository scope | Argo CD, Kubernetes desired state, admission policy, and promotion |
 
 **Do not open a public issue for a vulnerability.**
 
 | Channel | For |
 |---|---|
 | [Private security advisory](https://github.com/mindclade/gitops/security/advisories/new) | Anything in this repository. Preferred |
-| `security@mindclade.com` | The same, by email. PGP key in the canonical policy |
-| `biosecurity@mindclade.com` | Screening bypasses, unsafe model behaviour |
+| `security@mindclade.com` | Reports that cannot be submitted through GitHub; ordinary email is not end-to-end encrypted |
+| `biosecurity@mindclade.com` | Screening bypasses, unsafe model behavior |
 
-Acknowledgement within 2 business days, triage within 5. Good-faith research is covered by
-safe harbour.
+The canonical policy targets acknowledgement within 2 business days and triage
+within 5. Those are operational targets, not contractual service levels. Safe
+harbor applies only within the canonical scope and does not authorize
+third-party systems or data, promise a bounty, or excuse unlawful conduct.
 
-**The full policy — scope, SLAs, PGP key, safe-harbour text — is the canonical one:**
+**The full policy — scope, response targets, encryption guidance, and safe-harbor text — is the canonical one:**
 [`mindclade/.github/SECURITY.md`](https://github.com/mindclade/.github/blob/main/SECURITY.md).
 
 This file exists because the `.github` repo is **internal**, and GitHub only inherits
@@ -33,7 +44,7 @@ remediation: the value was already exposed to every clone, fetch, and webhook su
 ## Proprietary header policy
 
 First-party configuration and policy files in this repository use a shared comment header block.
-It is defined once in `license-header.txt` at the workspace root:
+It is defined once in `.github/MINDCLADE_PROPRIETARY_SOURCE_HEADER.txt`:
 
 ```text
 # Copyright © 2026 Mindclade, LLC. All Rights Reserved.

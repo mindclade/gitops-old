@@ -27,6 +27,18 @@ forbidden_authority:
   - plaintext-secrets
 required_paths:
   - AGENTS.md
+  - README.md
+  - CONTRIBUTING.md
+  - SECURITY.md
+  - SUPPORT.md
+  - CODE_OF_CONDUCT.md
+  - GOVERNANCE.md
+  - CHANGELOG.md
+  - LEGAL.md
+  - LICENSE
+  - NOTICE
+  - .github/PULL_REQUEST_TEMPLATE.md
+  - .github/MINDCLADE_PROPRIETARY_SOURCE_HEADER.txt
   - .kubernetes-version
   - bootstrap/argocd-install.yaml
   - bootstrap/argocd-install.provenance.json
@@ -36,6 +48,8 @@ required_paths:
   - bootstrap/profiles/standard/kustomization.yaml
   - bootstrap/profiles/ha/kustomization.yaml
   - bootstrap/root-app.yaml
+  - vendor/arc/LICENSE
+  - vendor/cert-manager/LICENSE
   - applications
   - deployments
   - contracts/release-handoff-policy.json
@@ -67,6 +81,7 @@ required_paths:
   - tests/test_validate_release_metadata.py
   - tests/fixtures/release-metadata-3.0.0.schema.json
   - .github/workflows/production-qualification-evidence.yml
+  - .github/workflows/dr-evidence.yml
   - overlays/production.yaml
   - docs/disaster-recovery.md
   - docs/argocd-upgrade.md

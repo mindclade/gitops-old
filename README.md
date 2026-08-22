@@ -28,6 +28,8 @@
 | Visibility | `internal` |
 | Change model | `pull-request` |
 | Authority | `argocd-installation`<br>`argocd-configuration`<br>`kubernetes-desired-state`<br>`promotion`<br>`admission-policy` |
+| Primary readers | Platform engineers and service owners |
+| First success | [Render and validate desired state](#quick-start) |
 | Start here | [`docs/README.md`](docs/README.md) |
 
 ## Mission
@@ -54,17 +56,22 @@ environment promotion, and Gatekeeper policy without granting pull-request jobs 
 
 ## Quick start
 
-Run the offline render, policy, RBAC, release-metadata, and repository checks:
+Prerequisite: Nix with flakes enabled. This path needs no cluster, Argo CD, or cloud credentials
+and performs no reconciliation.
 
 ```sh
 nix develop .#ci --command make validate
 nix flake check --no-update-lock-file
 ```
 
-Expected result: generated provenance, bootstrap checksums, YAML, project boundaries, policy
-fixtures, deployment selections, shell checks, and repository contracts pass. Do not sync Argo
-CD, run `kubectl apply`, promote an artifact, or change a production freeze from a development
-session.
+**Success means:** generated provenance, bootstrap checksums, YAML, project boundaries, policy
+fixtures, deployment selections, shell checks, and repository contracts all pass.
+
+**If it fails:** change the authored source, regenerate through the repository command, and
+review both source and rendered output. Never repair a failure by hand-editing generated files.
+
+**Safety boundary:** do not sync Argo CD, run `kubectl apply`, promote an artifact, or change a
+production freeze from a development session.
 
 ## Estate position
 
@@ -118,6 +125,9 @@ emergency operations. Never hand-edit generated output.
 - [Rollback](docs/rollback.md)
 - [Disaster recovery](docs/disaster-recovery.md)
 - [Contributing](CONTRIBUTING.md)
+- Policies and terms: [governance](GOVERNANCE.md) · [conduct](CODE_OF_CONDUCT.md) ·
+  [support](SUPPORT.md) · [legal](LEGAL.md) · [license](LICENSE) · [notice](NOTICE) ·
+  [changes](CHANGELOG.md)
 
 ## Security
 

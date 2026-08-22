@@ -8,7 +8,6 @@ from __future__ import annotations
 
 import argparse
 import hashlib
-import os
 import stat
 import subprocess
 import zipfile
@@ -62,29 +61,32 @@ def main() -> int:
     if dirty and not args.allow_dirty:
         raise ValueError("source worktree is dirty; refusing release archive")
 
-    tracked = [PurePosixPath(item.decode("utf-8")) for item in git(source, "ls-files", "-z").split(b"\0") if item]
-    if not tracked:
+    index = [
+        item.decode("utf-8")
+        for item in git(source, "ls-files", "--stage", "-z").split(b"\0")
+        if item
+    ]
+    if not index:
         raise ValueError("source repository has no tracked files")
-    entries: list[tuple[PurePosixPath, Path]] = []
-    for rel in sorted(tracked, key=str):
+    entries: list[tuple[PurePosixPath, bytes, int]] = []
+    for record in sorted(index, key=lambda item: item.split("\t", 1)[-1]):
+        metadata, raw_path = record.split("\t", 1)
+        mode, _object_id, stage = metadata.split(" ")
+        rel = PurePosixPath(raw_path)
+        if stage != "0" or mode not in {"100644", "100755"}:
+            raise ValueError(f"tracked path is not a regular stage-zero file: {rel}")
         if forbidden(rel):
             raise ValueError(f"tracked forbidden path: {rel}")
-        path = source.joinpath(*rel.parts)
-        if path.is_symlink():
-            raise ValueError(f"tracked symlink is not archive-safe: {rel}")
-        if not path.is_file():
-            raise ValueError(f"tracked path is not a regular file: {rel}")
         name = prefix / rel if prefix else rel
-        entries.append((name, path))
+        entries.append((name, git(source, "show", f"HEAD:{raw_path}"), int(mode[-3:], 8)))
 
     output.parent.mkdir(parents=True, exist_ok=True)
     with zipfile.ZipFile(output, "w", zipfile.ZIP_DEFLATED, compresslevel=9) as archive:
-        for name, path in entries:
+        for name, content, perms in entries:
             info = zipfile.ZipInfo(str(name), FIXED_TIME)
-            perms = 0o755 if os.access(path, os.X_OK) else 0o644
             info.external_attr = ((stat.S_IFREG | perms) & 0xFFFF) << 16
             info.compress_type = zipfile.ZIP_DEFLATED
-            archive.writestr(info, path.read_bytes())
+            archive.writestr(info, content)
 
     expected = [str(name) for name, _ in entries]
     with zipfile.ZipFile(output, "r") as archive:
@@ -93,8 +95,8 @@ def main() -> int:
             raise ValueError("archive member verification failed")
         if archive.testzip() is not None:
             raise ValueError("archive CRC verification failed")
-        for member, (_, path) in zip(observed, entries):
-            if archive.read(member) != path.read_bytes():
+        for member, (_, content, _) in zip(observed, entries):
+            if archive.read(member) != content:
                 raise ValueError(f"archive content verification failed: {member}")
     digest = hashlib.sha256(output.read_bytes()).hexdigest()
     print(f"{digest}  {output.name}")

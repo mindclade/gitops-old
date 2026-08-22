@@ -69,6 +69,10 @@ jobs:
               ;;
           esac
           python3 scripts/production_qualification.py request "$absolute" > "$RUNNER_TEMP/request.json"
+          test "$(jq -r '.repositories.gitops' "$RUNNER_TEMP/request.json")" = "$GITHUB_SHA" || {
+            echo "::error::request GitOps commit must equal the workflow source commit"
+            exit 1
+          }
           echo "path=$absolute" >> "$GITHUB_OUTPUT"
           echo "qualification-id=$(jq -r .qualification_id "$RUNNER_TEMP/request.json")" >> "$GITHUB_OUTPUT"
 
@@ -135,7 +139,8 @@ jobs:
               echo "::error::evidence run source differs: $repo/$run_id"
               exit 1
             }
-            ids="$(gh api "repos/mindclade/$repo/actions/runs/$run_id/artifacts?per_page=100" \
+            ids="$(gh api --paginate \
+              "repos/mindclade/$repo/actions/runs/$run_id/artifacts?per_page=100" \
               --jq ".artifacts[] | select(.name == \"$name\" and .expired == false) | .id")"
             id_count="$(printf '%s\n' "$ids" | sed '/^$/d' | wc -l | tr -d ' ')"
             test -n "$ids" && test "$id_count" = 1 || {
@@ -259,10 +264,19 @@ jobs:
             relative="${path#"$root/"}"
             digest="$(sha256sum "$path" | awk '{print $1}')"
             target="gs://$BUCKET/$prefix/$relative"
-            gcloud storage cp \
-              --if-generation-match=0 \
-              --custom-metadata="sha256=$digest" \
-              "$path" "$target"
+            if remote="$(gcloud storage objects describe "$target" --format=json 2>/dev/null)"; then
+              test "$(jq -r '.metadata.sha256' <<<"$remote")" = "$digest"
+              remote_digest="$(gcloud storage cat "$target" | sha256sum | awk '{print $1}')"
+              test "$remote_digest" = "$digest" || {
+                echo "::error::existing immutable evidence object differs: $target"
+                exit 1
+              }
+            else
+              gcloud storage cp \
+                --if-generation-match=0 \
+                --custom-metadata="sha256=$digest" \
+                "$path" "$target"
+            fi
             remote="$(gcloud storage objects describe "$target" --format=json)"
             test "$(jq -r '.metadata.sha256' <<<"$remote")" = "$digest"
           done < <(find "$root" -type f -print0 | sort -z)

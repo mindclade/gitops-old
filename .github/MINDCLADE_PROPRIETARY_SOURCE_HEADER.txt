@@ -1,3 +1,6 @@
 # Copyright © 2026 Mindclade, LLC. All Rights Reserved.
 # Mindclade Proprietary and Confidential.
 # SPDX-License-Identifier: LicenseRef-Mindclade-Proprietary
+
+# Source-file header template; this file is not a standalone license.
+# The sole repository license is the complete root LICENSE.
