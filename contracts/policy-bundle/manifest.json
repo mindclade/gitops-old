@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "bundleId": "mindclade-policy-bundle",
-  "version": "2026.08.21.1",
+  "version": "2026.08.21.2",
   "effectiveDate": "2026-08-21",
   "canonicalRepository": "mindclade/.github",
   "licenseExpression": "LicenseRef-Mindclade-Proprietary",
@@ -70,7 +70,7 @@
     {
       "name": "repository-home-validator",
       "source": "actions/validate-repository-home/validate.py",
-      "sha256": "04400d7b57327cf7852e947be20a4dc788b19fc5d1211ae8e1c627e45312da10",
+      "sha256": "ed27899568297dd371dabd9e24f62ece1f3aacdc295197964c48339f40dff223",
       "mediaType": "text/x-python",
       "distributions": [
         {"repository": ".github-private", "path": "scripts/validate-repository-home.py"},
@@ -83,16 +83,44 @@
     {
       "name": "acceptance-record-schema",
       "source": "contracts/policy-bundle/acceptance-record.schema.json",
-      "sha256": "77f5928c176657affba2ce21f6bb12fff7a5aef13623d14a24174c485510fa21",
+      "sha256": "58022260c66fab8ca0163cc7ad7cfea621a53e7619619beb4283435487280c43",
       "mediaType": "application/json",
       "distributions": []
     },
     {
       "name": "policy-bundle-schema",
       "source": "contracts/policy-bundle/policy-bundle.schema.json",
-      "sha256": "c5b8695b8e0b31ec5dcba0c25fd7e1cd14d48b7cd394f9182322235aa14c85bd",
+      "sha256": "e7466737bde556863d765ba6df54dd1f5b6d9439fa51ae1f625455ebf317e20c",
       "mediaType": "application/json",
       "distributions": []
+    },
+    {
+      "name": "third-party-notice-validator",
+      "source": "tools/third_party_notices.py",
+      "sha256": "5c344b342d487242b5ff96dec64cf2f22afe52a3bbf8d1b6b97922cb0151d28f",
+      "mediaType": "text/x-python",
+      "distributions": [
+        {"repository": ".github-private", "path": "scripts/generate-third-party-notices.py"},
+        {"repository": "bootstrap", "path": "scripts/generate-third-party-notices.py"},
+        {"repository": "github-config", "path": "scripts/generate-third-party-notices.py"},
+        {"repository": "gitops", "path": "scripts/generate-third-party-notices.py"},
+        {"repository": "infrastructure-live", "path": "scripts/generate-third-party-notices.py"},
+        {"repository": "mindclade-internal-monorepo", "path": "scripts/generate-third-party-notices.py"}
+      ]
+    },
+    {
+      "name": "spdx-license-enricher",
+      "source": "tools/enrich_spdx_license.py",
+      "sha256": "c6e3077d817d7f9181f35e42a55944c65dc36acb28a2228ff5abbab90633f7bd",
+      "mediaType": "text/x-python",
+      "distributions": [
+        {"repository": ".github-private", "path": "scripts/enrich-spdx-license.py"},
+        {"repository": "bootstrap", "path": "scripts/enrich-spdx-license.py"},
+        {"repository": "github-config", "path": "scripts/enrich-spdx-license.py"},
+        {"repository": "gitops", "path": "scripts/enrich-spdx-license.py"},
+        {"repository": "infrastructure-live", "path": "scripts/enrich-spdx-license.py"},
+        {"repository": "mindclade-internal-monorepo", "path": "scripts/enrich-spdx-license.py"}
+      ]
     },
     {
       "name": "policy-bundle-validator",
