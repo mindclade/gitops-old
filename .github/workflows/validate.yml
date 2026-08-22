@@ -416,10 +416,14 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with: {persist-credentials: false}
+      - name: Validate repository home
+        uses: mindclade/.github/actions/validate-repository-home@f4744c44959dc699870565f630dccc6f986821da  # v4.0.0
+        with:
+          local-validator-path: scripts/validate-repository-home.py
       - uses: cachix/install-nix-action@630ae543ea3a38a9a4166f03376c02c50f408342
         with:
           extra_nix_config: |
             experimental-features = nix-command flakes
             accept-flake-config = false
       - name: Validate the complete repository contract
-        run: nix develop .#ci --command make validate
+        run: nix develop .#ci --command make validate-core

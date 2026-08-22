@@ -25,7 +25,7 @@ jobs:
     uses: mindclade/.github/.github/workflows/reusable-nix-qualification.yml@0bdba2a8d06c732a6eb0a09238267dc83e1ca576
     with:
       watch-path-regex: '(^|/)(flake\.nix|flake\.lock|[^/]+\.nix)$|^\.github/workflows/.*nix.*\.ya?ml$'
-      ci-command: make validate
+      ci-command: make validate-core
       enable-aarch64-linux: true
       enable-aarch64-darwin: true
       reproducibility-targets: .#checks.x86_64-linux.ci-shell
