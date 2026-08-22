@@ -37,6 +37,14 @@ EXPECTED_RELEASES = {
         "gha-runner-scale-set",
         "qualify.yaml",
     ),
+    # This output is a dormant review fixture. It is deliberately omitted from
+    # arc/rendered/kustomization.yaml and every Argo root until the readiness contract passes.
+    "presubmit": (
+        "arc-presubmit",
+        "arc-presubmit",
+        "gha-runner-scale-set",
+        "presubmit.yaml",
+    ),
 }
 
 
@@ -77,7 +85,12 @@ def render(name: str) -> bytes:
     result = subprocess.run(command, cwd=ROOT, check=True, capture_output=True)
     if not result.stdout:
         raise ValueError(f"ARC render is empty: {output}")
-    return normalize_rendered_yaml(result.stdout)
+    rendered = normalize_rendered_yaml(result.stdout)
+    if name == "presubmit":
+        # Preserve the reviewed release manifests byte-for-byte while giving this new fixture a
+        # whitespace-clean canonical form from its first commit.
+        rendered = b"\n".join(line.rstrip() for line in rendered.splitlines()) + b"\n"
+    return rendered
 
 
 def normalize_rendered_yaml(contents: bytes) -> bytes:
@@ -92,6 +105,7 @@ def normalize_rendered_yaml(contents: bytes) -> bytes:
 def atomic_write(path: Path, contents: bytes) -> None:
     """Replace one generated manifest without sharing a temporary name."""
 
+    mode = path.stat().st_mode & 0o777 if path.exists() else 0o644
     descriptor, temporary_name = tempfile.mkstemp(
         dir=path.parent,
         prefix=f".{path.name}.",
@@ -103,6 +117,7 @@ def atomic_write(path: Path, contents: bytes) -> None:
             handle.write(contents)
             handle.flush()
             os.fsync(handle.fileno())
+        temporary.chmod(mode)
         temporary.replace(path)
     finally:
         temporary.unlink(missing_ok=True)

@@ -49,6 +49,13 @@ required_paths:
   - bootstrap/profiles/ha/kustomization.yaml
   - bootstrap/root-app.yaml
   - vendor/arc/LICENSE
+  - arc/presubmit-readiness.yaml
+  - arc/values/presubmit.yaml
+  - arc/rendered/presubmit.yaml
+  - contracts/arc-ci-presubmit.schema.json
+  - scripts/validate-arc-ci.py
+  - tests/test_arc_ci_contract.py
+  - docs/arc-ci-activation.md
   - vendor/cert-manager/LICENSE
   - applications
   - deployments

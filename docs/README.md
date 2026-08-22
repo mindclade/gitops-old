@@ -12,6 +12,7 @@
 | Understand reconciliation and trust | [Architecture](architecture.md) | Learn repository, cluster, policy, and promotion boundaries |
 | Import or activate the control plane | [Initial import](initial-import.md) | Validate generated state and bootstrap one environment |
 | Activate a workload | [Workload activation](workload-activation.md) | Prove artifact, policy, and destination readiness |
+| Activate presubmit ARC | [ARC CI activation](arc-ci-activation.md) | Qualify a separate ephemeral, read-only runner boundary |
 | Diagnose reconciliation failure | [Failed sync](failed-sync.md) | Classify the owner and repair the authoritative source |
 | Make an emergency frozen change | [Freeze and emergency](freeze-and-emergency.md) | Authorize one reviewed merge and audited sync without a standing bypass |
 | Qualify production Argo CD | [Production qualification](production-qualification.md) | Separate source checks from applied policy, admission, recovery, and freeze evidence |
@@ -27,6 +28,8 @@
   transferring release or serving authority to MLflow.
 - [Gateway and TLS activation](gateway-activation.md) — enable public routing only after its
   controller, cloud, certificate, and rollback gates are met.
+- [ARC CI activation](arc-ci-activation.md) — qualify, canary, and scale a separately governed
+  presubmit runner group without artifact authority.
 
 ## Concepts and architecture
 

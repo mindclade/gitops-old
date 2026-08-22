@@ -1,4 +1,4 @@
-.PHONY: license-headers license-headers-fix repository-invariants bootstrap-checks arc-render cert-manager-vendor \
+.PHONY: license-headers license-headers-fix repository-invariants bootstrap-checks arc-render arc-ci-contract cert-manager-vendor \
         yaml-check project-rbac release-handoff release-metadata release-metadata-tests deployment-selections shell-check \
         production-qualification-tests validate-production-contract validate-repository-home validate-core validate
 
@@ -16,6 +16,10 @@ bootstrap-checks:
 
 arc-render:
 	python3 scripts/render-arc.py
+
+arc-ci-contract:
+	python3 scripts/validate-arc-ci.py
+	kubeconform -strict -summary -kubernetes-version "$$(tr -d '[:space:]' < .kubernetes-version)" -ignore-missing-schemas arc/rendered/presubmit.yaml
 
 cert-manager-vendor:
 	python3 scripts/validate-cert-manager-vendor.py
@@ -52,4 +56,4 @@ validate-repository-home:
 
 validate: validate-core validate-repository-home
 
-validate-core: validate-production-contract repository-invariants bootstrap-checks arc-render cert-manager-vendor yaml-check project-rbac release-handoff release-metadata deployment-selections release-metadata-tests shell-check
+validate-core: validate-production-contract repository-invariants bootstrap-checks arc-render arc-ci-contract cert-manager-vendor yaml-check project-rbac release-handoff release-metadata deployment-selections release-metadata-tests shell-check

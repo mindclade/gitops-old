@@ -1,0 +1,47 @@
+# Copyright © 2026 Mindclade, LLC. All Rights Reserved.
+# Mindclade Proprietary and Confidential.
+# SPDX-License-Identifier: LicenseRef-Mindclade-Proprietary
+
+---
+apiVersion: ci.mindclade.dev/v1alpha1
+kind: ArcPresubmitReadiness
+metadata:
+  name: mindclade-arc-presubmit-cpu
+spec:
+  phase: blocked
+  selected: false
+  routing:
+    githubConfigUrl: https://github.com/mindclade
+    runnerGroup: mindclade-arc-ci
+    scaleSetName: mindclade-arc-presubmit-cpu
+    namespace: arc-presubmit
+  capacity:
+    configured:
+      minRunners: 0
+      maxRunners: 0
+    activatedTarget:
+      minRunners: 2
+      maxRunners: 24
+  runnerImage:
+    authorityRepository: mindclade/mindclade-internal-monorepo
+    baseFlakePackage: .#remote-execution-base
+    runnerFlakePackage: null
+    repository: null
+    digest: null
+    sourceCommit: null
+    releaseRecord: null
+    validationFixture: ghcr.io/actions/actions-runner:2.336.0@sha256:0cfdcc701ce933c6d243c6b0b2da767366dc9f2e99961d4c3754b0b78084cdda
+  security:
+    ephemeralRunners: true
+    automountServiceAccountToken: false
+    sharedWritableCacheVolume: false
+    artifactSigningCredentials: false
+    artifactPushCredentials: false
+    remoteCacheWriteCredentials: false
+  gates:
+    nixBinaryCache: {qualified: false, evidence: null}
+    runnerImage: {qualified: false, evidence: null}
+    runnerGroup: {qualified: false, evidence: null}
+    readOnlyCacheWif: {qualified: false, evidence: null}
+    connectedCluster: {qualified: false, evidence: null}
+    workflowRouting: {qualified: false, evidence: null}
