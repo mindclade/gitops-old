@@ -40,4 +40,3 @@ the freeze or failed-sync runbook used if reconciliation fails.
       generated artifact and preserved its source, license, provenance, and notices.
 - [ ] I updated `LICENSE`, `NOTICE`, the SBOM, or other license evidence when
       the included or distributed material changed.
-

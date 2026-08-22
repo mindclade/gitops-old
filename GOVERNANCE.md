@@ -43,4 +43,3 @@ Drift, exemptions, image provenance, failed syncs, recovery evidence, and
 privileged project membership are reviewed at least quarterly and after every
 emergency use. Organization-wide defaults are defined in
 [`mindclade/.github/GOVERNANCE.md`](https://github.com/mindclade/.github/blob/main/GOVERNANCE.md).
-

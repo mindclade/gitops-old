@@ -27,4 +27,3 @@ revision, run, release, and artifact identifiers.
 
 The applicable customer agreement or incident-response process controls if it
 conflicts with this routing guide.
-
