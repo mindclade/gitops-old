@@ -31,9 +31,59 @@ def load(name: str, path: str):
 
 
 RENDER = load("render", "scripts/render.py")
+RENDER_SOURCE_POLICY = load(
+    "render_source_policy", "scripts/render_source_policy.py"
+)
 
 
 class GitOpsSafetyTest(unittest.TestCase):
+    def test_render_source_authority_keeps_only_one_frozen_legacy_exception(self) -> None:
+        self.assertEqual(
+            RENDER_SOURCE_POLICY.render_source_policy_errors(
+                "mindclade/mindclade-internal-monorepo",
+                "v0.1.1",
+                ["infra/gitops/environments/{env}"],
+            ),
+            [],
+        )
+        self.assertTrue(
+            any(
+                "authorized only at v0.1.1" in error
+                for error in RENDER_SOURCE_POLICY.render_source_policy_errors(
+                    "mindclade/mindclade-internal-monorepo",
+                    "v0.2.0",
+                    ["infra/gitops/environments/{env}"],
+                )
+            )
+        )
+        self.assertTrue(
+            any(
+                "retired monorepo GitOps authority" in error
+                for error in RENDER_SOURCE_POLICY.render_source_policy_errors(
+                    "mindclade/mindclade-internal-monorepo",
+                    "v1.2.3",
+                    ["infra/gitops/new-platform"],
+                )
+            )
+        )
+
+    def test_new_render_sources_stay_in_the_kubernetes_package_boundary(self) -> None:
+        allowed = RENDER_SOURCE_POLICY.render_source_policy_errors(
+            "mindclade/mindclade-internal-monorepo",
+            "v1.2.3",
+            ["infra/kubernetes/platform/mlflow/chart"],
+        )
+        self.assertEqual(allowed, [])
+
+        rejected = RENDER_SOURCE_POLICY.render_source_policy_errors(
+            "mindclade/mindclade-internal-monorepo",
+            "v1.2.3",
+            ["infra/kubernetes/platform/overlays/production/mlflow"],
+        )
+        self.assertTrue(
+            any("live environment composition" in error for error in rejected)
+        )
+
     def test_bootstrap_requires_explicit_apply_before_tool_lookup(self) -> None:
         result = subprocess.run(
             ["bash", str(ROOT / "bootstrap/bootstrap.sh")],

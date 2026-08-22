@@ -15,6 +15,8 @@ spec:
   source:
     repo: mindclade/mindclade-internal-monorepo
     # Protected immutable release tag. github-config protects v* tags from movement/deletion.
+    # v0.1.1 is the frozen source for the already-reviewed platform-core render. New targets use
+    # infra/kubernetes packages; GitOps retains target selection and live desired-state authority.
     ref: v0.1.1
 
   targets:
@@ -23,6 +25,9 @@ spec:
       out: platform-core
       project: platform
       environments: [development, staging, production]
+
+  # The production contract permits the legacy source above only at v0.1.1 and rejects any new
+  # infra/gitops target. See docs/source-boundary-migration.md.
 
   # Workload Helm charts use renderer: helm with an explicit local values file, release, and
   # namespace. They remain absent until the pinned monorepo release contains the chart, a release

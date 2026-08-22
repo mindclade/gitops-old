@@ -20,6 +20,8 @@ import subprocess
 import sys
 from pathlib import Path
 
+from render_source_policy import render_source_policy_errors
+
 ROOT = Path(__file__).resolve().parents[1]
 REPOSITORY = "gitops"
 NIX_QUALIFICATION_WORKFLOW_SHA = "0bdba2a8d06c732a6eb0a09238267dc83e1ca576"
@@ -486,15 +488,9 @@ if render_manifest.exists():
     ref_match = re.search(r"(?m)^\s*ref:\s*([^#\s]+)", text)
     repo = repo_match.group(1).strip("\"'") if repo_match else ""
     ref = ref_match.group(1).strip("\"'") if ref_match else ""
-    if repo != "mindclade/mindclade-internal-monorepo":
-        error(f"unauthorized render source repository: {repo or '<missing>'}")
-    if not (
-        re.fullmatch(r"v[0-9]+\.[0-9]+\.[0-9]+", ref)
-        or re.fullmatch(r"[0-9a-f]{40}", ref)
-    ):
-        error(
-            f"render source ref is not a protected full semver tag or commit SHA: {ref or '<missing>'}"
-        )
+    target_sources = re.findall(r"(?m)^\s+- source:\s*([^#\s]+)", text)
+    for violation in render_source_policy_errors(repo, ref, target_sources):
+        error(violation)
 
 image_field = re.compile(r"^\s*(?:-\s*)?image:\s*[\"']?([^\"'\s#]+)")
 new_tag_field = re.compile(r"^\s*newTag:\s*[\"']?([^\"'\s#]+)")

@@ -32,6 +32,8 @@
 
 - [Architecture](architecture.md) — control-plane composition, environment isolation, and
   promotion flow.
+- [Render source authority boundary](source-boundary-migration.md) — keep live GitOps
+  composition here while retiring the frozen monorepo transition package.
 - [Argo CD bootstrap](../bootstrap/README.md) — pinned installation, protected credentials,
   and standard-versus-HA profiles.
 - [Artifact deployment selections](../deployments/README.md) — environment digest selection
