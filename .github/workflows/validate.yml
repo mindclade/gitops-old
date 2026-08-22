@@ -417,7 +417,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with: {persist-credentials: false}
       - name: Validate repository home
-        uses: mindclade/.github/actions/validate-repository-home@f4744c44959dc699870565f630dccc6f986821da  # v4.0.0
+        uses: mindclade/.github/actions/validate-repository-home@8467615f12868d4b78718b8ddf7f05797c44a507  # policy bundle 2026.08.21.3
         with:
           local-validator-path: scripts/validate-repository-home.py
       - uses: cachix/install-nix-action@630ae543ea3a38a9a4166f03376c02c50f408342
