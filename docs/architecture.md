@@ -105,6 +105,13 @@ Plain Kubernetes Secret payloads are prohibited. Argo repository access is a rea
 App credential installed out of band during audited bootstrap. Production bootstrap also
 requires an explicit environment confirmation and a verified Kubernetes context.
 
+ARC release runners and presubmit runners are distinct trust domains. The former retain the
+restricted `mindclade-arc-artifact-authority` route; the latter are staged under the separate
+`mindclade-arc-ci` contract with no signing, push, or cache-write authority. Presubmit source stays
+zero-capacity and outside every Argo root until its Nix image, cache, WIF, runner-group, cluster,
+and workflow-routing evidence are independently qualified. See
+[ARC CI activation](arc-ci-activation.md).
+
 ApplicationSet-generated Applications do not carry cascading resource-deletion finalizers, and
 every ApplicationSet enables `preserveResourcesOnDeletion`. Resource pruning remains an explicit
 per-environment sync-policy decision, while deletion of an ApplicationSet or environment root

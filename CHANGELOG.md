@@ -19,6 +19,8 @@ not reconstructed or relabeled here.
   the repository contract.
 - Preserved and digest-pinned the upstream Apache-2.0 license texts beside the
   vendored ARC 0.14.2 charts and cert-manager v1.19.1 release.
+- Added a zero-capacity, non-selected ARC presubmit contract with deterministic render, schema,
+  security, and evidence-gated activation checks.
 
 ### Changed
 

@@ -5,10 +5,12 @@
 from __future__ import annotations
 
 import importlib.util
+import shutil
 import unittest
 from pathlib import Path
 
 MODULE_PATH = Path(__file__).resolve().parents[1] / "scripts/render-arc.py"
+ROOT = MODULE_PATH.parents[1]
 SPEC = importlib.util.spec_from_file_location("render_arc", MODULE_PATH)
 assert SPEC and SPEC.loader
 render_arc = importlib.util.module_from_spec(SPEC)
@@ -25,6 +27,13 @@ class RenderArcTest(unittest.TestCase):
             ),
             expected,
         )
+
+    @unittest.skipUnless(shutil.which("helm"), "pinned Helm is required")
+    def test_presubmit_render_is_deterministic(self) -> None:
+        first = render_arc.render("presubmit")
+        second = render_arc.render("presubmit")
+        self.assertEqual(first, second)
+        self.assertEqual(first, (ROOT / "arc/rendered/presubmit.yaml").read_bytes())
 
 
 if __name__ == "__main__":

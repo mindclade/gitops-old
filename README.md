@@ -121,6 +121,7 @@ emergency operations. Never hand-edit generated output.
 - [Documentation home](docs/README.md)
 - [Architecture](docs/architecture.md)
 - [Workload activation](docs/workload-activation.md)
+- [ARC CI activation](docs/arc-ci-activation.md)
 - [Failed sync](docs/failed-sync.md)
 - [Rollback](docs/rollback.md)
 - [Disaster recovery](docs/disaster-recovery.md)

@@ -24,10 +24,13 @@ Planned services that do not meet those gates remain in the monorepo and are **n
 `render-manifest.yaml`. GitOps does not carry `:latest`, unbuilt-image exceptions, or inactive
 render directories for topology documentation.
 
-The ARC CI control plane and DR-evidence caller follow the same rule. Their v4 contract and
+The ARC CI control plane and DR-evidence caller follow the same rule. Their v5 contract and
 validators remain reviewable source, but this repository does not publish a CI root, CI
 Application, ARC AppProject, CI bootstrap configuration, or DR caller until the immutable
 workflow/module releases and applied identity handoffs are qualified together.
+The dormant presubmit scale-set contract has a separate evidence-gated procedure in
+[ARC CI activation](arc-ci-activation.md); it carries no artifact authority and is not a workload
+promotion shortcut.
 
 ## Procedure
 

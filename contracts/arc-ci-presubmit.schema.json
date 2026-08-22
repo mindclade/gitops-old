@@ -1,0 +1,246 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/mindclade/gitops/contracts/arc-ci-presubmit.schema.json",
+  "title": "Mindclade ARC presubmit readiness contract",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["apiVersion", "kind", "metadata", "spec"],
+  "properties": {
+    "apiVersion": {
+      "const": "ci.mindclade.dev/v1alpha1"
+    },
+    "kind": {
+      "const": "ArcPresubmitReadiness"
+    },
+    "metadata": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name"],
+      "properties": {
+        "name": {
+          "const": "mindclade-arc-presubmit-cpu"
+        }
+      }
+    },
+    "spec": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "phase",
+        "selected",
+        "routing",
+        "capacity",
+        "runnerImage",
+        "security",
+        "gates"
+      ],
+      "properties": {
+        "phase": {
+          "enum": ["blocked", "qualified", "canary", "activated"]
+        },
+        "selected": {
+          "type": "boolean"
+        },
+        "routing": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["githubConfigUrl", "runnerGroup", "scaleSetName", "namespace"],
+          "properties": {
+            "githubConfigUrl": {
+              "const": "https://github.com/mindclade"
+            },
+            "runnerGroup": {
+              "const": "mindclade-arc-ci"
+            },
+            "scaleSetName": {
+              "const": "mindclade-arc-presubmit-cpu"
+            },
+            "namespace": {
+              "const": "arc-presubmit"
+            }
+          }
+        },
+        "capacity": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["configured", "activatedTarget"],
+          "properties": {
+            "configured": {
+              "$ref": "#/$defs/capacity"
+            },
+            "activatedTarget": {
+              "$ref": "#/$defs/capacity"
+            }
+          }
+        },
+        "runnerImage": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "authorityRepository",
+            "baseFlakePackage",
+            "runnerFlakePackage",
+            "repository",
+            "digest",
+            "sourceCommit",
+            "releaseRecord",
+            "validationFixture"
+          ],
+          "properties": {
+            "authorityRepository": {
+              "const": "mindclade/mindclade-internal-monorepo"
+            },
+            "baseFlakePackage": {
+              "const": ".#remote-execution-base"
+            },
+            "runnerFlakePackage": {
+              "type": ["string", "null"],
+              "minLength": 1
+            },
+            "repository": {
+              "type": ["string", "null"],
+              "pattern": "^[a-z0-9.-]+/[a-z0-9._/-]+$"
+            },
+            "digest": {
+              "type": ["string", "null"],
+              "pattern": "^sha256:[0-9a-f]{64}$"
+            },
+            "sourceCommit": {
+              "type": ["string", "null"],
+              "pattern": "^[0-9a-f]{40}$"
+            },
+            "releaseRecord": {
+              "type": ["string", "null"],
+              "minLength": 1
+            },
+            "validationFixture": {
+              "type": "string",
+              "pattern": "^[^@\\s]+@sha256:[0-9a-f]{64}$"
+            }
+          }
+        },
+        "security": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "ephemeralRunners",
+            "automountServiceAccountToken",
+            "sharedWritableCacheVolume",
+            "artifactSigningCredentials",
+            "artifactPushCredentials",
+            "remoteCacheWriteCredentials"
+          ],
+          "properties": {
+            "ephemeralRunners": {
+              "const": true
+            },
+            "automountServiceAccountToken": {
+              "const": false
+            },
+            "sharedWritableCacheVolume": {
+              "const": false
+            },
+            "artifactSigningCredentials": {
+              "const": false
+            },
+            "artifactPushCredentials": {
+              "const": false
+            },
+            "remoteCacheWriteCredentials": {
+              "const": false
+            }
+          }
+        },
+        "gates": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "nixBinaryCache",
+            "runnerImage",
+            "runnerGroup",
+            "readOnlyCacheWif",
+            "connectedCluster",
+            "workflowRouting"
+          ],
+          "properties": {
+            "nixBinaryCache": {
+              "$ref": "#/$defs/gate"
+            },
+            "runnerImage": {
+              "$ref": "#/$defs/gate"
+            },
+            "runnerGroup": {
+              "$ref": "#/$defs/gate"
+            },
+            "readOnlyCacheWif": {
+              "$ref": "#/$defs/gate"
+            },
+            "connectedCluster": {
+              "$ref": "#/$defs/gate"
+            },
+            "workflowRouting": {
+              "$ref": "#/$defs/gate"
+            }
+          }
+        }
+      }
+    }
+  },
+  "$defs": {
+    "capacity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["minRunners", "maxRunners"],
+      "properties": {
+        "minRunners": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "maxRunners": {
+          "type": "integer",
+          "minimum": 0
+        }
+      }
+    },
+    "gate": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["qualified", "evidence"],
+      "properties": {
+        "qualified": {
+          "type": "boolean"
+        },
+        "evidence": {
+          "oneOf": [
+            {
+              "type": "null"
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["uri", "sha256", "reviewer", "reviewedAt"],
+              "properties": {
+                "uri": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "sha256": {
+                  "type": "string",
+                  "pattern": "^[0-9a-f]{64}$"
+                },
+                "reviewer": {
+                  "type": "string",
+                  "pattern": "^@[A-Za-z0-9-]+$"
+                },
+                "reviewedAt": {
+                  "type": "string",
+                  "format": "date-time"
+                }
+              }
+            }
+          ]
+        }
+      }
+    }
+  }
+}

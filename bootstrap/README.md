@@ -4,11 +4,13 @@ Argo CD v3.5.1 is vendored byte-for-byte from the official release. Both the sta
 manifests have committed SHA-256 files and must not be hand-edited. Production requires the HA
 profile after the production cluster has sufficient multi-zone capacity.
 
-The ARC CI control plane is deliberately not bootstrappable yet. Its reusable-workflow v4
+The ARC CI control plane is deliberately not bootstrappable yet. Its reusable-workflow v5
 release, bootstrap identity contract, infrastructure module release, and applied CI cluster must
 all be qualified first. The repository retains the inactive ARC source and release validators,
 but exposes no CI bootstrap configuration, root Application, or AppProject until that coordinated
-activation change is reviewed.
+activation change is reviewed. The separately governed presubmit source remains zero-capacity and
+unselected under [`arc/presubmit-readiness.yaml`](../arc/presubmit-readiness.yaml); follow the
+[ARC CI activation runbook](../docs/arc-ci-activation.md) rather than adding it to a root directly.
 
 The upstream payloads name versioned container tags. Both cold-start and self-management render
 them through `components/immutable-images`, whose manifest-list digests are bound to the exact
