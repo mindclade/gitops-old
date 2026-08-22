@@ -1,0 +1,19 @@
+{
+  "id": "production-controls",
+  "version": "v1.0.0",
+  "digest": "sha256:affcc099bf4e423232e9176d2f77c9d08e0d4fd4eac6d4fb926a9abe85aa5326",
+  "epoch": 1,
+  "valid_until": "2027-08-22T00:00:00Z",
+  "controls": [
+    {"id": "cost_capacity", "owner": "finops", "maximum_age": 86400000000000, "exception_allowed": true},
+    {"id": "deployment_health", "owner": "sre", "maximum_age": 3600000000000, "exception_allowed": false},
+    {"id": "dr_evidence", "owner": "sre", "maximum_age": 7776000000000000, "exception_allowed": true},
+    {"id": "github_protections", "owner": "platform", "maximum_age": 21600000000000, "exception_allowed": false},
+    {"id": "policy_results", "owner": "security", "maximum_age": 21600000000000, "exception_allowed": false},
+    {"id": "provenance", "owner": "security", "maximum_age": 86400000000000, "exception_allowed": false},
+    {"id": "sbom", "owner": "security", "maximum_age": 86400000000000, "exception_allowed": true},
+    {"id": "source_ci", "owner": "platform", "maximum_age": 21600000000000, "exception_allowed": false},
+    {"id": "tenant_isolation", "owner": "security", "maximum_age": 21600000000000, "exception_allowed": false},
+    {"id": "vulnerability_posture", "owner": "security", "maximum_age": 21600000000000, "exception_allowed": true}
+  ]
+}

@@ -21,6 +21,13 @@ from datetime import datetime, timezone
 from pathlib import Path, PurePosixPath
 from typing import Any
 
+SCRIPT_DIR = Path(__file__).resolve().parent
+if str(SCRIPT_DIR) not in sys.path:
+    sys.path.insert(0, str(SCRIPT_DIR))
+
+import production_eligibility
+
+ROOT = SCRIPT_DIR.parent
 REPOSITORIES = (
     ".github",
     ".github-private",
@@ -151,12 +158,14 @@ def load_request(path: Path) -> dict[str, Any]:
     used_evidence: set[str] = set()
     for check in checks:
         check = exact_object(
-            check, {"name", "status", "command", "detail", "evidence_key"}, "check"
+            check, {"name", "control_id", "status", "command", "detail", "evidence_key"}, "check"
         )
         name = nonempty(check["name"], "check name")
         if name in check_names:
             fail(f"duplicate check name: {name}")
         check_names.add(name)
+        if not isinstance(check["control_id"], str) or not production_eligibility.CANONICAL_NAME.fullmatch(check["control_id"]):
+            fail(f"check {name} has an invalid control_id")
         if check["status"] != "pass":
             fail(f"request check is not passed: {name}")
         nonempty(check["command"], f"check {name} command")
@@ -166,6 +175,15 @@ def load_request(path: Path) -> dict[str, Any]:
         used_evidence.add(check["evidence_key"])
     if used_evidence != artifact_keys:
         fail("every evidence artifact must support at least one named check")
+    policy = production_eligibility.load_policy(
+        ROOT / "contracts/evidence/production-controls.json"
+    )
+    if {item["control_id"] for item in checks} != {
+        item["id"] for item in policy["controls"]
+    } or len(checks) != len(policy["controls"]):
+        fail("checks must cover every production eligibility control exactly once")
+    if "infrastructure-control-plane-handoff" not in artifact_keys:
+        fail("evidence artifacts must include the applied infrastructure handoff")
 
     modules = request["module_references"]
     if not isinstance(modules, list) or not modules:
@@ -393,6 +411,17 @@ def assemble(
     audit_target = output / "estate-audit.json"
     shutil.copyfile(audit_path, audit_target)
     artifacts.append({"path": audit_target.name, "sha256": sha256(audit_target)})
+    bundle_target = output / "deployment-bundle.json"
+    bundle = production_eligibility.build_bundle(
+        request,
+        estate,
+        audit_target,
+        estate / ".github/contracts/evidence/production-controls.json",
+    )
+    bundle_target.write_text(
+        json.dumps(bundle, indent=2, sort_keys=True) + "\n", encoding="utf-8"
+    )
+    artifacts.append({"path": bundle_target.name, "sha256": sha256(bundle_target)})
 
     checks = [
         {
@@ -407,7 +436,7 @@ def assemble(
             "name": item["name"],
             "status": item["status"],
             "command": item["command"],
-            "detail": f"{item['detail']} Evidence artifact: {item['evidence_key']}.zip.",
+            "detail": f"Control {item['control_id']}. {item['detail']} Evidence artifact: {item['evidence_key']}.zip.",
         }
         for item in request["checks"]
     )
@@ -473,6 +502,7 @@ def verify(directory: Path) -> str:
             "qualification-report.md",
             "estate-audit.json",
             "checksums.json",
+            "deployment-bundle.json",
         ):
             if required not in names:
                 fail(f"qualification bundle omits {required}")

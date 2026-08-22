@@ -35,7 +35,7 @@ CONTRACT = json.loads(
     '"repository_class":"production-control",'
     '"required_paths":[".kubernetes-version","bootstrap/argocd-install.yaml","bootstrap/argocd-install.provenance.json","bootstrap/components/immutable-images/kustomization.yaml","bootstrap/components/control-plane-baseline/kustomization.yaml","bootstrap/install-profiles/standard/kustomization.yaml","bootstrap/install-profiles/ha/kustomization.yaml","bootstrap/profiles/standard/kustomization.yaml",'
     '"bootstrap/profiles/ha/kustomization.yaml","bootstrap/root-app.yaml",'
-    '"applications","deployments","projects","projects/argocd-administration.yaml","policy","qualification","qualification/schemas/qualification-request-v1.schema.json","qualification/schemas/qualification-report-v2.schema.json","scripts/audit-production-estate.py","scripts/deterministic-qualification-archive.py","scripts/production_qualification.py",".github/workflows/production-qualification-evidence.yml",".github/workflows/dr-evidence.yml","overlays/production.yaml",'
+    '"applications","deployments","projects","projects/argocd-administration.yaml","policy","qualification","qualification/schemas/qualification-request-v1.schema.json","qualification/schemas/qualification-report-v2.schema.json","scripts/audit-production-estate.py","scripts/deterministic-qualification-archive.py","scripts/production_qualification.py","scripts/production_eligibility.py",".github/workflows/production-qualification-evidence.yml",".github/workflows/dr-evidence.yml","overlays/production.yaml",'
     '"docs/disaster-recovery.md","docs/argocd-upgrade.md","docs/production-qualification.md","docs/failed-sync.md","docs/freeze-and-emergency.md","docs/rollback.md","vendor/arc/provenance.json","vendor/arc/LICENSE","vendor/cert-manager/LICENSE"],'
     '"visibility":"internal"}'
 )
@@ -429,11 +429,20 @@ for required in (
     "WIF_PROVIDER_PRODUCTION_QUALIFICATION",
     "SA_PRODUCTION_QUALIFICATION_READER",
     "SA_PRODUCTION_QUALIFICATION_WRITER",
+    "SA_PRODUCTION_QUALIFICATION_EVALUATOR",
     "PRODUCTION_QUALIFICATION_PRIVATE_KEY_SECRET",
     "PRODUCTION_QUALIFICATION_BUCKET",
+    "PRODUCTION_ELIGIBILITY_URL",
+    "PRODUCTION_ELIGIBILITY_SIGNING_KEY_ID",
+    "PRODUCTION_ELIGIBILITY_KMS_KEY_VERSION",
     "scripts/audit-production-estate.py",
     "scripts/deterministic-qualification-archive.py",
     "scripts/production_qualification.py",
+    "scripts/production_eligibility.py",
+    "/v1/evidence/claims",
+    "/v1/production-eligibility/decisions",
+    "gcloud iam service-accounts sign-jwt",
+    "openssl pkeyutl -verify",
     "request GitOps commit must equal the workflow source commit",
     "gh api --paginate",
     "--if-generation-match=0",
@@ -453,8 +462,12 @@ for repository in (
 ):
     if qualification_workflow.count(repository) < 1:
         error(f"production qualification workflow omits repository: {repository}")
-if qualification_workflow.count("environment: production") != 2:
-    error("production qualification must independently protect assembly and publication")
+if qualification_workflow.count("environment: production") != 4:
+    error("production qualification must protect assembly, publication, decision, and decision publication")
+if qualification_workflow.count("--if-generation-match=0") != 2:
+    error("production qualification must create both evidence layers immutably")
+if qualification_workflow.count("openssl pkeyutl -verify") != 2:
+    error("production eligibility signatures require independent verification before publication")
 
 secret_patterns = [
     re.compile(r"-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----"),

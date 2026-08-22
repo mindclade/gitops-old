@@ -1,8 +1,8 @@
 {
   "schemaVersion": 1,
   "bundleId": "mindclade-policy-bundle",
-  "version": "2026.08.21.3",
-  "effectiveDate": "2026-08-21",
+  "version": "2026.08.22.1",
+  "effectiveDate": "2026-08-22",
   "canonicalRepository": "mindclade/.github",
   "licenseExpression": "LicenseRef-Mindclade-Proprietary",
   "signature": {
@@ -81,6 +81,34 @@
       ]
     },
     {
+      "name": "adoption-record-schema",
+      "source": "contracts/policy-bundle/adoption-record.schema.json",
+      "sha256": "d79b32e11ed0f24aacdda4e4e789fc779854d72c2bd4c51ed410963f532b18f7",
+      "mediaType": "application/json",
+      "distributions": []
+    },
+    {
+      "name": "policy-adoption-writer",
+      "source": "tools/policy_adoption.py",
+      "sha256": "eb3d46eda7b1db1e345720402c74b9318a4780f4769e0569c5631c9d39755c54",
+      "mediaType": "text/x-python",
+      "distributions": []
+    },
+    {
+      "name": "pull-request-policy-validator",
+      "source": "tools/validate_pr_policy.py",
+      "sha256": "129359d1e952343d3a0b3e1744d1ed70d9bd10299f9d86b241a80d4bddf2a2a6",
+      "mediaType": "text/x-python",
+      "distributions": []
+    },
+    {
+      "name": "repository-home-adoption-validator",
+      "source": "actions/validate-repository-home/verify_adoption.py",
+      "sha256": "8776c428064e91b9787342ddefc9ea053f220b123f4e4ecd24b897cd186815a6",
+      "mediaType": "text/x-python",
+      "distributions": []
+    },
+    {
       "name": "acceptance-record-schema",
       "source": "contracts/policy-bundle/acceptance-record.schema.json",
       "sha256": "58022260c66fab8ca0163cc7ad7cfea621a53e7619619beb4283435487280c43",
@@ -126,6 +154,125 @@
       "name": "policy-bundle-validator",
       "source": "tools/policy_bundle.py",
       "sha256": "92404b50a6de9a56eaef4093565318f6669f75e72d1e24e44d7b8d285af3a6b3",
+      "mediaType": "text/x-python",
+      "distributions": []
+    },
+    {
+      "name": "evidence-common-schema",
+      "source": "contracts/evidence/common.schema.json",
+      "sha256": "4f153ce3d5c135e28733cfcc87a87a76326984ab85082b145ff6534c4bd5630c",
+      "mediaType": "application/json",
+      "distributions": [
+        {"repository": ".github-private", "path": "contracts/evidence/common.schema.json"},
+        {"repository": "bootstrap", "path": "contracts/evidence/common.schema.json"},
+        {"repository": "github-config", "path": "contracts/evidence/common.schema.json"},
+        {"repository": "gitops", "path": "contracts/evidence/common.schema.json"},
+        {"repository": "infrastructure-live", "path": "contracts/evidence/common.schema.json"},
+        {"repository": "mindclade-internal-monorepo", "path": "contracts/evidence/common.schema.json"}
+      ]
+    },
+    {
+      "name": "deployment-bundle-schema",
+      "source": "contracts/evidence/deployment-bundle.schema.json",
+      "sha256": "3442dbe55be8535e46cddd2195997b0da20551ec81cc6acfdb672a462ed95260",
+      "mediaType": "application/json",
+      "distributions": [
+        {"repository": ".github-private", "path": "contracts/evidence/deployment-bundle.schema.json"},
+        {"repository": "bootstrap", "path": "contracts/evidence/deployment-bundle.schema.json"},
+        {"repository": "github-config", "path": "contracts/evidence/deployment-bundle.schema.json"},
+        {"repository": "gitops", "path": "contracts/evidence/deployment-bundle.schema.json"},
+        {"repository": "infrastructure-live", "path": "contracts/evidence/deployment-bundle.schema.json"},
+        {"repository": "mindclade-internal-monorepo", "path": "contracts/evidence/deployment-bundle.schema.json"}
+      ]
+    },
+    {
+      "name": "eligibility-decision-schema",
+      "source": "contracts/evidence/eligibility-decision.schema.json",
+      "sha256": "9aa595de9d52aaca2d9b5a4d2935ed7c727efdd1d7e0ca2014b1b5a533be32db",
+      "mediaType": "application/json",
+      "distributions": [
+        {"repository": ".github-private", "path": "contracts/evidence/eligibility-decision.schema.json"},
+        {"repository": "bootstrap", "path": "contracts/evidence/eligibility-decision.schema.json"},
+        {"repository": "github-config", "path": "contracts/evidence/eligibility-decision.schema.json"},
+        {"repository": "gitops", "path": "contracts/evidence/eligibility-decision.schema.json"},
+        {"repository": "infrastructure-live", "path": "contracts/evidence/eligibility-decision.schema.json"},
+        {"repository": "mindclade-internal-monorepo", "path": "contracts/evidence/eligibility-decision.schema.json"}
+      ]
+    },
+    {
+      "name": "evidence-claim-schema",
+      "source": "contracts/evidence/evidence-claim.schema.json",
+      "sha256": "255b35c5650cfa3b06ca88fb3091bcfef2e4f53801faef37baa08a421b3e33fd",
+      "mediaType": "application/json",
+      "distributions": [
+        {"repository": ".github-private", "path": "contracts/evidence/evidence-claim.schema.json"},
+        {"repository": "bootstrap", "path": "contracts/evidence/evidence-claim.schema.json"},
+        {"repository": "github-config", "path": "contracts/evidence/evidence-claim.schema.json"},
+        {"repository": "gitops", "path": "contracts/evidence/evidence-claim.schema.json"},
+        {"repository": "infrastructure-live", "path": "contracts/evidence/evidence-claim.schema.json"},
+        {"repository": "mindclade-internal-monorepo", "path": "contracts/evidence/evidence-claim.schema.json"}
+      ]
+    },
+    {
+      "name": "evidence-exception-schema",
+      "source": "contracts/evidence/evidence-exception.schema.json",
+      "sha256": "c5c3a15680605f37e4f837942045360efebd06b298c86ba61e3896e12aad36fe",
+      "mediaType": "application/json",
+      "distributions": [
+        {"repository": ".github-private", "path": "contracts/evidence/evidence-exception.schema.json"},
+        {"repository": "bootstrap", "path": "contracts/evidence/evidence-exception.schema.json"},
+        {"repository": "github-config", "path": "contracts/evidence/evidence-exception.schema.json"},
+        {"repository": "gitops", "path": "contracts/evidence/evidence-exception.schema.json"},
+        {"repository": "infrastructure-live", "path": "contracts/evidence/evidence-exception.schema.json"},
+        {"repository": "mindclade-internal-monorepo", "path": "contracts/evidence/evidence-exception.schema.json"}
+      ]
+    },
+    {
+      "name": "evidence-verification-schema",
+      "source": "contracts/evidence/evidence-verification.schema.json",
+      "sha256": "5520a96ac5baf76935bb14e103bff5cda46b9019490bec573ac27da777fdba9e",
+      "mediaType": "application/json",
+      "distributions": [
+        {"repository": ".github-private", "path": "contracts/evidence/evidence-verification.schema.json"},
+        {"repository": "bootstrap", "path": "contracts/evidence/evidence-verification.schema.json"},
+        {"repository": "github-config", "path": "contracts/evidence/evidence-verification.schema.json"},
+        {"repository": "gitops", "path": "contracts/evidence/evidence-verification.schema.json"},
+        {"repository": "infrastructure-live", "path": "contracts/evidence/evidence-verification.schema.json"},
+        {"repository": "mindclade-internal-monorepo", "path": "contracts/evidence/evidence-verification.schema.json"}
+      ]
+    },
+    {
+      "name": "production-controls-policy",
+      "source": "contracts/evidence/production-controls.json",
+      "sha256": "cee8e73a39748d14cc1971f25cf8a08ab1d78b96bd262b6e113adde64af74fa5",
+      "mediaType": "application/json",
+      "distributions": [
+        {"repository": ".github-private", "path": "contracts/evidence/production-controls.json"},
+        {"repository": "bootstrap", "path": "contracts/evidence/production-controls.json"},
+        {"repository": "github-config", "path": "contracts/evidence/production-controls.json"},
+        {"repository": "gitops", "path": "contracts/evidence/production-controls.json"},
+        {"repository": "infrastructure-live", "path": "contracts/evidence/production-controls.json"},
+        {"repository": "mindclade-internal-monorepo", "path": "contracts/evidence/production-controls.json"}
+      ]
+    },
+    {
+      "name": "production-controls-schema",
+      "source": "contracts/evidence/production-controls.schema.json",
+      "sha256": "e92ad108de6c4f25f113330c06d974f519613ce3055c4143cc5e5755710708f1",
+      "mediaType": "application/json",
+      "distributions": [
+        {"repository": ".github-private", "path": "contracts/evidence/production-controls.schema.json"},
+        {"repository": "bootstrap", "path": "contracts/evidence/production-controls.schema.json"},
+        {"repository": "github-config", "path": "contracts/evidence/production-controls.schema.json"},
+        {"repository": "gitops", "path": "contracts/evidence/production-controls.schema.json"},
+        {"repository": "infrastructure-live", "path": "contracts/evidence/production-controls.schema.json"},
+        {"repository": "mindclade-internal-monorepo", "path": "contracts/evidence/production-controls.schema.json"}
+      ]
+    },
+    {
+      "name": "evidence-contract-validator",
+      "source": "tools/validate_evidence_contracts.py",
+      "sha256": "d94062a2bbc5e5826dc627df9c6273c6b8508bc4ef1a816589601ebf8202dbff",
       "mediaType": "text/x-python",
       "distributions": []
     }

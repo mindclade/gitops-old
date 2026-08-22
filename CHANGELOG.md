@@ -10,6 +10,9 @@ not reconstructed or relabeled here.
 
 ### Added
 
+- Added canonical deployment bundles, policy-bound evidence records, and a protected
+  production-eligibility decision flow with independent Cloud KMS Ed25519 verification and
+  immutable decision publication.
 - Restored a tested source-authority gate that freezes the sole legacy monorepo GitOps package
   to `v0.1.1` and requires new render targets to use reusable `infra/kubernetes/**` packages.
 - Added the exact estate-wide `LEGAL.md` reliance policy and made it part of

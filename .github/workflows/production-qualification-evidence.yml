@@ -282,3 +282,207 @@ jobs:
           done < <(find "$root" -type f -print0 | sort -z)
 
           echo "Published immutable evidence: gs://$BUCKET/$prefix/" >> "$GITHUB_STEP_SUMMARY"
+
+  decide:
+    needs: [assemble, publish]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    environment: production
+    permissions:
+      actions: read
+      contents: read
+      id-token: write
+    outputs:
+      artifact-name: ${{ steps.decision.outputs.artifact-name }}
+      decision-digest: ${{ steps.decision.outputs.decision-digest }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+
+      - uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0  # v5
+        with:
+          name: ${{ needs.assemble.outputs.artifact-name }}
+          path: ${{ runner.temp }}/qualification-output
+
+      - uses: google-github-actions/auth@7c6bc770dae815cd3e89ee6cdf493a5fab2cc093  # v3
+        with:
+          workload_identity_provider: ${{ vars.WIF_PROVIDER_PRODUCTION_QUALIFICATION }}
+          service_account: ${{ vars.SA_PRODUCTION_QUALIFICATION_EVALUATOR }}
+
+      - uses: google-github-actions/setup-gcloud@9d3a10fd1bfc75d8f4817cce8a2dcd3681293c7a  # v3
+
+      - id: decision
+        name: Submit evidence and verify the signed decision
+        env:
+          REQUEST_PATH: ${{ inputs.request_path }}
+          BUCKET: ${{ vars.PRODUCTION_QUALIFICATION_BUCKET }}
+          QUALIFICATION_ID: ${{ needs.assemble.outputs.qualification-id }}
+          BUNDLE_SHA256: ${{ needs.assemble.outputs.bundle-sha256 }}
+          ELIGIBILITY_URL: ${{ vars.PRODUCTION_ELIGIBILITY_URL }}
+          EVALUATOR_SERVICE_ACCOUNT: ${{ vars.SA_PRODUCTION_QUALIFICATION_EVALUATOR }}
+          SIGNING_KEY_ID: ${{ vars.PRODUCTION_ELIGIBILITY_SIGNING_KEY_ID }}
+          KMS_KEY_VERSION: ${{ vars.PRODUCTION_ELIGIBILITY_KMS_KEY_VERSION }}
+        run: |
+          set -euo pipefail
+          root="$RUNNER_TEMP/qualification-output"
+          evidence="$RUNNER_TEMP/eligibility-evidence"
+          mkdir -p "$evidence"
+          request="$(realpath "$REQUEST_PATH")"
+          case "$request" in
+            "$GITHUB_WORKSPACE"/qualification/requests/*.json) ;;
+            *)
+              echo "::error::request_path must resolve below qualification/requests"
+              exit 1
+              ;;
+          esac
+
+          now_epoch="$(date -u +%s)"
+          issued_at="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          endpoint="${ELIGIBILITY_URL%/}"
+          jq -n \
+            --arg issuer "$EVALUATOR_SERVICE_ACCOUNT" \
+            --arg audience "$endpoint/*" \
+            --argjson issued "$now_epoch" \
+            --argjson expires "$((now_epoch + 600))" \
+            '{iss:$issuer,sub:$issuer,aud:$audience,iat:$issued,exp:$expires}' \
+            > "$RUNNER_TEMP/iap-claims.json"
+          gcloud iam service-accounts sign-jwt \
+            "$RUNNER_TEMP/iap-claims.json" "$RUNNER_TEMP/iap.jwt" \
+            --iam-account "$EVALUATOR_SERVICE_ACCOUNT" --quiet >/dev/null
+
+          artifact_root="gs://$BUCKET/production-qualification/$QUALIFICATION_ID/$BUNDLE_SHA256"
+          python3 scripts/production_eligibility.py records \
+            --request "$request" \
+            --bundle "$root/deployment-bundle.json" \
+            --policy contracts/evidence/production-controls.json \
+            --artifact-root "$artifact_root" \
+            --issued-at "$issued_at" \
+            --output "$evidence/evidence-records.json" >/dev/null
+
+          while IFS= read -r record; do
+            curl --fail-with-body --silent --show-error \
+              --request POST \
+              --header "Authorization: Bearer $(cat "$RUNNER_TEMP/iap.jwt")" \
+              --header "Content-Type: application/json" \
+              --data-binary "$record" \
+              "$endpoint/v1/evidence/claims" >/dev/null
+          done < <(jq -c '.records[]' "$evidence/evidence-records.json")
+
+          curl --fail-with-body --silent --show-error \
+            --request POST \
+            --header "Authorization: Bearer $(cat "$RUNNER_TEMP/iap.jwt")" \
+            --header "Content-Type: application/json" \
+            --data-binary @"$root/deployment-bundle.json" \
+            "$endpoint/v1/production-eligibility/decisions" \
+            > "$evidence/eligibility-decision.json"
+
+          decision_digest="$(python3 scripts/production_eligibility.py verify-response \
+            --response "$evidence/eligibility-decision.json" \
+            --bundle "$root/deployment-bundle.json" \
+            --policy contracts/evidence/production-controls.json \
+            --key-id "$SIGNING_KEY_ID" \
+            --payload-output "$RUNNER_TEMP/decision-payload.bin" \
+            --signature-output "$RUNNER_TEMP/decision-signature.bin")"
+
+          access_token="$(gcloud auth print-access-token)"
+          curl --fail-with-body --silent --show-error \
+            --header "Authorization: Bearer $access_token" \
+            "https://cloudkms.googleapis.com/v1/$KMS_KEY_VERSION/publicKey" \
+            > "$RUNNER_TEMP/public-key.json"
+          test "$(jq -r .algorithm "$RUNNER_TEMP/public-key.json")" = EC_SIGN_ED25519
+          jq -r .pem "$RUNNER_TEMP/public-key.json" > "$RUNNER_TEMP/public-key.pem"
+          openssl pkeyutl -verify -pubin \
+            -inkey "$RUNNER_TEMP/public-key.pem" -rawin \
+            -in "$RUNNER_TEMP/decision-payload.bin" \
+            -sigfile "$RUNNER_TEMP/decision-signature.bin"
+
+          cp "$root/deployment-bundle.json" "$evidence/deployment-bundle.json"
+          printf '%s\n' "$decision_digest" > "$evidence/decision-digest.txt"
+          artifact="production-eligibility-${decision_digest#sha256:}"
+          {
+            echo "artifact-name=$artifact"
+            echo "decision-digest=$decision_digest"
+          } >> "$GITHUB_OUTPUT"
+          rm -f "$RUNNER_TEMP/iap.jwt" "$RUNNER_TEMP/iap-claims.json" "$RUNNER_TEMP/public-key.json" "$RUNNER_TEMP/public-key.pem" "$RUNNER_TEMP/decision-payload.bin" "$RUNNER_TEMP/decision-signature.bin"
+
+      - uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4  # v5
+        with:
+          name: ${{ steps.decision.outputs.artifact-name }}
+          path: ${{ runner.temp }}/eligibility-evidence/
+          retention-days: 30
+          if-no-files-found: error
+
+  publish-decision:
+    needs: [assemble, decide]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    environment: production
+    permissions:
+      actions: read
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+
+      - uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0  # v5
+        with:
+          name: ${{ needs.decide.outputs.artifact-name }}
+          path: ${{ runner.temp }}/eligibility-evidence
+
+      - uses: google-github-actions/auth@7c6bc770dae815cd3e89ee6cdf493a5fab2cc093  # v3
+        with:
+          workload_identity_provider: ${{ vars.WIF_PROVIDER_PRODUCTION_QUALIFICATION }}
+          service_account: ${{ vars.SA_PRODUCTION_QUALIFICATION_WRITER }}
+
+      - uses: google-github-actions/setup-gcloud@9d3a10fd1bfc75d8f4817cce8a2dcd3681293c7a  # v3
+
+      - name: Independently verify and publish the signed decision
+        env:
+          BUCKET: ${{ vars.PRODUCTION_QUALIFICATION_BUCKET }}
+          QUALIFICATION_ID: ${{ needs.assemble.outputs.qualification-id }}
+          BUNDLE_SHA256: ${{ needs.assemble.outputs.bundle-sha256 }}
+          DECISION_DIGEST: ${{ needs.decide.outputs.decision-digest }}
+          SIGNING_KEY_ID: ${{ vars.PRODUCTION_ELIGIBILITY_SIGNING_KEY_ID }}
+          KMS_KEY_VERSION: ${{ vars.PRODUCTION_ELIGIBILITY_KMS_KEY_VERSION }}
+        run: |
+          set -euo pipefail
+          root="$RUNNER_TEMP/eligibility-evidence"
+          actual="$(python3 scripts/production_eligibility.py verify-response \
+            --response "$root/eligibility-decision.json" \
+            --bundle "$root/deployment-bundle.json" \
+            --policy contracts/evidence/production-controls.json \
+            --key-id "$SIGNING_KEY_ID" \
+            --payload-output "$RUNNER_TEMP/decision-payload.bin" \
+            --signature-output "$RUNNER_TEMP/decision-signature.bin")"
+          test "$actual" = "$DECISION_DIGEST"
+          access_token="$(gcloud auth print-access-token)"
+          curl --fail-with-body --silent --show-error \
+            --header "Authorization: Bearer $access_token" \
+            "https://cloudkms.googleapis.com/v1/$KMS_KEY_VERSION/publicKey" \
+            > "$RUNNER_TEMP/public-key.json"
+          test "$(jq -r .algorithm "$RUNNER_TEMP/public-key.json")" = EC_SIGN_ED25519
+          jq -r .pem "$RUNNER_TEMP/public-key.json" > "$RUNNER_TEMP/public-key.pem"
+          openssl pkeyutl -verify -pubin \
+            -inkey "$RUNNER_TEMP/public-key.pem" -rawin \
+            -in "$RUNNER_TEMP/decision-payload.bin" \
+            -sigfile "$RUNNER_TEMP/decision-signature.bin"
+
+          prefix="production-qualification/$QUALIFICATION_ID/$BUNDLE_SHA256/eligibility/${DECISION_DIGEST#sha256:}"
+          while IFS= read -r -d '' path; do
+            relative="${path#"$root/"}"
+            digest="$(sha256sum "$path" | awk '{print $1}')"
+            target="gs://$BUCKET/$prefix/$relative"
+            if remote="$(gcloud storage objects describe "$target" --format=json 2>/dev/null)"; then
+              test "$(jq -r '.metadata.sha256' <<<"$remote")" = "$digest"
+              test "$(gcloud storage cat "$target" | sha256sum | awk '{print $1}')" = "$digest"
+            else
+              gcloud storage cp --if-generation-match=0 \
+                --custom-metadata="sha256=$digest" "$path" "$target"
+            fi
+          done < <(find "$root" -type f -print0 | sort -z)
+          echo "Published signed eligibility decision: gs://$BUCKET/$prefix/" >> "$GITHUB_STEP_SUMMARY"

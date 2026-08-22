@@ -1,0 +1,31 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://mindclade.dev/contracts/evidence/production-controls/v1",
+  "title": "Production eligibility control policy",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["id", "version", "digest", "epoch", "valid_until", "controls"],
+  "properties": {
+    "id": {"const": "production-controls"},
+    "version": {"type": "string", "pattern": "^v[0-9]+\\.[0-9]+\\.[0-9]+$"},
+    "digest": {"$ref": "common.schema.json#/$defs/digest"},
+    "epoch": {"type": "integer", "minimum": 1},
+    "valid_until": {"$ref": "common.schema.json#/$defs/timestamp"},
+    "controls": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 128,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "owner", "maximum_age", "exception_allowed"],
+        "properties": {
+          "id": {"$ref": "common.schema.json#/$defs/canonicalName"},
+          "owner": {"$ref": "common.schema.json#/$defs/canonicalName"},
+          "maximum_age": {"type": "integer", "minimum": 1, "maximum": 31622400000000000},
+          "exception_allowed": {"type": "boolean"}
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,51 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://mindclade.dev/contracts/evidence/eligibility-decision/v1",
+  "title": "Signed production-eligibility decision",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["decision", "signature"],
+  "properties": {
+    "decision": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schema_version", "decision_digest", "bundle_digest", "policy_digest", "policy_epoch", "result", "reasons", "selections", "exceptions", "evaluated_at", "expires_at"],
+      "properties": {
+        "schema_version": {"const": "mindclade.dev/production-eligibility/v1"},
+        "decision_digest": {"$ref": "common.schema.json#/$defs/digest"},
+        "bundle_digest": {"$ref": "common.schema.json#/$defs/digest"},
+        "policy_digest": {"$ref": "common.schema.json#/$defs/digest"},
+        "policy_epoch": {"type": "integer", "minimum": 1},
+        "result": {"enum": ["eligible", "eligible_with_exceptions", "ineligible", "indeterminate"]},
+        "reasons": {"type": "array", "maxItems": 256, "items": {"$ref": "common.schema.json#/$defs/canonicalName"}},
+        "selections": {
+          "type": "array",
+          "maxItems": 128,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["control_id", "claim_digest", "verification_digest"],
+            "properties": {
+              "control_id": {"$ref": "common.schema.json#/$defs/canonicalName"},
+              "claim_digest": {"$ref": "common.schema.json#/$defs/digest"},
+              "verification_digest": {"$ref": "common.schema.json#/$defs/digest"}
+            }
+          }
+        },
+        "exceptions": {"type": "array", "maxItems": 128, "items": {"type": "string", "pattern": "^exc_[a-z0-9]{16,64}$"}},
+        "evaluated_at": {"$ref": "common.schema.json#/$defs/timestamp"},
+        "expires_at": {"$ref": "common.schema.json#/$defs/timestamp"}
+      }
+    },
+    "signature": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["algorithm", "key_id", "value"],
+      "properties": {
+        "algorithm": {"const": "ed25519"},
+        "key_id": {"type": "string", "minLength": 1, "maxLength": 256},
+        "value": {"type": "string", "contentEncoding": "base64"}
+      }
+    }
+  }
+}
