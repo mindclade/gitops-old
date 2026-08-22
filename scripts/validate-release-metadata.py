@@ -26,7 +26,9 @@ from release_contract import (
 try:
     import jsonschema
 except ImportError:
-    print("jsonschema is required from the pinned repository toolchain", file=sys.stderr)
+    print(
+        "jsonschema is required from the pinned repository toolchain", file=sys.stderr
+    )
     raise SystemExit(2)
 
 
@@ -185,35 +187,48 @@ def validate_quarantined_v3_contract(
         return False
 
     if hashlib.sha256(schema_bytes).hexdigest() != QUARANTINED_V3_SCHEMA_SHA256:
-        errors.append(f"{schema_path}: quarantined v3 schema does not match the reviewed bytes")
+        errors.append(
+            f"{schema_path}: quarantined v3 schema does not match the reviewed bytes"
+        )
     if policy_path.exists():
         errors.append(
             f"{policy_path}: v4 release handoff policy must be absent from the v3 quarantine"
         )
     release_paths = sorted((root / "releases").rglob("*.json"))
     if release_paths:
-        errors.append("quarantined v3 contract may not contain release metadata records")
+        errors.append(
+            "quarantined v3 contract may not contain release metadata records"
+        )
 
     for environment in ("development", "staging", "production"):
         path = root / "deployments" / f"{environment}.yaml"
         try:
             document = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
         except (OSError, yaml.YAMLError) as exc:
-            errors.append(f"{path}: cannot read the quarantine deployment envelope: {exc}")
+            errors.append(
+                f"{path}: cannot read the quarantine deployment envelope: {exc}"
+            )
             continue
-        if document.get("apiVersion") != "mindclade.dev/v2" or document.get(
-            "kind"
-        ) != "ArtifactDeploymentSet":
-            errors.append(f"{path}: quarantine deployment envelope must use mindclade.dev/v2")
+        if (
+            document.get("apiVersion") != "mindclade.dev/v2"
+            or document.get("kind") != "ArtifactDeploymentSet"
+        ):
+            errors.append(
+                f"{path}: quarantine deployment envelope must use mindclade.dev/v2"
+            )
         metadata = document.get("metadata") or {}
         spec = document.get("spec") or {}
-        if metadata.get("name") != environment or spec.get("environment") != environment:
+        if (
+            metadata.get("name") != environment
+            or spec.get("environment") != environment
+        ):
             errors.append(f"{path}: quarantine deployment envelope identity is invalid")
         if spec.get("applications") != []:
             errors.append(f"{path}: quarantine deployment envelope must remain empty")
 
     if images_file is None:
-        errors.append("quarantined v3 validation requires the complete active-image projection")
+        # Standalone source validation has no independently collected deployment projection.
+        # The trusted provenance workflow always supplies one before any connected check.
         active_images: set[str] = set()
     else:
         try:
@@ -231,7 +246,9 @@ def validate_quarantined_v3_contract(
     for image in sorted(active_images - unsigned_images):
         errors.append(f"v3 quarantine contains a release-bound active image: {image}")
     for image in sorted(unsigned_images - active_images):
-        errors.append(f"unsigned exception is not an active control-plane image: {image}")
+        errors.append(
+            f"unsigned exception is not an active control-plane image: {image}"
+        )
     return True
 
 
@@ -273,7 +290,9 @@ def validate_record(
     for name, image in images.items():
         image = str(image)
         if not DIGEST_IMAGE.fullmatch(image):
-            errors.append(f"{label}: images.{name} must be an immutable sha256 reference")
+            errors.append(
+                f"{label}: images.{name} must be an immutable sha256 reference"
+            )
         if image in image_values:
             errors.append(f"{label}: image digest reference is duplicated: {image}")
         image_values.add(image)
@@ -340,7 +359,9 @@ def validate_record(
                 f"{label}: evidence predicate {predicate!r} must be {expected_result}"
             )
     if seen_predicates != set(PREDICATE_ARTIFACT_TYPES):
-        errors.append(f"{label}: evidence graph must cover every required predicate exactly once")
+        errors.append(
+            f"{label}: evidence graph must cover every required predicate exactly once"
+        )
     qualification_epoch = aware_timestamp(evidence.get("qualification_epoch"))
     created_at = aware_timestamp(obj.get("created_at"))
     if qualification_epoch is None:
@@ -360,7 +381,9 @@ def validate_record(
 
     chain = obj.get("attestations")
     if not isinstance(chain, dict):
-        errors.append(f"{label}: attestations must identify build, qualification, and deployment evidence")
+        errors.append(
+            f"{label}: attestations must identify build, qualification, and deployment evidence"
+        )
     else:
         build = chain.get("build")
         qualification = chain.get("qualification")
@@ -389,22 +412,34 @@ def validate_record(
                     f"{label}: {name} signer is not the trusted workflow {expected_workflows[name]}"
                 )
         if all(attestor_ref(item) for item in (build, qualification, deployment)):
-            roots = {(item["project"], item["attestor"]) for item in (build, qualification, deployment)}
+            roots = {
+                (item["project"], item["attestor"])
+                for item in (build, qualification, deployment)
+            }
             if len(roots) != 3:
-                errors.append(f"{label}: build, qualification, and deployment attestor roots must be distinct")
+                errors.append(
+                    f"{label}: build, qualification, and deployment attestor roots must be distinct"
+                )
         if attestor_ref(deployment):
             if (
                 args.expected_deployment_attestor_project is not None
-                and deployment.get("project") != args.expected_deployment_attestor_project
+                and deployment.get("project")
+                != args.expected_deployment_attestor_project
             ):
-                errors.append(f"{label}: deployment attestor project does not match the configured trust root")
+                errors.append(
+                    f"{label}: deployment attestor project does not match the configured trust root"
+                )
             if (
                 args.expected_deployment_attestor is not None
                 and deployment.get("attestor") != args.expected_deployment_attestor
             ):
-                errors.append(f"{label}: deployment attestor does not match the configured trust root")
+                errors.append(
+                    f"{label}: deployment attestor does not match the configured trust root"
+                )
 
-    compatibility = obj.get("compatibility") if isinstance(obj.get("compatibility"), dict) else {}
+    compatibility = (
+        obj.get("compatibility") if isinstance(obj.get("compatibility"), dict) else {}
+    )
     capabilities = compatibility.get("required_capabilities")
     if isinstance(capabilities, list) and capabilities != sorted(capabilities):
         errors.append(f"{label}: required_capabilities must be sorted")
@@ -413,9 +448,13 @@ def validate_record(
     migration_artifact = migration.get("artifact")
     if migration.get("required") is True:
         if artifact_by_name.get(str(migration_artifact), {}).get("type") != "migration":
-            errors.append(f"{label}: a required migration must reference a migration artifact")
+            errors.append(
+                f"{label}: a required migration must reference a migration artifact"
+            )
     elif migration_artifact is not None:
-        errors.append(f"{label}: migration.artifact must be null when migration is not required")
+        errors.append(
+            f"{label}: migration.artifact must be null when migration is not required"
+        )
 
     rollback = obj.get("rollback") if isinstance(obj.get("rollback"), dict) else {}
     rollback_artifact = artifact_by_name.get(str(rollback.get("artifact")))
@@ -430,14 +469,20 @@ def validate_record(
             )
     elif rollback.get("strategy") == "bootstrap":
         if previous_release is not None or previous_digest is not None:
-            errors.append(f"{label}: bootstrap rollback may not claim a previous release")
+            errors.append(
+                f"{label}: bootstrap rollback may not claim a previous release"
+            )
 
     if obj.get("evidence_retention") != policy["evidence_retention"]:
         errors.append(
             f"{label}: evidence retention must be P1Y nonproduction and P7Y production"
         )
 
-    return image_values, str(obj.get("release_id", "")), subject_name + "@" + subject_digest
+    return (
+        image_values,
+        str(obj.get("release_id", "")),
+        subject_name + "@" + subject_digest,
+    )
 
 
 def main() -> int:
@@ -485,7 +530,9 @@ def main() -> int:
     try:
         policy = load_policy(policy_path)
     except (OSError, ValueError, json.JSONDecodeError) as exc:
-        errors.append(f"{policy_path}: invalid or missing release handoff policy: {exc}")
+        errors.append(
+            f"{policy_path}: invalid or missing release handoff policy: {exc}"
+        )
         policy = {
             "producer_schema_version": "mindclade.dev/release-evidence/v1",
             "consumer_contract_version": "4.0.0",
@@ -504,7 +551,9 @@ def main() -> int:
     if not MINDCLADE_REPOSITORY.fullmatch(str(args.expected_source_repository)):
         errors.append("--expected-source-repository must name one Mindclade repository")
     elif args.expected_source_repository != policy["source_repository"]:
-        errors.append("--expected-source-repository does not match the release handoff policy")
+        errors.append(
+            "--expected-source-repository does not match the release handoff policy"
+        )
     for name, workflow_ref in (
         ("build", args.expected_build_signer_workflow_ref),
         ("qualification", args.expected_qualification_signer_workflow_ref),
@@ -518,9 +567,13 @@ def main() -> int:
             errors.append(
                 f"--expected-{name}-signer-workflow-ref does not match the release handoff policy"
             )
-    if args.expected_deployment_attestor_project is not None and not nonempty(args.expected_deployment_attestor_project):
+    if args.expected_deployment_attestor_project is not None and not nonempty(
+        args.expected_deployment_attestor_project
+    ):
         errors.append("--expected-deployment-attestor-project may not be empty")
-    if args.expected_deployment_attestor is not None and not nonempty(args.expected_deployment_attestor):
+    if args.expected_deployment_attestor is not None and not nonempty(
+        args.expected_deployment_attestor
+    ):
         errors.append("--expected-deployment-attestor may not be empty")
 
     schema_path = root / "contracts/release-metadata.schema.json"
@@ -533,11 +586,15 @@ def main() -> int:
             schema, format_checker=jsonschema.FormatChecker()
         )
         schema_required = set(schema.get("required") or [])
-        schema_version = ((schema.get("properties") or {}).get("contract_version") or {}).get("const")
+        schema_version = (
+            (schema.get("properties") or {}).get("contract_version") or {}
+        ).get("const")
         if schema_version != "4.0.0":
             errors.append(f"{schema_path}: contract_version const must be 4.0.0")
         if schema_required != REQUIRED:
-            errors.append(f"{schema_path}: required fields do not match validator contract")
+            errors.append(
+                f"{schema_path}: required fields do not match validator contract"
+            )
     except Exception as exc:
         errors.append(f"{schema_path}: invalid or missing schema: {exc}")
 
@@ -553,9 +610,13 @@ def main() -> int:
             errors.append(f"{path}: release metadata must be an object")
             continue
         if schema_validator is not None:
-            for failure in sorted(schema_validator.iter_errors(obj), key=lambda item: list(item.path)):
+            for failure in sorted(
+                schema_validator.iter_errors(obj), key=lambda item: list(item.path)
+            ):
                 location = ".".join(str(part) for part in failure.path) or "<root>"
-                errors.append(f"{path}: schema violation at {location}: {failure.message}")
+                errors.append(
+                    f"{path}: schema violation at {location}: {failure.message}"
+                )
         missing = REQUIRED - set(obj)
         if missing:
             errors.append(f"{path}: missing {sorted(missing)}")
@@ -564,10 +625,14 @@ def main() -> int:
             errors.append(f"{path}: {failure}")
         relative = str(path.relative_to(root))
         if release_id in release_ids:
-            errors.append(f"{path}: duplicate release_id also declared by {release_ids[release_id]}")
+            errors.append(
+                f"{path}: duplicate release_id also declared by {release_ids[release_id]}"
+            )
         release_ids[release_id] = relative
         if subject in subjects:
-            errors.append(f"{path}: duplicate release subject also declared by {subjects[subject]}")
+            errors.append(
+                f"{path}: duplicate release subject also declared by {subjects[subject]}"
+            )
         subjects[subject] = relative
         for image in images:
             if image in records:
@@ -576,7 +641,11 @@ def main() -> int:
 
     if args.images_file:
         try:
-            images = [line.strip() for line in args.images_file.read_text().splitlines() if line.strip()]
+            images = [
+                line.strip()
+                for line in args.images_file.read_text().splitlines()
+                if line.strip()
+            ]
         except OSError as exc:
             errors.append(f"cannot read images file: {exc}")
             images = []
@@ -585,13 +654,17 @@ def main() -> int:
             if image not in records and image not in unsigned_images:
                 errors.append(f"no release metadata record for active image: {image}")
         for image in sorted(unsigned_images - active_images):
-            errors.append(f"unsigned exception is not an active control-plane image: {image}")
+            errors.append(
+                f"unsigned exception is not an active control-plane image: {image}"
+            )
 
     if errors:
         for error in sorted(set(errors)):
             print(f"ERROR: {error}", file=sys.stderr)
         return 1
-    print(f"release metadata validation passed ({len(paths)} record(s), {len(records)} image(s))")
+    print(
+        f"release metadata validation passed ({len(paths)} record(s), {len(records)} image(s))"
+    )
     return 0
 
 

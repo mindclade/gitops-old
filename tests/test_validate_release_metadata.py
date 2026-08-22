@@ -9,7 +9,6 @@
 from __future__ import annotations
 
 import datetime as dt
-import hashlib
 import importlib.util
 import json
 import subprocess
@@ -17,11 +16,11 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
-from unittest import mock
 
 
 ROOT = Path(__file__).resolve().parents[1]
 VALIDATOR = ROOT / "scripts/validate-release-metadata.py"
+V3_SCHEMA = ROOT / "tests/fixtures/release-metadata-3.0.0.schema.json"
 ATTESTOR_PROJECT = "mindclade-security"
 BUILD_ATTESTOR = "build-attestor"
 QUALIFICATION_ATTESTOR = "qualification-attestor"
@@ -53,6 +52,17 @@ assert VALIDATOR_SPEC and VALIDATOR_SPEC.loader
 VALIDATOR_MODULE = importlib.util.module_from_spec(VALIDATOR_SPEC)
 VALIDATOR_SPEC.loader.exec_module(VALIDATOR_MODULE)
 PRODUCER_PATH = "evidence/serving-api/v1.2.3.json"
+
+
+def signer_refs(version: str) -> dict[str, str]:
+    prefix = "mindclade/.github/.github/workflows"
+    return {
+        "build": f"{prefix}/reusable-arc-oci-build.yml@refs/tags/{version}",
+        "qualification": (
+            f"{prefix}/reusable-arc-qualification-attest.yml@refs/tags/{version}"
+        ),
+        "deployment": f"{prefix}/reusable-binauthz-sign.yml@refs/tags/{version}",
+    }
 
 
 def valid_producer() -> dict:
@@ -204,10 +214,7 @@ def valid_exception(image: str) -> dict:
 
 class ReleaseMetadataContractTest(unittest.TestCase):
     def test_exact_empty_v3_quarantine_is_fail_closed(self) -> None:
-        schema_bytes = json.dumps(
-            {"properties": {"contract_version": {"const": "3.0.0"}}},
-            sort_keys=True,
-        ).encode("utf-8")
+        schema_bytes = V3_SCHEMA.read_bytes()
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             (root / "contracts").mkdir()
@@ -233,47 +240,54 @@ class ReleaseMetadataContractTest(unittest.TestCase):
             images = root / "images.txt"
             images.write_text("", encoding="utf-8")
             errors: list[str] = []
-            with mock.patch.object(
-                VALIDATOR_MODULE,
-                "QUARANTINED_V3_SCHEMA_SHA256",
-                hashlib.sha256(schema_bytes).hexdigest(),
-            ):
-                recognized = VALIDATOR_MODULE.validate_quarantined_v3_contract(
-                    root,
-                    images,
-                    root / "contracts/release-handoff-policy.json",
-                    set(),
-                    errors,
-                )
-                self.assertTrue(recognized)
-                self.assertEqual(errors, [])
+            recognized = VALIDATOR_MODULE.validate_quarantined_v3_contract(
+                root,
+                images,
+                root / "contracts/release-handoff-policy.json",
+                set(),
+                errors,
+            )
+            self.assertTrue(recognized)
+            self.assertEqual(errors, [])
 
-                production = root / "deployments/production.yaml"
-                production.write_text(
-                    production.read_text(encoding="utf-8").replace(
-                        "applications: []", "applications: [{}]"
-                    ),
-                    encoding="utf-8",
-                )
-                errors = []
-                VALIDATOR_MODULE.validate_quarantined_v3_contract(
-                    root,
-                    images,
-                    root / "contracts/release-handoff-policy.json",
-                    set(),
-                    errors,
-                )
-                self.assertTrue(any("must remain empty" in error for error in errors))
+            production = root / "deployments/production.yaml"
+            production.write_text(
+                production.read_text(encoding="utf-8").replace(
+                    "applications: []", "applications: [{}]"
+                ),
+                encoding="utf-8",
+            )
+            errors = []
+            VALIDATOR_MODULE.validate_quarantined_v3_contract(
+                root,
+                images,
+                root / "contracts/release-handoff-policy.json",
+                set(),
+                errors,
+            )
+            self.assertTrue(any("must remain empty" in error for error in errors))
 
     def run_schema_validator(
-        self, schema: dict, record: dict | None = None
+        self,
+        schema: dict,
+        record: dict | None = None,
+        *,
+        policy_version: str | None = None,
+        expected_version: str | None = None,
     ) -> subprocess.CompletedProcess[str]:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             (root / "contracts").mkdir()
             (root / "releases").mkdir()
-            (root / "contracts/release-handoff-policy.json").write_bytes(
-                (ROOT / "contracts/release-handoff-policy.json").read_bytes()
+            policy = json.loads(
+                (ROOT / "contracts/release-handoff-policy.json").read_text(
+                    encoding="utf-8"
+                )
+            )
+            if policy_version is not None:
+                policy["signer_workflow_refs"] = signer_refs(policy_version)
+            (root / "contracts/release-handoff-policy.json").write_text(
+                json.dumps(policy), encoding="utf-8"
             )
             (root / "contracts/release-metadata.schema.json").write_text(
                 json.dumps(schema), encoding="utf-8"
@@ -282,8 +296,21 @@ class ReleaseMetadataContractTest(unittest.TestCase):
                 (root / "releases/release.json").write_text(
                     json.dumps(record), encoding="utf-8"
                 )
+            command = [sys.executable, str(VALIDATOR), "--root", str(root)]
+            if expected_version is not None:
+                refs = signer_refs(expected_version)
+                command.extend(
+                    [
+                        "--expected-build-signer-workflow-ref",
+                        refs["build"],
+                        "--expected-qualification-signer-workflow-ref",
+                        refs["qualification"],
+                        "--expected-deployment-signer-workflow-ref",
+                        refs["deployment"],
+                    ]
+                )
             return subprocess.run(
-                [sys.executable, str(VALIDATOR), "--root", str(root)],
+                command,
                 capture_output=True,
                 check=False,
                 text=True,
@@ -356,6 +383,30 @@ class ReleaseMetadataContractTest(unittest.TestCase):
             "producer_evidence must identify the immutable producer input",
             result.stderr,
         )
+
+    def test_v4_and_v5_transition_policies_bind_exact_signers(self) -> None:
+        schema = {
+            "$schema": "https://json-schema.org/draft/2020-12/schema",
+            "type": "object",
+            "required": sorted(VALIDATOR_MODULE.REQUIRED),
+            "properties": {"contract_version": {"const": "4.0.0"}},
+        }
+        for version in ("v4.0.0", "v5.0.0"):
+            with self.subTest(version=version):
+                result = self.run_schema_validator(
+                    schema,
+                    policy_version=version,
+                    expected_version=version,
+                )
+                self.assertEqual(result.returncode, 0, result.stderr)
+
+        result = self.run_schema_validator(
+            schema,
+            policy_version="v5.0.0",
+            expected_version="v4.0.0",
+        )
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("does not match the release handoff policy", result.stderr)
 
     def test_untrusted_signer_fails(self) -> None:
         record = valid_record()
