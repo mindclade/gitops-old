@@ -24,6 +24,13 @@
 Source success does not prove an applied policy, admission decision, Argo login, recovery, or
 freeze path. Record it separately from the connected gate.
 
+The immutable developer-workstation path has the same separation. Its source contracts select
+bootstrap `1.6.0`, reusable workflows `v5.0.0`, and Terraform modules `v0.4.0`; GitOps records
+their readiness in `qualification/workstation-image-readiness.yaml` but owns no VM image or GCP
+resource. Keep all connected fields false and selection disabled until the create-only source
+object, Terraform-owned Compute Image, first boot, idle shutdown, rollback, and enforced VPC-SC
+cache path have independent evidence.
+
 ## Staging gate
 
 1. Apply the protected staging infrastructure plan and export the applied Binary Authorization

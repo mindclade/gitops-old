@@ -72,12 +72,14 @@ required_paths:
   - qualification
   - qualification/schemas/qualification-request-v1.schema.json
   - qualification/schemas/qualification-report-v2.schema.json
+  - qualification/workstation-image-readiness.yaml
   - scripts/audit-production-estate.py
   - scripts/apply-artifact-selection.py
   - scripts/create-release-promotion.py
   - scripts/deterministic-qualification-archive.py
   - scripts/production_qualification.py
   - scripts/production_eligibility.py
+  - scripts/validate-workstation-image-readiness.py
   - scripts/release_contract.py
   - scripts/select-release-handoff-transition.py
   - scripts/validate-deployment-selections.py
@@ -89,6 +91,7 @@ required_paths:
   - tests/test_release_handoff.py
   - tests/test_release_handoff_transition.py
   - tests/test_production_eligibility.py
+  - tests/test_workstation_image_readiness.py
   - tests/test_validate_release_metadata.py
   - tests/fixtures/release-metadata-3.0.0.schema.json
   - .github/workflows/production-qualification-evidence.yml

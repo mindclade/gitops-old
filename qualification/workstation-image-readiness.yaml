@@ -1,0 +1,42 @@
+# Copyright © 2026 Mindclade, LLC. All Rights Reserved.
+# Mindclade Proprietary and Confidential.
+# SPDX-License-Identifier: LicenseRef-Mindclade-Proprietary
+
+---
+apiVersion: mindclade.dev/v1alpha1
+kind: WorkstationImageQualification
+metadata:
+  name: development-workstation
+spec:
+  state: qualifying
+  authority:
+    sourceRepository: mindclade/mindclade-internal-monorepo
+    workflowRepository: mindclade/.github
+    infrastructureRepository: mindclade/infrastructure-live
+    gitopsRole: evidence-only
+  releases:
+    bootstrapContract: 1.6.0
+    workflowContract: v5.0.0
+    terraformModules: v0.4.0
+  sourceGates:
+    imageContractValidated: true
+    runtimeFetchesAbsent: true
+    createOnlyPublicationContract: true
+    terraformImageAuthoritySeparated: true
+    governedSourceEvidenceTransition: true
+  connectedGates:
+    bootstrapApplied: false
+    workflowContractPublished: false
+    terraformModulesPublished: false
+    sourceBucketApplied: false
+    sourceObjectPublished: false
+    sourceEvidenceCatalogQualified: false
+    computeImageApplied: false
+    firstBootQualified: false
+    idleShutdownObserved: false
+    rollbackImageBooted: false
+    vpcScCachePathQualified: false
+  activation:
+    argoReconciliationAllowed: false
+    productActivationAllowed: false
+    selected: false
