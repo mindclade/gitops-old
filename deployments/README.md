@@ -43,7 +43,8 @@ eligibility decision, the pinned Ed25519 public-key fingerprint, and the rollbac
 rendering refuses `staged-v1`; only the protected qualification candidate mode may render it.
 
 The handoff expires after at most six hours. The stable `production-handoff-gate` pull-request
-and merge-queue check re-fetches the exact GCS object generation and revalidates the signature,
-selection, and committed render before merge. Governance must make that context required before
-activation. Expiry prevents a new promotion; it does not turn evidence freshness into an automated
-production deletion.
+check runs protected-base tooling, treats the head only as data, and re-fetches the exact GCS object
+generation. The merge-queue check has no cloud identity and repeats signature, expiry, selection,
+and committed-render validation with protected-base tooling. Governance must make that context
+required before activation. Expiry prevents a new promotion; it does not turn evidence freshness
+into an automated production deletion.

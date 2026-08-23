@@ -6,11 +6,11 @@ signed eligibility decision, immutable evidence-object URI and generation, pinne
 rollback target.
 
 Claims contain no credentials or raw connected evidence. The protected qualification workflow
-publishes evidence create-only, and the protected `production-handoff-gate` merge check re-fetches
-the exact object generation and verifies the Ed25519 decision before the qualified source can merge.
-A decision is
-valid for at most six hours. Expiry blocks a new promotion; it does not automatically delete a
-healthy running workload.
+publishes evidence create-only. The base-trusted pull-request gate validates candidate data before
+authentication, re-fetches the exact object generation, and verifies the Ed25519 decision. The
+merge-queue gate receives no cloud identity and repeats signature, expiry, selection, and render
+validation with tooling from the protected base. A decision is valid for at most six hours. Expiry
+blocks a new promotion; it does not automatically delete a healthy running workload.
 
 Promotion first commits a nonempty `staged-v1` selection with no handoff; ordinary rendering cannot
 materialize it. Protected qualification emits the handoff and public key as a short-lived review
