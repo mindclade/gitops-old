@@ -88,6 +88,7 @@ required_paths:
   - scripts/production_qualification.py
   - scripts/production_eligibility.py
   - scripts/production_handoff.py
+  - scripts/validate-production-handoff-workflow.py
   - scripts/validate-workstation-image-readiness.py
   - scripts/release_contract.py
   - scripts/select-release-handoff-transition.py

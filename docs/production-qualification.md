@@ -88,8 +88,12 @@ activation pull request references that claim through the v3 deployment set, cha
 claim contains no raw evidence or credential: it records the generation-pinned evidence URI,
 bundle/decision/selection/render digests, exact source commits, signature, public-key fingerprint,
 six-hour validity window, and rollback target. Credential-free validation verifies the committed
-signature; the protected `production-handoff-gate` check re-fetches the exact immutable object
-generation on pull requests and merge groups before merge. Activate that required context through
+signature. On pull requests, the protected `production-handoff-gate` runs from the protected base
+revision through `pull_request_target`, treats the head only as data, validates it before cloud
+authentication, and re-fetches the exact immutable object generation. Merge groups receive no
+cloud identity; they repeat signature, expiry, selection, and render validation with tooling from
+the protected merge-group base. Trusted provenance pins the privileged workflow digest, so changing
+that workflow requires a separate reviewed trust transition. Activate the required context through
 GitHub governance before selecting production workloads.
 Expiry freezes a new promotion and requires reviewed operator disposition rather than deleting a
 healthy workload automatically.

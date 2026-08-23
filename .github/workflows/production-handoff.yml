@@ -3,10 +3,14 @@
 # Mindclade Proprietary and Confidential.
 # SPDX-License-Identifier: LicenseRef-Mindclade-Proprietary
 
+# Privilege boundary: pull_request_target loads this workflow and every executable from the
+# protected base revision. The pull-request head is mounted only as data under .candidate. Merge
+# groups receive no cloud identity and repeat the signature, expiry, selection, and render checks
+# using tooling from the protected merge-group base.
 name: Production handoff
 
 on:
-  pull_request:
+  pull_request_target:
   merge_group:
 
 permissions:
@@ -15,37 +19,54 @@ permissions:
 jobs:
   detect:
     runs-on: ubuntu-24.04
+    permissions:
+      contents: read
     outputs:
       qualified: ${{ steps.selection.outputs.qualified }}
       handoff-path: ${{ steps.selection.outputs.handoff-path }}
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+      - name: Refuse forked candidates
+        if: github.event_name == 'pull_request_target'
+        env:
+          HEAD_REPOSITORY: ${{ github.event.pull_request.head.repo.full_name }}
+        run: |
+          set -euo pipefail
+          [[ "$HEAD_REPOSITORY" == "$GITHUB_REPOSITORY" ]] || {
+            echo "::error::Production activation PRs must originate inside ${GITHUB_REPOSITORY}."
+            exit 1
+          }
+
+      - name: Check out desired-state candidate as data
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
         with:
+          ref: ${{ github.event_name == 'pull_request_target' && github.event.pull_request.head.sha || github.event.merge_group.head_sha }}
+          path: .candidate
           persist-credentials: false
 
       - id: selection
         name: Detect an atomic qualified production selection
         run: |
           set -euo pipefail
-          state="$(sed -n 's/^  qualificationState: //p' deployments/production.yaml)"
+          selection=.candidate/deployments/production.yaml
+          state="$(sed -n 's/^  qualificationState: //p' "$selection")"
           test "$(printf '%s\n' "$state" | sed '/^$/d' | wc -l | tr -d ' ')" = 1
           if [ "$state" != qualified-v1 ]; then
             echo "qualified=false" >> "$GITHUB_OUTPUT"
             echo "handoff-path=" >> "$GITHUB_OUTPUT"
             exit 0
           fi
-          handoff="$(sed -n 's/^  qualificationHandoff: //p' deployments/production.yaml)"
+          handoff="$(sed -n 's/^  qualificationHandoff: //p' "$selection")"
           case "$handoff" in
             qualification/handoffs/*.json) ;;
             *) echo "::error::qualified-v1 must name a safe production handoff"; exit 1 ;;
           esac
-          test -f "$handoff"
+          test -f ".candidate/$handoff"
           echo "qualified=true" >> "$GITHUB_OUTPUT"
           echo "handoff-path=$handoff" >> "$GITHUB_OUTPUT"
 
   connected:
     needs: detect
-    if: needs.detect.outputs.qualified == 'true'
+    if: github.event_name == 'pull_request_target' && needs.detect.outputs.qualified == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     environment: production
@@ -53,8 +74,18 @@ jobs:
       contents: read
       id-token: write
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+      - name: Check out trusted base implementation
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
         with:
+          ref: ${{ github.event.pull_request.base.sha }}
+          path: .trusted
+          persist-credentials: false
+
+      - name: Check out desired-state candidate as data
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          path: .candidate
           persist-credentials: false
 
       - uses: cachix/install-nix-action@630ae543ea3a38a9a4166f03376c02c50f408342  # v31.11.0
@@ -63,14 +94,7 @@ jobs:
             experimental-features = nix-command flakes
             accept-flake-config = false
 
-      - uses: google-github-actions/auth@7c6bc770dae815cd3e89ee6cdf493a5fab2cc093  # v3
-        with:
-          workload_identity_provider: ${{ vars.WIF_PROVIDER_PRODUCTION_QUALIFICATION }}
-          service_account: ${{ vars.SA_PRODUCTION_QUALIFICATION_READER }}
-
-      - uses: google-github-actions/setup-gcloud@9d3a10fd1bfc75d8f4817cce8a2dcd3681293c7a  # v3
-
-      - name: Reverify immutable evidence and the committed activation
+      - name: Validate candidate handoff before cloud authentication
         env:
           HANDOFF_PATH: ${{ needs.detect.outputs.handoff-path }}
         run: |
@@ -79,38 +103,134 @@ jobs:
             qualification/handoffs/*.json) ;;
             *) echo "::error::unsafe production handoff path"; exit 1 ;;
           esac
-          uri="$(jq -r .artifact.uri "$HANDOFF_PATH")"
-          generation="$(jq -r .artifact.generation "$HANDOFF_PATH")"
-          expected="$(jq -r .artifact.digest "$HANDOFF_PATH")"
+          nix develop ./.trusted#ci --command python3 \
+            .trusted/scripts/production_handoff.py validate \
+            --root .candidate \
+            --handoff ".candidate/$HANDOFF_PATH" \
+            --selection .candidate/deployments/production.yaml \
+            --render-root .candidate/rendered/production
+
+      - name: Authenticate as the evidence-only qualification reader
+        uses: google-github-actions/auth@7c6bc770dae815cd3e89ee6cdf493a5fab2cc093  # v3
+        with:
+          workload_identity_provider: ${{ vars.WIF_PROVIDER_PRODUCTION_QUALIFICATION }}
+          service_account: ${{ vars.SA_PRODUCTION_QUALIFICATION_READER }}
+
+      - uses: google-github-actions/setup-gcloud@9d3a10fd1bfc75d8f4817cce8a2dcd3681293c7a  # v3
+
+      - name: Fetch the exact immutable evidence generation
+        env:
+          HANDOFF_PATH: ${{ needs.detect.outputs.handoff-path }}
+        run: |
+          set -euo pipefail
+          handoff=".candidate/$HANDOFF_PATH"
+          uri="$(jq -r .artifact.uri "$handoff")"
+          generation="$(jq -r .artifact.generation "$handoff")"
+          expected="$(jq -r .artifact.digest "$handoff")"
+          case "$uri" in gs://*) ;; *) echo "::error::unsafe evidence URI"; exit 1 ;; esac
+          [[ "$generation" =~ ^[1-9][0-9]*$ ]]
+          [[ "$expected" =~ ^sha256:[0-9a-f]{64}$ ]]
           gcloud storage cat "${uri}#${generation}" > "$RUNNER_TEMP/eligibility-decision.json"
           actual="sha256:$(sha256sum "$RUNNER_TEMP/eligibility-decision.json" | awk '{print $1}')"
           test "$actual" = "$expected" || {
             echo "::error::immutable eligibility artifact digest differs"
             exit 1
           }
+
+      - name: Drop cloud credentials before processing fetched data
+        run: |
+          set -euo pipefail
+          if [ -n "${GOOGLE_GHA_CREDS_PATH:-}" ]; then
+            rm -f -- "$GOOGLE_GHA_CREDS_PATH"
+          fi
+          {
+            echo 'CLOUDSDK_AUTH_CREDENTIAL_FILE_OVERRIDE='
+            echo 'GOOGLE_APPLICATION_CREDENTIALS='
+            echo 'GOOGLE_GHA_CREDS_PATH='
+          } >> "$GITHUB_ENV"
+
+      - name: Compare remote evidence and revalidate the committed activation
+        env:
+          HANDOFF_PATH: ${{ needs.detect.outputs.handoff-path }}
+        run: |
+          set -euo pipefail
           diff -u \
-            <(jq -S .signed_decision "$HANDOFF_PATH") \
+            <(jq -S .signed_decision ".candidate/$HANDOFF_PATH") \
             <(jq -S .signed_decision "$RUNNER_TEMP/eligibility-decision.json")
-          nix develop .#ci --command python3 scripts/production_handoff.py validate \
-            --handoff "$HANDOFF_PATH" \
-            --selection deployments/production.yaml \
-            --render-root rendered/production
+          nix develop ./.trusted#ci --command python3 \
+            .trusted/scripts/production_handoff.py validate \
+            --root .candidate \
+            --handoff ".candidate/$HANDOFF_PATH" \
+            --selection .candidate/deployments/production.yaml \
+            --render-root .candidate/rendered/production
+
+  merge-group-offline:
+    needs: detect
+    if: github.event_name == 'merge_group' && needs.detect.outputs.qualified == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - name: Check out trusted merge-group base implementation
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          ref: ${{ github.event.merge_group.base_sha }}
+          path: .trusted
+          persist-credentials: false
+
+      - name: Check out merge-group candidate as data
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          ref: ${{ github.event.merge_group.head_sha }}
+          path: .candidate
+          persist-credentials: false
+
+      - uses: cachix/install-nix-action@630ae543ea3a38a9a4166f03376c02c50f408342  # v31.11.0
+        with:
+          extra_nix_config: |
+            experimental-features = nix-command flakes
+            accept-flake-config = false
+
+      - name: Revalidate signature, expiry, selection, and render without cloud identity
+        env:
+          HANDOFF_PATH: ${{ needs.detect.outputs.handoff-path }}
+        run: |
+          set -euo pipefail
+          nix develop ./.trusted#ci --command python3 \
+            .trusted/scripts/production_handoff.py validate \
+            --root .candidate \
+            --handoff ".candidate/$HANDOFF_PATH" \
+            --selection .candidate/deployments/production.yaml \
+            --render-root .candidate/rendered/production
 
   production-handoff-gate:
-    needs: [detect, connected]
+    needs: [detect, connected, merge-group-offline]
     if: always()
     runs-on: ubuntu-24.04
+    permissions:
+      contents: read
     steps:
-      - name: Require connected verification for qualified production
+      - name: Require the event-appropriate production verification
         env:
+          EVENT_NAME: ${{ github.event_name }}
           DETECT_RESULT: ${{ needs.detect.result }}
           QUALIFIED: ${{ needs.detect.outputs.qualified }}
           CONNECTED_RESULT: ${{ needs.connected.result }}
+          MERGE_GROUP_RESULT: ${{ needs.merge-group-offline.result }}
         run: |
           set -euo pipefail
           test "$DETECT_RESULT" = success
-          if [ "$QUALIFIED" = true ]; then
-            test "$CONNECTED_RESULT" = success
-          else
+          if [ "$QUALIFIED" != true ]; then
             test "$CONNECTED_RESULT" = skipped
+            test "$MERGE_GROUP_RESULT" = skipped
+          elif [ "$EVENT_NAME" = pull_request_target ]; then
+            test "$CONNECTED_RESULT" = success
+            test "$MERGE_GROUP_RESULT" = skipped
+          elif [ "$EVENT_NAME" = merge_group ]; then
+            test "$CONNECTED_RESULT" = skipped
+            test "$MERGE_GROUP_RESULT" = success
+          else
+            echo "::error::unsupported production handoff event: $EVENT_NAME"
+            exit 1
           fi

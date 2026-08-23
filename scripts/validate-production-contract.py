@@ -35,7 +35,7 @@ CONTRACT = json.loads(
     '"repository_class":"production-control",'
     '"required_paths":[".kubernetes-version","bootstrap/argocd-install.yaml","bootstrap/argocd-install.provenance.json","bootstrap/components/immutable-images/kustomization.yaml","bootstrap/components/control-plane-baseline/kustomization.yaml","bootstrap/install-profiles/standard/kustomization.yaml","bootstrap/install-profiles/ha/kustomization.yaml","bootstrap/profiles/standard/kustomization.yaml",'
     '"bootstrap/profiles/ha/kustomization.yaml","bootstrap/root-app.yaml",'
-    '"applications","deployments","deployments/artifact-deployment-set-v3.schema.json","projects","projects/argocd-administration.yaml","policy","qualification","qualification/schemas/qualification-request-v1.schema.json","qualification/schemas/qualification-report-v2.schema.json","qualification/schemas/production-handoff-v1.schema.json","qualification/schemas/production-release-chain-v1.schema.json","qualification/handoffs/README.md","qualification/keys/README.md","qualification/release-chain/README.md","qualification/workstation-image-readiness.yaml","scripts/audit-production-estate.py","scripts/deterministic-qualification-archive.py","scripts/production_qualification.py","scripts/production_eligibility.py","scripts/production_handoff.py","scripts/validate-workstation-image-readiness.py","tests/test_production_handoff.py","tests/test_production_handoff_workflow.py","tests/test_workstation_image_readiness.py",".github/workflows/production-qualification-evidence.yml",".github/workflows/production-handoff.yml",".github/workflows/dr-evidence.yml","overlays/production.yaml",'
+    '"applications","deployments","deployments/artifact-deployment-set-v3.schema.json","projects","projects/argocd-administration.yaml","policy","qualification","qualification/schemas/qualification-request-v1.schema.json","qualification/schemas/qualification-report-v2.schema.json","qualification/schemas/production-handoff-v1.schema.json","qualification/schemas/production-release-chain-v1.schema.json","qualification/handoffs/README.md","qualification/keys/README.md","qualification/release-chain/README.md","qualification/workstation-image-readiness.yaml","scripts/audit-production-estate.py","scripts/deterministic-qualification-archive.py","scripts/production_qualification.py","scripts/production_eligibility.py","scripts/production_handoff.py","scripts/validate-production-handoff-workflow.py","scripts/validate-workstation-image-readiness.py","tests/test_production_handoff.py","tests/test_production_handoff_workflow.py","tests/test_workstation_image_readiness.py",".github/workflows/production-qualification-evidence.yml",".github/workflows/production-handoff.yml",".github/workflows/dr-evidence.yml","overlays/production.yaml",'
     '"docs/disaster-recovery.md","docs/argocd-upgrade.md","docs/production-qualification.md","docs/failed-sync.md","docs/freeze-and-emergency.md","docs/rollback.md","vendor/arc/provenance.json","vendor/arc/LICENSE","vendor/cert-manager/LICENSE"],'
     '"visibility":"internal"}'
 )
@@ -94,7 +94,9 @@ def tracked_prefix_exists(relative: str) -> bool:
 def vendored_tree_sha256(root: Path) -> str:
     """Hash both relative names and bytes so file moves are provenance changes."""
     digest = hashlib.sha256()
-    for path in sorted(candidate for candidate in root.rglob("*") if candidate.is_file()):
+    for path in sorted(
+        candidate for candidate in root.rglob("*") if candidate.is_file()
+    ):
         data = path.read_bytes()
         relative = path.relative_to(root).as_posix().encode("utf-8")
         digest.update(relative + b"\0")
@@ -129,8 +131,7 @@ try:
         if record.get("version") != "0.14.2":
             error(f"ARC vendor provenance has an unexpected version: {name}")
         expected_reference = (
-            "oci://ghcr.io/actions/actions-runner-controller-charts/"
-            f"{name}:0.14.2"
+            f"oci://ghcr.io/actions/actions-runner-controller-charts/{name}:0.14.2"
         )
         if record.get("oci_reference") != expected_reference:
             error(f"ARC vendor provenance has an unexpected OCI reference: {name}")
@@ -291,12 +292,15 @@ validate_workflow = (workflow_root / "validate.yml").read_text(encoding="utf-8")
 contract_workflow = (workflow_root / "production-contract.yml").read_text(
     encoding="utf-8"
 )
-nix_qualification_workflow = (
-    workflow_root / "nix-qualification.yml"
-).read_text(encoding="utf-8")
+nix_qualification_workflow = (workflow_root / "nix-qualification.yml").read_text(
+    encoding="utf-8"
+)
 qualification_workflow = (
     workflow_root / "production-qualification-evidence.yml"
 ).read_text(encoding="utf-8")
+handoff_workflow = (workflow_root / "production-handoff.yml").read_text(
+    encoding="utf-8"
+)
 qualification_runbook = (ROOT / "docs/production-qualification.md").read_text(
     encoding="utf-8"
 )
@@ -324,9 +328,13 @@ if (
     "validate-deployment-selections.py" not in provenance_workflow
     or "--print-images" not in provenance_workflow
 ):
-    error("provenance workflow does not enumerate images through trusted v2 release selections")
+    error(
+        "provenance workflow does not enumerate images through trusted v2 release selections"
+    )
 if ".spec.applications[]?.images" in provenance_workflow:
-    error("provenance workflow still trusts the removed inline deployment image contract")
+    error(
+        "provenance workflow still trusts the removed inline deployment image contract"
+    )
 for required in (":validateAttestationOccurrence", 'value.get("result") == "VERIFIED"'):
     if required not in release_verifier:
         error(
@@ -381,7 +389,9 @@ for name, workflow in (
     if "steps.connected.outputs.enabled == 'true'" not in workflow:
         error(f"{name} workflow does not gate cloud access on connected activation")
 if "pull_request_target:\n    paths:" not in render_workflow:
-    error("render workflow runs connected candidate processing for unrelated pull requests")
+    error(
+        "render workflow runs connected candidate processing for unrelated pull requests"
+    )
 if "merge_group:" not in validate_workflow or "merge_group:" not in contract_workflow:
     error("required GitOps checks do not run for merge-queue groups")
 for context in (
@@ -408,8 +418,7 @@ expected_nix_qualification_caller = (
 )
 if (
     nix_qualification_workflow.count(
-        "uses: mindclade/.github/.github/workflows/"
-        "reusable-nix-qualification.yml@"
+        "uses: mindclade/.github/.github/workflows/reusable-nix-qualification.yml@"
     )
     != 1
     or expected_nix_qualification_caller not in nix_qualification_workflow
@@ -420,9 +429,36 @@ for expected_identity in (
     NIX_QUALIFICATION_WORKFLOW_TREE,
 ):
     if expected_identity not in qualification_runbook:
-        error("production qualification runbook omits the governed Nix workflow identity")
+        error(
+            "production qualification runbook omits the governed Nix workflow identity"
+        )
 if render_workflow.count('rm -f -- "$GOOGLE_GHA_CREDS_PATH"') < 2:
     error("render workflow retains GCP credentials while processing desired-state data")
+for required in (
+    "pull_request_target:",
+    "merge_group:",
+    "github.event.pull_request.base.sha",
+    "github.event.pull_request.head.sha",
+    "github.event.merge_group.base_sha",
+    "github.event.merge_group.head_sha",
+    "path: .trusted",
+    "path: .candidate",
+    "nix develop ./.trusted#ci",
+    ".trusted/scripts/production_handoff.py validate",
+    "--root .candidate",
+    "environment: production",
+    "id-token: write",
+    'rm -f -- "$GOOGLE_GHA_CREDS_PATH"',
+):
+    if required not in handoff_workflow:
+        error(f"production handoff workflow omits trust boundary: {required}")
+for forbidden in ("\n  pull_request:\n", "nix develop .#ci", ".candidate/scripts/"):
+    if forbidden in handoff_workflow:
+        error(
+            f"production handoff workflow crosses trust boundary: {forbidden.strip()}"
+        )
+if "validate-production-handoff-workflow.py" not in provenance_workflow:
+    error("trusted provenance does not pin the production handoff workflow digest")
 for required in (
     'test "$GITHUB_REF" = refs/heads/main',
     "environment: production",
@@ -463,11 +499,15 @@ for repository in (
     if qualification_workflow.count(repository) < 1:
         error(f"production qualification workflow omits repository: {repository}")
 if qualification_workflow.count("environment: production") != 4:
-    error("production qualification must protect assembly, publication, decision, and decision publication")
+    error(
+        "production qualification must protect assembly, publication, decision, and decision publication"
+    )
 if qualification_workflow.count("--if-generation-match=0") != 2:
     error("production qualification must create both evidence layers immutably")
 if qualification_workflow.count("openssl pkeyutl -verify") != 2:
-    error("production eligibility signatures require independent verification before publication")
+    error(
+        "production eligibility signatures require independent verification before publication"
+    )
 
 secret_patterns = [
     re.compile(r"-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----"),
