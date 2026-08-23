@@ -143,8 +143,12 @@ def load_selection(environment: str, errors: list[str]) -> dict[str, dict]:
     except Exception as exc:
         errors.append(f"{path.relative_to(ROOT)}: cannot parse: {exc}")
         return {}
+    # v3 retains the v2 application/release inventory and adds activation fields validated by
+    # its owning source revision. Accepting the envelope here lets pull_request_target provenance
+    # keep executing trusted default-branch application and digest validation during the staged
+    # contract rollout; it does not execute candidate tooling or relax application fields.
     if (
-        document.get("apiVersion") != "mindclade.dev/v2"
+        document.get("apiVersion") not in {"mindclade.dev/v2", "mindclade.dev/v3"}
         or document.get("kind") != "ArtifactDeploymentSet"
     ):
         errors.append(f"{path.relative_to(ROOT)}: invalid apiVersion/kind")
