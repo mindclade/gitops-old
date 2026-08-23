@@ -80,6 +80,34 @@ class ArcCiContractTest(unittest.TestCase):
             errors,
         )
 
+    def test_spot_capacity_cannot_exceed_pool_ceiling(self) -> None:
+        contract = copy.deepcopy(self.contract)
+        contract["spec"]["capacity"]["activatedTarget"]["maxRunners"] = 25
+        errors = validate_arc_ci.validate_readiness(
+            contract,
+            self.values,
+            self.vendor_runner_image,
+        )
+        self.assertIn(
+            "activated capacity must equal the reviewed Spot pool ceiling",
+            errors,
+        )
+
+    def test_spot_placement_requires_both_taints(self) -> None:
+        contract = copy.deepcopy(self.contract)
+        values = copy.deepcopy(self.values)
+        contract["spec"]["placement"]["tolerations"].pop()
+        values["template"]["spec"]["tolerations"].pop()
+        errors = validate_arc_ci.validate_readiness(
+            contract,
+            values,
+            self.vendor_runner_image,
+        )
+        self.assertIn(
+            "presubmit placement differs from the dedicated Spot pool contract",
+            errors,
+        )
+
     def test_unqualified_runner_image_rejects_invented_coordinates(self) -> None:
         contract = copy.deepcopy(self.contract)
         contract["spec"]["runnerImage"]["digest"] = "sha256:" + ("1" * 64)

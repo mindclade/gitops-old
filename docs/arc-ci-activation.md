@@ -19,12 +19,15 @@ The fixture uses the digest already locked in the vendored ARC provenance solely
 chart. It is not the Mindclade CI image and cannot satisfy the `runnerImage` gate. Do not activate
 that fixture.
 
-All runner scale sets select `mindclade.dev/workload-class=arc-runner` and tolerate only
-`scheduling.mindclade.dev/arc-runner=true:NoSchedule`. The ARC controller has neither permission
-and remains on the system pool. This is source-complete placement intent, not evidence that the
-pool exists: `infrastructure-live/5-workloads/ci/nodepools/runner` still selects the unpublished
-module contract `v0.4.0`. Apply and qualify that unit before reconciling these values. A zero
-`minRunners` value is not a rollout guard because a queued job can scale an active set from zero.
+The canary, build, and qualification scale sets remain on the on-demand `arc-runner` pool. This
+dormant presubmit set instead selects `mindclade.dev/workload-class=arc-presubmit-spot` and
+tolerates exactly the module-managed `scheduling.mindclade.dev/spot=true:NoSchedule` taint and the
+pool-specific `scheduling.mindclade.dev/arc-presubmit=true:NoSchedule` taint. The ARC controller
+has none of those permissions and remains on the system pool. The placement contract is
+source-complete, not evidence that `infrastructure-live/5-workloads/ci/nodepools/runner-spot`
+exists or is schedulable: it still selects unpublished module contract `v0.4.0`. Apply and qualify
+that unit before selecting these values. A zero `minRunners` value is not a rollout guard because
+a queued job can scale an active set from zero.
 
 ## Authority boundaries
 
@@ -58,11 +61,16 @@ with its URI, SHA-256, reviewer, and UTC timestamp in `arc/presubmit-readiness.y
    identities.
 5. **Connected cluster:** the target cluster, ARC controller, workload identity, network policy,
    Secret Sync CRDs, and bounded resource capacity pass connected qualification. Prove the
-   dedicated runner pool carries the exact label and taint selected by GitOps, runner pods do not
-   land on system nodes, the controller does not land on runner nodes, and the pool ceiling covers
-   the activated concurrency.
+   dedicated Spot pool carries the exact label and both taints selected by GitOps, runner pods do
+   not land on system or release nodes, the controller does not land on runner nodes, and the
+   eight-node ceiling at three runners per node covers the 24-runner activated concurrency.
 6. **Workflow routing:** an internal test repository proves the exact scale-set label accepts the
    permitted workflow and rejects an unlisted workflow, a fork, and an artifact-authority job.
+7. **Spot interruption:** a controlled eviction proves node loss is classified as infrastructure
+   failure, the interrupted job is safely rerun without publishing side effects, and the original
+   pod and registration are removed. Ordinary test failures must not enter that retry path.
+8. **On-demand rollback:** the same workflow is routed back to `ubuntu-24.04`, succeeds without the
+   Spot scale set, and leaves no queued jobs or required checks bound only to unavailable capacity.
 
 The GitHub App secret named in the chart is a controller registration credential. It is never
 mounted into a runner pod. Runner pods use the chart-created no-permission service account,
@@ -93,11 +101,11 @@ Use a dedicated pull request while capacity and selection remain zero.
 
 ## Protected canary activation
 
-Use a second, approved change only after all six gates remain qualified.
+Use a second, approved change only after all eight gates remain qualified.
 
 1. In `github-config`, apply the separate `mindclade-arc-ci` group and its exact workflow
    allowlist. In `infrastructure-live`, publish and validate the selected module release, then
-   apply the dedicated runner pool, read-only cache identity, and qualified cluster prerequisites
+   apply the dedicated Spot runner pool, read-only cache identity, and qualified cluster prerequisites
    through their protected plan/apply paths. Run
    `make validate-gitops-integration GITOPS=../gitops` against the paired source commits and record
    applied placement evidence; do not copy raw credentials into Git.
@@ -111,7 +119,9 @@ Use a second, approved change only after all six gates remain qualified.
    review every generated object, and merge through the protected queue.
 5. From an approved operator session, sync the reviewed commit. Run one non-publishing test job and
    prove the pod terminates after the job, no persistent volume exists, cache access is read-only,
-   forbidden workflow routing is denied, and no signing or push credential is reachable.
+   forbidden workflow routing is denied, and no signing or push credential is reachable. Evict the
+   canary node and prove interruption classification, bounded retry, registration cleanup, and
+   hosted-runner rollback before proceeding.
 6. Store the connected canary record at the restricted evidence boundary with the Git commit,
    image digest, workflow run ID, pod UID, timestamps, reviewer, and SHA-256.
 
@@ -123,13 +133,14 @@ do not weaken the validator or runner-group restriction.
 
 After the canary evidence is independently reviewed, use a third pull request to set
 `phase: activated`, `minRunners: 2`, and `maxRunners: 24`. The minimum absorbs queue latency; the
-maximum provides full-graph fanout and is intentionally higher than the release lane's maximum of
-six. Do not increase the ceiling until the cluster quota, cache service, queue latency, and cost
-evidence support it.
+maximum provides full-graph fanout and exactly matches eight nodes at the reviewed three runners
+per node. Do not increase it until a paired infrastructure ceiling change plus renewed cluster
+quota, cache service, eviction, queue-latency, and cost evidence support it.
 
 After merge and protected sync, observe at least one pull request and one merge-group full-graph
-run. Confirm cache-hit rate, startup latency, CPU/memory saturation, pod deletion, rejected cache
-writes, and hosted-runner fallback behavior before making the ARC label a required merge context.
+run. Confirm cache-hit rate, startup latency, CPU/memory saturation, Spot interruption rate, pod
+deletion, rejected cache writes, and hosted-runner fallback behavior before making the ARC label a
+required merge context.
 
 ## Roll back
 
