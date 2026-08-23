@@ -120,9 +120,9 @@ roleRef:
   name: mindclade-arc-qualify-cpu-gha-rs-manager
 subjects:
 - kind: ServiceAccount
-  name: 
+  name:
     arc-controller
-  namespace: 
+  namespace:
     arc-systems
 ---
 # Source: gha-runner-scale-set/templates/autoscalingrunnerset.yaml
@@ -142,7 +142,7 @@ metadata:
     actions.github.com/scale-set-name: mindclade-arc-qualify-cpu
     actions.github.com/scale-set-namespace: arc-qualify
   annotations:
-    actions.github.com/values-hash: feb9472c1b84280e6255f442927bfda623a06a08b64ce94b1c83485375253df
+    actions.github.com/values-hash: 0de848aacc1c460b984f39c2fd3367bc877b34e6bb692b15b3d1a7314213dc2
     actions.github.com/cleanup-manager-role-binding: mindclade-arc-qualify-cpu-gha-rs-manager
     actions.github.com/cleanup-manager-role-name: mindclade-arc-qualify-cpu-gha-rs-manager
     actions.github.com/cleanup-no-permission-service-account-name: mindclade-arc-qualify-cpu-gha-rs-no-permission
@@ -157,31 +157,37 @@ spec:
 
   template:
     spec:
-      automountServiceAccountToken: 
+      automountServiceAccountToken:
         false
-      nodeSelector: 
+      nodeSelector:
         iam.gke.io/gke-metadata-server-enabled: "true"
-      securityContext: 
+        mindclade.dev/workload-class: arc-runner
+      securityContext:
         runAsNonRoot: true
         seccompProfile:
           type: RuntimeDefault
+      tolerations:
+        - effect: NoSchedule
+          key: scheduling.mindclade.dev/arc-runner
+          operator: Equal
+          value: "true"
       restartPolicy: Never
       serviceAccountName: mindclade-arc-qualify-cpu-gha-rs-no-permission
       containers:
-      
+
       - name: runner
-        command: 
+        command:
           - /home/runner/run.sh
-        image: 
+        image:
           ghcr.io/actions/actions-runner:2.336.0@sha256:0cfdcc701ce933c6d243c6b0b2da767366dc9f2e99961d4c3754b0b78084cdda
-        resources: 
+        resources:
           limits:
             cpu: "8"
             memory: 16Gi
           requests:
             cpu: "2"
             memory: 4Gi
-        securityContext: 
+        securityContext:
           allowPrivilegeEscalation: false
           capabilities:
             drop:

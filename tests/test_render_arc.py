@@ -23,7 +23,7 @@ class RenderArcTest(unittest.TestCase):
         self.assertEqual(render_arc.normalize_rendered_yaml(expected), expected)
         self.assertEqual(
             render_arc.normalize_rendered_yaml(
-                b"apiVersion: v1\n\n\n---\nkind: Service\n\n"
+                b"apiVersion: v1  \n\n\n---\nkind: Service\t\n\n"
             ),
             expected,
         )

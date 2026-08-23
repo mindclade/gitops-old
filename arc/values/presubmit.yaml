@@ -25,8 +25,42 @@ template:
       mindclade.dev/shared-cache-volume: prohibited
   spec:
     automountServiceAccountToken: false
+    # DEDICATED-POOL PLACEMENT. Runner pods execute untrusted pull-request code. The Workload
+    # Identity selector below is a GKE metadata-server capability check, NOT a pool selector: it
+    # matches the system pool too, which is how runners came to schedule beside the ARC controller
+    # that decides which jobs run. A container escape — or a runner that merely exhausts its node
+    # — took the controller and every other runner down with it.
+    #
+    # BOTH fields below are load-bearing and neither works alone. The toleration only *permits*
+    # this pod onto the dedicated pool (infrastructure-live 5-workloads/ci/nodepools/runner,
+    # tainted scheduling.mindclade.dev/arc-runner=true:NO_SCHEDULE); it does not require it. A
+    # toleration without a pool-selecting nodeSelector is the dangerous half-step: runners stay
+    # free to land back on the system pool while the config reads as fixed. workload-class is the
+    # half that actually pins them, and a nodeSelector ANDs its keys, so the Workload Identity key
+    # stays — the runner still needs it.
+    #
+    # controller.yaml deliberately gets neither field. The ARC controller belongs on the system
+    # pool: the component deciding what code runs must not follow that code onto its nodes.
+    #
+    # ROLLOUT ORDER. Apply and qualify the infrastructure-live runner pool before reconciling this
+    # selection. minRunners: 0 removes warm capacity; it is not a safety gate because a queued job
+    # can still scale an active set from zero and leave its pod Pending when the selected pool is
+    # absent. The cross-repository placement check proves source parity, while connected evidence
+    # proves the pool exists and is schedulable.
+    #
+    # CAPACITY CEILING, unresolved. The pool's total_max_nodes = 6 was sized for the
+    # artifact-authority group alone — build 6 + qualify 4 + canary 1. This scale set's activated
+    # target is minRunners 2 / maxRunners 24: additional demand of the same shape on the same
+    # pool. Activating presubmit must therefore revisit that ceiling in infrastructure-live. It is
+    # deliberately not changed here, and this change does not change it there either.
     nodeSelector:
       iam.gke.io/gke-metadata-server-enabled: "true"
+      mindclade.dev/workload-class: arc-runner
+    tolerations:
+      - key: scheduling.mindclade.dev/arc-runner
+        operator: Equal
+        value: "true"
+        effect: NoSchedule
     securityContext:
       runAsNonRoot: true
       seccompProfile: {type: RuntimeDefault}

@@ -19,6 +19,13 @@ The fixture uses the digest already locked in the vendored ARC provenance solely
 chart. It is not the Mindclade CI image and cannot satisfy the `runnerImage` gate. Do not activate
 that fixture.
 
+All runner scale sets select `mindclade.dev/workload-class=arc-runner` and tolerate only
+`scheduling.mindclade.dev/arc-runner=true:NoSchedule`. The ARC controller has neither permission
+and remains on the system pool. This is source-complete placement intent, not evidence that the
+pool exists: `infrastructure-live/5-workloads/ci/nodepools/runner` still selects the unpublished
+module contract `v0.4.0`. Apply and qualify that unit before reconciling these values. A zero
+`minRunners` value is not a rollout guard because a queued job can scale an active set from zero.
+
 ## Authority boundaries
 
 | Concern | Authority |
@@ -50,7 +57,10 @@ with its URI, SHA-256, reviewer, and UTC timestamp in `arc/presubmit-readiness.y
    them, push packages or images, create attestations, use signing keys, or impersonate release
    identities.
 5. **Connected cluster:** the target cluster, ARC controller, workload identity, network policy,
-   Secret Sync CRDs, and bounded resource capacity pass connected qualification.
+   Secret Sync CRDs, and bounded resource capacity pass connected qualification. Prove the
+   dedicated runner pool carries the exact label and taint selected by GitOps, runner pods do not
+   land on system nodes, the controller does not land on runner nodes, and the pool ceiling covers
+   the activated concurrency.
 6. **Workflow routing:** an internal test repository proves the exact scale-set label accepts the
    permitted workflow and rejects an unlisted workflow, a fork, and an artifact-authority job.
 
@@ -86,9 +96,11 @@ Use a dedicated pull request while capacity and selection remain zero.
 Use a second, approved change only after all six gates remain qualified.
 
 1. In `github-config`, apply the separate `mindclade-arc-ci` group and its exact workflow
-   allowlist. In `infrastructure-live`, apply the read-only cache identity and qualified cluster
-   prerequisites through their protected plan/apply paths. Record applied outputs; do not copy raw
-   credentials into Git.
+   allowlist. In `infrastructure-live`, publish and validate the selected module release, then
+   apply the dedicated runner pool, read-only cache identity, and qualified cluster prerequisites
+   through their protected plan/apply paths. Run
+   `make validate-gitops-integration GITOPS=../gitops` against the paired source commits and record
+   applied placement evidence; do not copy raw credentials into Git.
 2. Add the `arc-presubmit` namespace with restricted Pod Security labels, default-deny and required
    egress policies, and controller-only GitHub App Secret Sync resources following the existing ARC
    platform patterns.

@@ -150,7 +150,7 @@ metadata:
   annotations:
     mindclade.dev/activation-state: "blocked"
     mindclade.dev/readiness-contract: "arc/presubmit-readiness.yaml"
-    actions.github.com/values-hash: 54b0415e7011e88540502256c93d0db2ac98b01f3c51a867aacadd34ff81157
+    actions.github.com/values-hash: 368d229e3a5a43c9e714e2d1c5b514d02366d5ea30d3dd7ff4b1170d98072e1
     actions.github.com/cleanup-manager-role-binding: mindclade-arc-presubmit-cpu-gha-rs-manager
     actions.github.com/cleanup-manager-role-name: mindclade-arc-presubmit-cpu-gha-rs-manager
     actions.github.com/cleanup-no-permission-service-account-name: mindclade-arc-presubmit-cpu-gha-rs-no-permission
@@ -175,12 +175,18 @@ spec:
         false
       nodeSelector:
         iam.gke.io/gke-metadata-server-enabled: "true"
+        mindclade.dev/workload-class: arc-runner
       securityContext:
         runAsNonRoot: true
         seccompProfile:
           type: RuntimeDefault
       terminationGracePeriodSeconds:
         120
+      tolerations:
+        - effect: NoSchedule
+          key: scheduling.mindclade.dev/arc-runner
+          operator: Equal
+          value: "true"
       restartPolicy: Never
       serviceAccountName: mindclade-arc-presubmit-cpu-gha-rs-no-permission
       containers:

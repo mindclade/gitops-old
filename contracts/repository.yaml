@@ -53,7 +53,9 @@ required_paths:
   - arc/values/presubmit.yaml
   - arc/rendered/presubmit.yaml
   - contracts/arc-ci-presubmit.schema.json
+  - scripts/validate-arc-runner-placement.py
   - scripts/validate-arc-ci.py
+  - tests/test_arc_runner_placement.py
   - tests/test_arc_ci_contract.py
   - docs/arc-ci-activation.md
   - vendor/cert-manager/LICENSE
