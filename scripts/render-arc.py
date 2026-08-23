@@ -85,21 +85,18 @@ def render(name: str) -> bytes:
     result = subprocess.run(command, cwd=ROOT, check=True, capture_output=True)
     if not result.stdout:
         raise ValueError(f"ARC render is empty: {output}")
-    rendered = normalize_rendered_yaml(result.stdout)
-    if name == "presubmit":
-        # Preserve the reviewed release manifests byte-for-byte while giving this new fixture a
-        # whitespace-clean canonical form from its first commit.
-        rendered = b"\n".join(line.rstrip() for line in rendered.splitlines()) + b"\n"
-    return rendered
+    return normalize_rendered_yaml(result.stdout)
 
 
 def normalize_rendered_yaml(contents: bytes) -> bytes:
-    """Canonicalize Helm's platform-dependent document-separator whitespace."""
+    """Canonicalize Helm's platform-dependent separators and trailing whitespace."""
 
     normalized = contents
     while b"\n\n---\n" in normalized:
         normalized = normalized.replace(b"\n\n---\n", b"\n---\n")
-    return normalized.rstrip(b"\n") + b"\n"
+    return b"\n".join(
+        line.rstrip() for line in normalized.rstrip(b"\n").splitlines()
+    ) + b"\n"
 
 
 def atomic_write(path: Path, contents: bytes) -> None:

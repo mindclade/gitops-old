@@ -120,9 +120,9 @@ roleRef:
   name: mindclade-arc-canary-gha-rs-manager
 subjects:
 - kind: ServiceAccount
-  name: 
+  name:
     arc-controller
-  namespace: 
+  namespace:
     arc-systems
 ---
 # Source: gha-runner-scale-set/templates/autoscalingrunnerset.yaml
@@ -142,7 +142,7 @@ metadata:
     actions.github.com/scale-set-name: mindclade-arc-canary
     actions.github.com/scale-set-namespace: arc-canary
   annotations:
-    actions.github.com/values-hash: 8275fd377c68dd044cd9ec2dd5dea8c1a09b2e6f0772ac23106cb4bf1818d68
+    actions.github.com/values-hash: cbf4bac18740e83cbd73f390c0eedaaedee790ce43185413223284e63ebd158
     actions.github.com/cleanup-manager-role-binding: mindclade-arc-canary-gha-rs-manager
     actions.github.com/cleanup-manager-role-name: mindclade-arc-canary-gha-rs-manager
     actions.github.com/cleanup-no-permission-service-account-name: mindclade-arc-canary-gha-rs-no-permission
@@ -157,31 +157,37 @@ spec:
 
   template:
     spec:
-      automountServiceAccountToken: 
+      automountServiceAccountToken:
         false
-      nodeSelector: 
+      nodeSelector:
         iam.gke.io/gke-metadata-server-enabled: "true"
-      securityContext: 
+        mindclade.dev/workload-class: arc-runner
+      securityContext:
         runAsNonRoot: true
         seccompProfile:
           type: RuntimeDefault
+      tolerations:
+        - effect: NoSchedule
+          key: scheduling.mindclade.dev/arc-runner
+          operator: Equal
+          value: "true"
       restartPolicy: Never
       serviceAccountName: mindclade-arc-canary-gha-rs-no-permission
       containers:
-      
+
       - name: runner
-        command: 
+        command:
           - /home/runner/run.sh
-        image: 
+        image:
           ghcr.io/actions/actions-runner:2.336.0@sha256:0cfdcc701ce933c6d243c6b0b2da767366dc9f2e99961d4c3754b0b78084cdda
-        resources: 
+        resources:
           limits:
             cpu: "1"
             memory: 2Gi
           requests:
             cpu: 250m
             memory: 512Mi
-        securityContext: 
+        securityContext:
           allowPrivilegeEscalation: false
           capabilities:
             drop:

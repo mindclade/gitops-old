@@ -64,8 +64,9 @@ nix develop .#ci --command make validate
 nix flake check --no-update-lock-file
 ```
 
-**Success means:** generated provenance, bootstrap checksums, YAML, project boundaries, policy
-fixtures, deployment selections, shell checks, and repository contracts all pass.
+**Success means:** generated provenance, bootstrap checksums, ARC runner placement, YAML, project
+boundaries, policy fixtures, deployment selections, shell checks, and repository contracts all
+pass.
 
 **If it fails:** change the authored source, regenerate through the repository command, and
 review both source and rendered output. Never repair a failure by hand-editing generated files.
