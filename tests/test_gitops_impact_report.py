@@ -82,6 +82,42 @@ spec:
         self.assertTrue(report["imageChanges"])
         self.assertTrue(report["pruneChanges"])
 
+    def test_all_production_delivery_paths_are_critical(self) -> None:
+        for relative in (
+            "applications/production/api.yaml",
+            "rendered/production/api/configmap.yaml",
+        ):
+            with self.subTest(relative=relative):
+                temporary, root, base = self.repository()
+                self.addCleanup(temporary.cleanup)
+                path = root / relative
+                path.parent.mkdir(parents=True)
+                path.write_text(
+                    "apiVersion: v1\n"
+                    "kind: ConfigMap\n"
+                    "metadata: {name: api, namespace: api}\n",
+                    encoding="utf-8",
+                )
+                report = IMPACT.analyze(root, base, self.commit(root))
+                self.assertEqual(report["risk"]["rating"], "critical")
+                self.assertIn("production", report["affectedEnvironments"])
+
+    def test_application_set_template_destination_is_reported(self) -> None:
+        documents = [
+            {
+                "kind": "ApplicationSet",
+                "metadata": {"name": "platform", "namespace": "argocd"},
+                "spec": {
+                    "template": {
+                        "spec": {"destination": {"namespace": "{{.path.basename}}"}}
+                    }
+                },
+            }
+        ]
+        applications, namespaces = IMPACT.object_names(documents)
+        self.assertEqual(applications, {"platform"})
+        self.assertEqual(namespaces, {"argocd", "{{.path.basename}}"})
+
     def test_app_project_authority_expansion_is_critical(self) -> None:
         temporary, root, base = self.repository()
         self.addCleanup(temporary.cleanup)
@@ -229,7 +265,7 @@ spec:
                 {"path": "applications/production/api.yaml", "change": "added"},
             ],
         )
-        self.assertEqual(report["risk"]["rating"], "high")
+        self.assertEqual(report["risk"]["rating"], "critical")
 
     def test_top_level_sequence_is_never_silently_discarded(self) -> None:
         temporary, root, base = self.repository()

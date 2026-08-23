@@ -29,9 +29,11 @@ RBAC_ALLOW_FIELDS = (
 )
 RBAC_DENY_FIELDS = ("clusterResourceBlacklist", "namespaceResourceBlacklist")
 CRITICAL_PREFIXES = (
+    "applications/production/",
     "bootstrap/",
     "deployments/production",
     "overlays/production",
+    "rendered/production/",
     "roots/production/",
 )
 CONTROL_PREFIXES = ("applications/", "arc/", "policy/", "projects/")
@@ -158,9 +160,19 @@ def object_names(documents: list[Any]) -> tuple[set[str], set[str]]:
             for application in spec.get("applications") or []:
                 if isinstance(application, dict) and isinstance(application.get("name"), str):
                     applications.add(application["name"])
-        destination = spec.get("destination")
-        if isinstance(destination, dict) and isinstance(destination.get("namespace"), str):
-            namespaces.add(destination["namespace"])
+        destination_specs = [spec]
+        if kind == "ApplicationSet":
+            template = spec.get("template")
+            template = template if isinstance(template, dict) else {}
+            template_spec = template.get("spec")
+            if isinstance(template_spec, dict):
+                destination_specs.append(template_spec)
+        for destination_spec in destination_specs:
+            destination = destination_spec.get("destination")
+            if isinstance(destination, dict) and isinstance(
+                destination.get("namespace"), str
+            ):
+                namespaces.add(destination["namespace"])
     return applications, namespaces
 
 
