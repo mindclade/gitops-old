@@ -35,7 +35,7 @@ CONTRACT = json.loads(
     '"repository_class":"production-control",'
     '"required_paths":[".kubernetes-version","bootstrap/argocd-install.yaml","bootstrap/argocd-install.provenance.json","bootstrap/components/immutable-images/kustomization.yaml","bootstrap/components/control-plane-baseline/kustomization.yaml","bootstrap/install-profiles/standard/kustomization.yaml","bootstrap/install-profiles/ha/kustomization.yaml","bootstrap/profiles/standard/kustomization.yaml",'
     '"bootstrap/profiles/ha/kustomization.yaml","bootstrap/root-app.yaml",'
-    '"applications","deployments","deployments/artifact-deployment-set-v3.schema.json","projects","projects/argocd-administration.yaml","policy","qualification","qualification/schemas/qualification-request-v1.schema.json","qualification/schemas/qualification-report-v2.schema.json","qualification/schemas/production-handoff-v1.schema.json","qualification/schemas/production-release-chain-v1.schema.json","qualification/handoffs/README.md","qualification/keys/README.md","qualification/release-chain/README.md","qualification/workstation-image-readiness.yaml","scripts/audit-production-estate.py","scripts/deterministic-qualification-archive.py","scripts/production_qualification.py","scripts/production_eligibility.py","scripts/production_handoff.py","scripts/validate-production-handoff-workflow.py","scripts/validate-workstation-image-readiness.py","tests/test_production_handoff.py","tests/test_production_handoff_workflow.py","tests/test_workstation_image_readiness.py",".github/workflows/production-qualification-evidence.yml",".github/workflows/production-handoff.yml",".github/workflows/dr-evidence.yml","overlays/production.yaml",'
+    '"applications","deployments","deployments/artifact-deployment-set-v3.schema.json","projects","projects/argocd-administration.yaml","policy","qualification","qualification/schemas/qualification-request-v1.schema.json","qualification/schemas/qualification-report-v2.schema.json","qualification/schemas/production-handoff-v1.schema.json","qualification/schemas/production-release-chain-v1.schema.json","qualification/handoffs/README.md","qualification/keys/README.md","qualification/release-chain/README.md","qualification/workstation-image-readiness.yaml","contracts/gitops-impact-report.schema.json","scripts/audit-production-estate.py","scripts/gitops-impact-report.py","scripts/deterministic-qualification-archive.py","scripts/production_qualification.py","scripts/production_eligibility.py","scripts/production_handoff.py","scripts/validate-production-handoff-workflow.py","scripts/validate-workstation-image-readiness.py","tests/test_gitops_impact_report.py","tests/test_production_handoff.py","tests/test_production_handoff_workflow.py","tests/test_workstation_image_readiness.py",".github/workflows/impact-report.yml",".github/workflows/production-qualification-evidence.yml",".github/workflows/production-handoff.yml",".github/workflows/dr-evidence.yml","overlays/production.yaml",'
     '"docs/disaster-recovery.md","docs/argocd-upgrade.md","docs/production-qualification.md","docs/failed-sync.md","docs/freeze-and-emergency.md","docs/rollback.md","vendor/arc/provenance.json","vendor/arc/LICENSE","vendor/cert-manager/LICENSE"],'
     '"visibility":"internal"}'
 )
@@ -301,6 +301,7 @@ qualification_workflow = (
 handoff_workflow = (workflow_root / "production-handoff.yml").read_text(
     encoding="utf-8"
 )
+impact_workflow = (workflow_root / "impact-report.yml").read_text(encoding="utf-8")
 qualification_runbook = (ROOT / "docs/production-qualification.md").read_text(
     encoding="utf-8"
 )
@@ -394,6 +395,36 @@ if "pull_request_target:\n    paths:" not in render_workflow:
     )
 if "merge_group:" not in validate_workflow or "merge_group:" not in contract_workflow:
     error("required GitOps checks do not run for merge-queue groups")
+for required in (
+    "pull_request_target:",
+    "types: [opened, synchronize, reopened, ready_for_review, edited]",
+    "merge_group:",
+    "permissions:\n  contents: read",
+    "github.event.pull_request.base.sha",
+    "github.event.pull_request.merge_commit_sha",
+    "github.event.merge_group.base_sha",
+    "github.event.merge_group.head_sha",
+    "path: .trusted",
+    "path: .candidate",
+    "nix develop ./.trusted#ci",
+    ".trusted/scripts/gitops-impact-report.py",
+    "--repository .candidate",
+    "--contract-root .trusted",
+    "merge-base --is-ancestor",
+    "group: impact-report-${{ github.event_name == 'pull_request_target' && github.event.pull_request.number || github.event.merge_group.head_sha }}",
+    "actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4",
+):
+    if required not in impact_workflow:
+        error(f"GitOps impact workflow omits trust boundary: {required}")
+for forbidden in (
+    "\n  pull_request:\n",
+    "nix develop .#ci",
+    ".candidate/scripts/",
+    "id-token: write",
+    "contents: write",
+):
+    if forbidden in impact_workflow:
+        error(f"GitOps impact workflow has excess authority: {forbidden}")
 for context in (
     "lint",
     "schema",

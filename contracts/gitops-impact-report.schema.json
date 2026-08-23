@@ -1,0 +1,130 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/mindclade/gitops/contracts/gitops-impact-report.schema.json",
+  "title": "Mindclade GitOps desired-state impact report",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "baseCommit",
+    "headCommit",
+    "risk",
+    "rollbackRequired",
+    "changedPaths",
+    "affectedEnvironments",
+    "affectedApplications",
+    "affectedNamespaces",
+    "imageChanges",
+    "rbacExpansions",
+    "policyChanges",
+    "pruneChanges",
+    "opaqueYamlChanges"
+  ],
+  "properties": {
+    "schemaVersion": {"const": 1},
+    "baseCommit": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
+    "headCommit": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
+    "risk": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["rating", "reasons"],
+      "properties": {
+        "rating": {"enum": ["low", "medium", "high", "critical"]},
+        "reasons": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"type": "string", "minLength": 1}}
+      }
+    },
+    "rollbackRequired": {"type": "boolean"},
+    "changedPaths": {"type": "array", "uniqueItems": true, "items": {"$ref": "#/$defs/pathChange"}},
+    "affectedEnvironments": {"type": "array", "uniqueItems": true, "items": {"enum": ["development", "staging", "production", "ci"]}},
+    "affectedApplications": {"type": "array", "uniqueItems": true, "items": {"type": "string", "minLength": 1}},
+    "affectedNamespaces": {"type": "array", "uniqueItems": true, "items": {"type": "string", "minLength": 1}},
+    "imageChanges": {"type": "array", "uniqueItems": true, "items": {"$ref": "#/$defs/imageChange"}},
+    "rbacExpansions": {"type": "array", "uniqueItems": true, "items": {"$ref": "#/$defs/rbacExpansion"}},
+    "policyChanges": {"type": "array", "uniqueItems": true, "items": {"$ref": "#/$defs/pathChange"}},
+    "pruneChanges": {"type": "array", "uniqueItems": true, "items": {"$ref": "#/$defs/pruneChange"}},
+    "opaqueYamlChanges": {"type": "array", "uniqueItems": true, "items": {"$ref": "#/$defs/opaqueChange"}}
+  },
+  "allOf": [
+    {
+      "if": {"properties": {"risk": {"properties": {"rating": {"enum": ["high", "critical"]}}}}},
+      "then": {"properties": {"rollbackRequired": {"const": true}}}
+    },
+    {
+      "if": {"properties": {"risk": {"properties": {"rating": {"enum": ["low", "medium"]}}}}},
+      "then": {"properties": {"rollbackRequired": {"const": false}}}
+    }
+  ],
+  "$defs": {
+    "pathChange": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "change"],
+      "properties": {
+        "path": {"type": "string", "minLength": 1},
+        "change": {"enum": ["added", "modified", "deleted"]}
+      }
+    },
+    "imageChange": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "removed", "added"],
+      "properties": {
+        "path": {"type": "string", "minLength": 1},
+        "removed": {"type": "array", "uniqueItems": true, "items": {"type": "string", "minLength": 1}},
+        "added": {"type": "array", "uniqueItems": true, "items": {"type": "string", "minLength": 1}}
+      },
+      "anyOf": [
+        {"properties": {"removed": {"minItems": 1}}},
+        {"properties": {"added": {"minItems": 1}}}
+      ]
+    },
+    "rbacExpansion": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "project", "field", "direction", "entries"],
+      "properties": {
+        "path": {"type": "string", "minLength": 1},
+        "project": {"type": "string", "minLength": 1},
+        "field": {"enum": ["sourceRepos", "sourceNamespaces", "destinations", "clusterResourceWhitelist", "namespaceResourceWhitelist", "roles", "clusterResourceBlacklist", "namespaceResourceBlacklist", "permitOnlyProjectScopedClusters"]},
+        "direction": {"enum": ["added", "removed", "disabled"]},
+        "entries": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"type": "string", "minLength": 1}}
+      }
+    },
+    "pruneChange": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "enabled", "retargeted"],
+      "properties": {
+        "path": {"type": "string", "minLength": 1},
+        "enabled": {"type": "array", "uniqueItems": true, "items": {"type": "string", "minLength": 1}},
+        "retargeted": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["object", "before", "after"],
+            "properties": {
+              "object": {"type": "string", "minLength": 1},
+              "before": {"type": "string", "minLength": 1},
+              "after": {"type": "string", "minLength": 1}
+            }
+          }
+        }
+      },
+      "anyOf": [
+        {"properties": {"enabled": {"minItems": 1}}},
+        {"properties": {"retargeted": {"minItems": 1}}}
+      ]
+    },
+    "opaqueChange": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "reason"],
+      "properties": {
+        "path": {"type": "string", "minLength": 1},
+        "reason": {"type": "string", "minLength": 1}
+      }
+    }
+  }
+}

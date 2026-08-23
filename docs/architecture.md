@@ -104,6 +104,19 @@ structural preconditions such as registry and digest form. Binary Authorization 
 runtime cryptographic attestation decision. The controls are complementary and intentionally
 do not duplicate signature admission.
 
+Every pull request and merge-queue candidate also receives a deterministic desired-state impact
+report. It compares exact base and head commits and records affected environments, applications,
+namespaces, image references, AppProject authority expansions, policy changes, and newly enabled
+pruning in a machine-readable artifact. A critical report is review input, not connected evidence:
+it cannot observe Argo live state and never authenticates to a cluster.
+
+For pull requests, `impact-report.yml` is loaded by `pull_request_target` from the default branch,
+has only `contents: read`, and runs the base checkout's Nix shell, analyzer, and JSON schema. The
+merge candidate is checked out separately and treated only as Git/YAML data; candidate scripts are
+never executed. The analyzer rejects a range unless the recorded base is an ancestor of the tested
+merge commit. Top-level patch/list YAML is reported as opaque high risk instead of being silently
+discarded.
+
 Plain Kubernetes Secret payloads are prohibited. Argo repository access is a read-only GitHub
 App credential installed out of band during audited bootstrap. Production bootstrap also
 requires an explicit environment confirmation and a verified Kubernetes context.

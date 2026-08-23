@@ -9,6 +9,7 @@ operator-visible result.
 - Exact subject digest:
 - Source and target environment:
 - Render, schema, policy, and drift results:
+- Automated desired-state impact artifact reviewed (risk, RBAC, prune, images):
 - Required approvers:
 
 ## Validation evidence
