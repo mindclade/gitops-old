@@ -98,6 +98,7 @@ jobs:
         env:
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
           REQUEST: ${{ steps.request.outputs.path }}
+          QUALIFICATION_ID: ${{ steps.request.outputs.qualification-id }}
         run: |
           set -euo pipefail
           estate="$RUNNER_TEMP/estate"
@@ -155,6 +156,64 @@ jobs:
             }
           done
 
+          release_chain="$estate/gitops/qualification/release-chain/$QUALIFICATION_ID.json"
+          test -f "$release_chain" || {
+            echo "::error::reviewed production release-chain record is absent"
+            exit 1
+          }
+          verify_release() {
+            local repository="$1"
+            local selector="$2"
+            local expected_version expected_tag expected_commit requested_commit
+            expected_version="$(jq -r "$selector.version" "$release_chain")"
+            expected_tag="$(jq -r "$selector.tag_object" "$release_chain")"
+            expected_commit="$(jq -r "$selector.peeled_commit" "$release_chain")"
+            requested_commit="$(jq -r --arg repo "$repository" '.repositories[$repo]' "$REQUEST")"
+            test "$expected_commit" = "$requested_commit" || {
+              echo "::error::$repository release does not bind the requested source commit"
+              exit 1
+            }
+            ref="$(gh api "repos/mindclade/$repository/git/ref/tags/$expected_version")"
+            test "$(jq -r .object.type <<<"$ref")" = tag || {
+              echo "::error::$repository $expected_version is not an annotated tag"
+              exit 1
+            }
+            test "$(jq -r .object.sha <<<"$ref")" = "$expected_tag" || {
+              echo "::error::$repository tag object differs from the reviewed release chain"
+              exit 1
+            }
+            tag="$(gh api "repos/mindclade/$repository/git/tags/$expected_tag")"
+            test "$(jq -r .verification.verified <<<"$tag")" = true || {
+              echo "::error::$repository release tag is not GitHub-verified"
+              exit 1
+            }
+            test "$(jq -r .object.type <<<"$tag")" = commit || {
+              echo "::error::$repository release tag does not peel to a commit"
+              exit 1
+            }
+            test "$(jq -r .object.sha <<<"$tag")" = "$expected_commit" || {
+              echo "::error::$repository peeled release commit differs"
+              exit 1
+            }
+            release="$(gh api "repos/mindclade/$repository/releases/tags/$expected_version")"
+            test "$(jq -r .draft <<<"$release")" = false
+            test "$(jq -r .prerelease <<<"$release")" = false
+            test "$(jq -r .tag_name <<<"$release")" = "$expected_version"
+          }
+          test "$(jq -r .workflow_release.version "$release_chain")" = v5.0.0
+          test "$(jq -r .module_release.version "$release_chain")" = v0.4.0
+          test "$(jq -r .bootstrap_contract.version "$release_chain")" = 1.6.0
+          verify_release .github .workflow_release
+          verify_release mindclade-internal-monorepo .module_release
+          render_ref="$(sed -n 's/^[[:space:]]*ref: \(v[0-9][0-9.]*\)$/\1/p' \
+            "$estate/gitops/render-manifest.yaml")"
+          test "$(printf '%s\n' "$render_ref" | sed '/^$/d' | wc -l | tr -d ' ')" = 1 || {
+            echo "::error::render manifest must name exactly one immutable semver source ref"
+            exit 1
+          }
+          git -C "$estate/mindclade-internal-monorepo" fetch --no-tags origin \
+            "refs/tags/$render_ref:refs/tags/$render_ref"
+
       - name: Drop source-reader credentials
         run: |
           set -euo pipefail
@@ -180,6 +239,23 @@ jobs:
           archives="$RUNNER_TEMP/source-archives"
           output="$RUNNER_TEMP/qualification-output"
           mkdir -p "$archives"
+          render_ref="$(sed -n 's/^[[:space:]]*ref: \(v[0-9][0-9.]*\)$/\1/p' \
+            "$estate/gitops/render-manifest.yaml")"
+          render_source="$RUNNER_TEMP/render-source"
+          git -C "$estate/mindclade-internal-monorepo" worktree add \
+            --detach "$render_source" "$render_ref"
+          cleanup_render_source() {
+            git -C "$estate/mindclade-internal-monorepo" worktree remove \
+              --force "$render_source" >/dev/null 2>&1 || true
+          }
+          trap cleanup_render_source EXIT
+          MINDCLADE_PROTECTED_QUALIFICATION=true \
+          MINDCLADE_GITOPS_ROOT="$estate/gitops" \
+            nix develop "$estate/gitops#ci" --command \
+              python3 "$estate/gitops/scripts/render.py" \
+                --monorepo "$render_source" \
+                --env production \
+                --candidate-digest-output "$RUNNER_TEMP/candidate-render.sha256"
           python3 scripts/audit-production-estate.py "$estate" \
             --json "$RUNNER_TEMP/estate-audit.json" > /dev/null
           for repo in .github .github-private bootstrap github-config infrastructure-live gitops mindclade-internal-monorepo; do
@@ -199,6 +275,7 @@ jobs:
             --source-archives "$archives" \
             --evidence "$RUNNER_TEMP/evidence" \
             --audit "$RUNNER_TEMP/estate-audit.json" \
+            --candidate-render-digest-file "$RUNNER_TEMP/candidate-render.sha256" \
             --output "$output")"
           python3 scripts/production_qualification.py verify "$output" >/dev/null
           artifact="production-qualification-$QUALIFICATION_ID-$digest"
@@ -485,4 +562,38 @@ jobs:
                 --custom-metadata="sha256=$digest" "$path" "$target"
             fi
           done < <(find "$root" -type f -print0 | sort -z)
+          decision_uri="gs://$BUCKET/$prefix/eligibility-decision.json"
+          remote="$(gcloud storage objects describe "$decision_uri" --format=json)"
+          decision_generation="$(jq -r '.generation | tonumber' <<<"$remote")"
+          decision_sha256="sha256:$(sha256sum "$root/eligibility-decision.json" | awk '{print $1}')"
+          activation="$RUNNER_TEMP/production-activation-handoff"
+          mkdir -p "$activation/qualification/keys" "$activation/qualification/handoffs"
+          cp "$RUNNER_TEMP/public-key.pem" \
+            "$activation/qualification/keys/production-eligibility.pem"
+          python3 scripts/production_handoff.py create \
+            --qualification-id "$QUALIFICATION_ID" \
+            --bundle "$root/deployment-bundle.json" \
+            --response "$root/eligibility-decision.json" \
+            --selection deployments/production.yaml \
+            --artifact-uri "$decision_uri" \
+            --artifact-generation "$decision_generation" \
+            --artifact-digest "$decision_sha256" \
+            --public-key "$RUNNER_TEMP/public-key.pem" \
+            --output "$activation/qualification/handoffs/$QUALIFICATION_ID.json" \
+            > "$activation/handoff-digest.txt"
+          cat > "$activation/ACTIVATION.md" <<EOF
+          Copy the qualification/ tree into GitOps, set deployments/production.yaml to
+          qualificationState: qualified-v1 with qualificationHandoff:
+          qualification/handoffs/$QUALIFICATION_ID.json, and commit the exact candidate render in
+          the same reviewed pull request before the signed decision expires.
+          EOF
           echo "Published signed eligibility decision: gs://$BUCKET/$prefix/" >> "$GITHUB_STEP_SUMMARY"
+          rm -f "$RUNNER_TEMP/public-key.json" "$RUNNER_TEMP/public-key.pem" \
+            "$RUNNER_TEMP/decision-payload.bin" "$RUNNER_TEMP/decision-signature.bin"
+
+      - uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4  # v5
+        with:
+          name: production-activation-handoff-${{ needs.assemble.outputs.qualification-id }}
+          path: ${{ runner.temp }}/production-activation-handoff/
+          retention-days: 7
+          if-no-files-found: error

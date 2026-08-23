@@ -43,7 +43,7 @@ release-metadata-tests:
 	PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s tests -p 'test_*.py'
 
 production-qualification-tests:
-	PYTHONDONTWRITEBYTECODE=1 python3 -m unittest tests.test_production_qualification tests.test_production_eligibility
+	PYTHONDONTWRITEBYTECODE=1 python3 -m unittest tests.test_production_qualification tests.test_production_eligibility tests.test_production_handoff
 
 workstation-image-readiness:
 	python3 scripts/validate-workstation-image-readiness.py

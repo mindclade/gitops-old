@@ -1,0 +1,116 @@
+---
+# Copyright © 2026 Mindclade, LLC. All Rights Reserved.
+# Mindclade Proprietary and Confidential.
+# SPDX-License-Identifier: LicenseRef-Mindclade-Proprietary
+
+name: Production handoff
+
+on:
+  pull_request:
+  merge_group:
+
+permissions:
+  contents: read
+
+jobs:
+  detect:
+    runs-on: ubuntu-24.04
+    outputs:
+      qualified: ${{ steps.selection.outputs.qualified }}
+      handoff-path: ${{ steps.selection.outputs.handoff-path }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          persist-credentials: false
+
+      - id: selection
+        name: Detect an atomic qualified production selection
+        run: |
+          set -euo pipefail
+          state="$(sed -n 's/^  qualificationState: //p' deployments/production.yaml)"
+          test "$(printf '%s\n' "$state" | sed '/^$/d' | wc -l | tr -d ' ')" = 1
+          if [ "$state" != qualified-v1 ]; then
+            echo "qualified=false" >> "$GITHUB_OUTPUT"
+            echo "handoff-path=" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          handoff="$(sed -n 's/^  qualificationHandoff: //p' deployments/production.yaml)"
+          case "$handoff" in
+            qualification/handoffs/*.json) ;;
+            *) echo "::error::qualified-v1 must name a safe production handoff"; exit 1 ;;
+          esac
+          test -f "$handoff"
+          echo "qualified=true" >> "$GITHUB_OUTPUT"
+          echo "handoff-path=$handoff" >> "$GITHUB_OUTPUT"
+
+  connected:
+    needs: detect
+    if: needs.detect.outputs.qualified == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    environment: production
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: cachix/install-nix-action@630ae543ea3a38a9a4166f03376c02c50f408342  # v31.11.0
+        with:
+          extra_nix_config: |
+            experimental-features = nix-command flakes
+            accept-flake-config = false
+
+      - uses: google-github-actions/auth@7c6bc770dae815cd3e89ee6cdf493a5fab2cc093  # v3
+        with:
+          workload_identity_provider: ${{ vars.WIF_PROVIDER_PRODUCTION_QUALIFICATION }}
+          service_account: ${{ vars.SA_PRODUCTION_QUALIFICATION_READER }}
+
+      - uses: google-github-actions/setup-gcloud@9d3a10fd1bfc75d8f4817cce8a2dcd3681293c7a  # v3
+
+      - name: Reverify immutable evidence and the committed activation
+        env:
+          HANDOFF_PATH: ${{ needs.detect.outputs.handoff-path }}
+        run: |
+          set -euo pipefail
+          case "$HANDOFF_PATH" in
+            qualification/handoffs/*.json) ;;
+            *) echo "::error::unsafe production handoff path"; exit 1 ;;
+          esac
+          uri="$(jq -r .artifact.uri "$HANDOFF_PATH")"
+          generation="$(jq -r .artifact.generation "$HANDOFF_PATH")"
+          expected="$(jq -r .artifact.digest "$HANDOFF_PATH")"
+          gcloud storage cat "${uri}#${generation}" > "$RUNNER_TEMP/eligibility-decision.json"
+          actual="sha256:$(sha256sum "$RUNNER_TEMP/eligibility-decision.json" | awk '{print $1}')"
+          test "$actual" = "$expected" || {
+            echo "::error::immutable eligibility artifact digest differs"
+            exit 1
+          }
+          diff -u \
+            <(jq -S .signed_decision "$HANDOFF_PATH") \
+            <(jq -S .signed_decision "$RUNNER_TEMP/eligibility-decision.json")
+          nix develop .#ci --command python3 scripts/production_handoff.py validate \
+            --handoff "$HANDOFF_PATH" \
+            --selection deployments/production.yaml \
+            --render-root rendered/production
+
+  production-handoff-gate:
+    needs: [detect, connected]
+    if: always()
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Require connected verification for qualified production
+        env:
+          DETECT_RESULT: ${{ needs.detect.result }}
+          QUALIFIED: ${{ needs.detect.outputs.qualified }}
+          CONNECTED_RESULT: ${{ needs.connected.result }}
+        run: |
+          set -euo pipefail
+          test "$DETECT_RESULT" = success
+          if [ "$QUALIFIED" = true ]; then
+            test "$CONNECTED_RESULT" = success
+          else
+            test "$CONNECTED_RESULT" = skipped
+          fi

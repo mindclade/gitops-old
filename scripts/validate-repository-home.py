@@ -601,8 +601,8 @@ def validate(root: Path) -> list[str]:
 
     if markdown.count(MARKER) != 1 or not markdown.startswith(MARKER):
         errors.append(f"README.md must begin with exactly one {MARKER}")
-    if "Brand source: mindclade/.github-private/mindclade-brand-assets (MONO family)." not in markdown:
-        errors.append("README.md must identify the canonical MONO brand source")
+    if "Brand distribution: mindclade/.github-private/mindclade-brand-assets (MONO family)." not in markdown:
+        errors.append("README.md must identify the checked-in MONO brand distribution")
     if len(re.findall(r"^# ", markdown, flags=re.M)) != 1:
         errors.append("README.md must contain exactly one level-one heading")
     if not re.search(r"^# Mindclade · ", markdown, flags=re.M):

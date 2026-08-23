@@ -1,0 +1,71 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://mindclade.dev/schemas/production-release-chain-v1.schema.json",
+  "title": "Production release-chain binding",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "qualification_id",
+    "workflow_release",
+    "module_release",
+    "bootstrap_contract",
+    "saved_plan_digest",
+    "applied_outputs_digest",
+    "rollback"
+  ],
+  "properties": {
+    "schema_version": {"const": "mindclade.dev/production-release-chain/v1"},
+    "qualification_id": {"type": "string", "pattern": "^[a-z0-9][a-z0-9-]{5,63}$"},
+    "workflow_release": {"$ref": "#/$defs/release"},
+    "module_release": {"$ref": "#/$defs/moduleRelease"},
+    "bootstrap_contract": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["version", "applied_output_digest"],
+      "properties": {
+        "version": {"const": "1.6.0"},
+        "applied_output_digest": {"$ref": "#/$defs/digest"}
+      }
+    },
+    "saved_plan_digest": {"$ref": "#/$defs/digest"},
+    "applied_outputs_digest": {"$ref": "#/$defs/digest"},
+    "rollback": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["strategy", "previous_bundle_digest", "target_selection_digest"],
+      "properties": {
+        "strategy": {"enum": ["bootstrap", "previous-bundle"]},
+        "previous_bundle_digest": {"oneOf": [{"type": "null"}, {"$ref": "#/$defs/digest"}]},
+        "target_selection_digest": {"oneOf": [{"type": "null"}, {"$ref": "#/$defs/digest"}]}
+      }
+    }
+  },
+  "$defs": {
+    "digest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "commit": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
+    "release": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["version", "tag_object", "peeled_commit", "release_manifest_digest"],
+      "properties": {
+        "version": {"const": "v5.0.0"},
+        "tag_object": {"$ref": "#/$defs/commit"},
+        "peeled_commit": {"$ref": "#/$defs/commit"},
+        "release_manifest_digest": {"$ref": "#/$defs/digest"}
+      }
+    },
+    "moduleRelease": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["version", "tag_object", "peeled_commit", "release_manifest_digest", "module_manifest_digest"],
+      "properties": {
+        "version": {"const": "v0.4.0"},
+        "tag_object": {"$ref": "#/$defs/commit"},
+        "peeled_commit": {"$ref": "#/$defs/commit"},
+        "release_manifest_digest": {"$ref": "#/$defs/digest"},
+        "module_manifest_digest": {"$ref": "#/$defs/digest"}
+      }
+    }
+  }
+}

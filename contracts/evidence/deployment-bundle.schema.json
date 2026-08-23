@@ -1,12 +1,31 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://mindclade.dev/contracts/evidence/deployment-bundle/v1",
-  "title": "Seven-repository production deployment bundle",
+  "$id": "https://mindclade.dev/contracts/evidence/deployment-bundle/v2",
+  "title": "Seven-repository production deployment bundle v2",
   "type": "object",
   "additionalProperties": false,
-  "required": ["schema_version", "bundle_digest", "change_reference", "environment", "repositories", "release_digests", "gitops_render_digest", "deployment_selection_digest", "infrastructure_handoff_digest", "governance_audit_digest", "workflow_release", "policy_bundle_digest"],
+  "required": [
+    "schema_version",
+    "bundle_digest",
+    "change_reference",
+    "environment",
+    "repositories",
+    "release_digests",
+    "gitops_render_digest",
+    "deployment_selection_digest",
+    "infrastructure_handoff_digest",
+    "governance_audit_digest",
+    "workflow_release",
+    "workflow_release_provenance",
+    "module_release",
+    "bootstrap_contract",
+    "saved_plan_digest",
+    "applied_outputs_digest",
+    "policy_bundle_digest",
+    "rollback"
+  ],
   "properties": {
-    "schema_version": {"const": "mindclade.dev/deployment-bundle/v1"},
+    "schema_version": {"const": "mindclade.dev/deployment-bundle/v2"},
     "bundle_digest": {"$ref": "common.schema.json#/$defs/digest"},
     "change_reference": {"type": "string", "pattern": "^(CHG|SEC|DR)-[A-Za-z0-9._-]+$", "maxLength": 128},
     "environment": {"const": "production"},
@@ -20,16 +39,65 @@
         "required": ["repository", "commit"],
         "properties": {
           "repository": {"enum": [".github", ".github-private", "bootstrap", "github-config", "gitops", "infrastructure-live", "mindclade-internal-monorepo"]},
-          "commit": {"type": "string", "pattern": "^[0-9a-f]{40}$"}
+          "commit": {"$ref": "#/$defs/commit"}
         }
       }
     },
-    "release_digests": {"type": "array", "minItems": 1, "maxItems": 64, "items": {"$ref": "common.schema.json#/$defs/digest"}},
+    "release_digests": {"type": "array", "minItems": 1, "maxItems": 64, "uniqueItems": true, "items": {"$ref": "common.schema.json#/$defs/digest"}},
     "gitops_render_digest": {"$ref": "common.schema.json#/$defs/digest"},
     "deployment_selection_digest": {"$ref": "common.schema.json#/$defs/digest"},
     "infrastructure_handoff_digest": {"$ref": "common.schema.json#/$defs/digest"},
     "governance_audit_digest": {"$ref": "common.schema.json#/$defs/digest"},
     "workflow_release": {"type": "string", "pattern": "^v[0-9]+\\.[0-9]+\\.[0-9]+$"},
-    "policy_bundle_digest": {"$ref": "common.schema.json#/$defs/digest"}
+    "workflow_release_provenance": {"$ref": "#/$defs/releaseProvenance"},
+    "module_release": {"$ref": "#/$defs/moduleReleaseProvenance"},
+    "bootstrap_contract": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["version", "applied_output_digest"],
+      "properties": {
+        "version": {"type": "string", "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$"},
+        "applied_output_digest": {"$ref": "common.schema.json#/$defs/digest"}
+      }
+    },
+    "saved_plan_digest": {"$ref": "common.schema.json#/$defs/digest"},
+    "applied_outputs_digest": {"$ref": "common.schema.json#/$defs/digest"},
+    "policy_bundle_digest": {"$ref": "common.schema.json#/$defs/digest"},
+    "rollback": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["strategy", "previous_bundle_digest", "target_selection_digest"],
+      "properties": {
+        "strategy": {"enum": ["bootstrap", "previous-bundle"]},
+        "previous_bundle_digest": {"oneOf": [{"type": "null"}, {"$ref": "common.schema.json#/$defs/digest"}]},
+        "target_selection_digest": {"oneOf": [{"type": "null"}, {"$ref": "common.schema.json#/$defs/digest"}]}
+      }
+    }
+  },
+  "$defs": {
+    "commit": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
+    "releaseProvenance": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["version", "tag_object", "peeled_commit", "release_manifest_digest"],
+      "properties": {
+        "version": {"type": "string", "pattern": "^v[0-9]+\\.[0-9]+\\.[0-9]+$"},
+        "tag_object": {"$ref": "#/$defs/commit"},
+        "peeled_commit": {"$ref": "#/$defs/commit"},
+        "release_manifest_digest": {"$ref": "common.schema.json#/$defs/digest"}
+      }
+    },
+    "moduleReleaseProvenance": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["version", "tag_object", "peeled_commit", "release_manifest_digest", "module_manifest_digest"],
+      "properties": {
+        "version": {"type": "string", "pattern": "^v[0-9]+\\.[0-9]+\\.[0-9]+$"},
+        "tag_object": {"$ref": "#/$defs/commit"},
+        "peeled_commit": {"$ref": "#/$defs/commit"},
+        "release_manifest_digest": {"$ref": "common.schema.json#/$defs/digest"},
+        "module_manifest_digest": {"$ref": "common.schema.json#/$defs/digest"}
+      }
+    }
   }
 }

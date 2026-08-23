@@ -35,12 +35,14 @@ def selection(environment: str, release: str | None) -> str:
         )
     return (
         HEADER
-        + "apiVersion: mindclade.dev/v2\n"
+        + "apiVersion: mindclade.dev/v3\n"
         + "kind: ArtifactDeploymentSet\n"
         + "metadata:\n"
         + f"  name: {environment}\n"
         + "spec:\n"
         + f"  environment: {environment}\n"
+        + f"  qualificationState: {'blocked-v1' if environment == 'production' and release is None else 'staged-v1' if environment == 'production' else 'null'}\n"
+        + "  qualificationHandoff: null\n"
         + f"  applications:{applications}\n"
     )
 

@@ -66,7 +66,11 @@ def main() -> int:
     merged = [item for item in target_apps if item.get("name") not in selected_names]
     merged.extend(copy.deepcopy(selected))
     merged.sort(key=lambda item: item["name"])
-    target.setdefault("spec", {})["applications"] = merged
+    target_spec = target.setdefault("spec", {})
+    target_spec["applications"] = merged
+    if target_environment == "production":
+        target_spec["qualificationState"] = "staged-v1"
+        target_spec["qualificationHandoff"] = None
     rendered = HEADER + yaml.safe_dump(target, sort_keys=False)
     if not args.apply:
         sys.stdout.write(rendered)

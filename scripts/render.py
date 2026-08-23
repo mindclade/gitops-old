@@ -14,6 +14,7 @@ import json
 import os
 import re
 import shutil
+import struct
 import subprocess
 import sys
 import tempfile
@@ -39,6 +40,11 @@ def parse_args() -> argparse.Namespace:
     )
     mode.add_argument(
         "--check", action="store_true", help="deprecated; check is the default"
+    )
+    mode.add_argument(
+        "--candidate-digest-output",
+        type=Path,
+        help="write the protected staged-production candidate tree digest",
     )
     parser.add_argument("--skip-lock-verification", action="store_true")
     return parser.parse_args()
@@ -140,16 +146,25 @@ def safe_child(root: Path, relative: str, label: str) -> Path:
     return resolved
 
 
-def apply_artifact_selection(body: str, environment: str, application: str) -> str:
-    result = subprocess.run(
-        [
+def apply_artifact_selection(
+    body: str,
+    environment: str,
+    application: str,
+    *,
+    allow_staged_production: bool = False,
+) -> str:
+    command = [
             sys.executable,
             str(SCRIPT_ROOT / "scripts/apply-artifact-selection.py"),
             "--selection",
             str(ROOT / "deployments" / f"{environment}.yaml"),
             "--application",
             application,
-        ],
+        ]
+    if allow_staged_production:
+        command.append("--allow-staged-production")
+    result = subprocess.run(
+        command,
         input=body,
         text=True,
         check=True,
@@ -229,7 +244,13 @@ def render_source(
 
 
 def render(
-    manifest: dict[str, Any], monorepo: Path, destination: Path, pinned_ref: str
+    manifest: dict[str, Any],
+    monorepo: Path,
+    destination: Path,
+    pinned_ref: str,
+    *,
+    selected_environment: str | None = None,
+    allow_staged_production: bool = False,
 ) -> None:
     targets = manifest.get("spec", {}).get("targets") or []
     total = 0
@@ -244,10 +265,17 @@ def render(
         for environment in target.get("environments") or []:
             if environment not in ENVIRONMENTS:
                 raise ValueError(f"invalid environment: {environment}")
+            if selected_environment is not None and environment != selected_environment:
+                continue
             rendered, provenance = render_source(
                 target, monorepo, environment, application
             )
-            body = apply_artifact_selection(rendered, environment, application)
+            body = apply_artifact_selection(
+                rendered,
+                environment,
+                application,
+                allow_staged_production=allow_staged_production,
+            )
             count = sum(1 for line in body.splitlines() if line.startswith("kind:"))
             total += 1
             if count == 0:
@@ -288,6 +316,23 @@ def trees_equal(left: Path, right: Path) -> bool:
     )
 
 
+def tree_digest(root: Path) -> str:
+    if not root.is_dir():
+        raise ValueError(f"candidate render tree is absent: {root}")
+    files = sorted(path for path in root.rglob("*") if path.is_file())
+    if not files:
+        raise ValueError(f"candidate render tree is empty: {root}")
+    value = hashlib.sha256(b"MCTREE1\0")
+    for path in files:
+        relative = path.relative_to(root).as_posix().encode("utf-8")
+        content = path.read_bytes()
+        value.update(struct.pack(">I", len(relative)))
+        value.update(relative)
+        value.update(struct.pack(">Q", len(content)))
+        value.update(content)
+    return "sha256:" + value.hexdigest()
+
+
 def selected_path(root: Path, environment: str | None) -> Path:
     return root / environment if environment else root
 
@@ -318,6 +363,16 @@ def publish(staging: Path, destination: Path, environment: str | None) -> None:
 
 def main() -> int:
     args = parse_args()
+    candidate_mode = args.candidate_digest_output is not None
+    if candidate_mode and (
+        args.environment != "production"
+        or os.environ.get("MINDCLADE_PROTECTED_QUALIFICATION") != "true"
+    ):
+        print(
+            "error: candidate digest requires --env production inside protected qualification",
+            file=sys.stderr,
+        )
+        return 2
     monorepo = args.monorepo.resolve()
     if not (monorepo / "infra").is_dir():
         print(
@@ -328,6 +383,22 @@ def main() -> int:
     staging = Path(tempfile.mkdtemp(prefix=".rendered.", dir=ROOT))
     try:
         manifest = load_yaml(MANIFEST)
+        if candidate_mode:
+            selection = load_yaml(ROOT / "deployments/production.yaml")
+            selection_spec = selection.get("spec") or {}
+            if (
+                selection.get("apiVersion") != "mindclade.dev/v3"
+                or selection.get("kind") != "ArtifactDeploymentSet"
+                or not isinstance(selection_spec, dict)
+                or selection_spec.get("environment") != "production"
+                or selection_spec.get("qualificationState") != "staged-v1"
+                or selection_spec.get("qualificationHandoff") is not None
+                or not isinstance(selection_spec.get("applications"), list)
+                or not selection_spec["applications"]
+            ):
+                raise ValueError(
+                    "candidate rendering requires a nonempty staged-v1 production selection"
+                )
         pinned_ref = str(manifest.get("spec", {}).get("source", {}).get("ref", ""))
         if not pinned_ref:
             raise ValueError("render manifest has no pinned source ref")
@@ -341,10 +412,22 @@ def main() -> int:
                 )
             print(f"WARNING: {message}", file=sys.stderr)
         verify_source_lock(monorepo, manifest, args.skip_lock_verification)
-        render(manifest, monorepo, staging, pinned_ref)
+        render(
+            manifest,
+            monorepo,
+            staging,
+            pinned_ref,
+            selected_environment=args.environment,
+            allow_staged_production=candidate_mode,
+        )
         generated = selected_path(staging, args.environment)
         committed = selected_path(ROOT / "rendered", args.environment)
-        if args.write:
+        if candidate_mode:
+            digest = tree_digest(generated)
+            args.candidate_digest_output.parent.mkdir(parents=True, exist_ok=True)
+            args.candidate_digest_output.write_text(digest + "\n", encoding="utf-8")
+            print(digest)
+        elif args.write:
             publish(staging, ROOT / "rendered", args.environment)
             print(f"Wrote {committed}")
         elif not trees_equal(generated, committed):

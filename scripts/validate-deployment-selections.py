@@ -22,6 +22,7 @@ if str(SCRIPT_DIR) not in sys.path:
     sys.path.insert(0, str(SCRIPT_DIR))
 
 from release_contract import active_exception_errors
+from production_handoff import validate_handoff
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -136,6 +137,20 @@ def safe_release_path(value: object) -> Path | None:
     return relative
 
 
+def safe_handoff_path(value: object) -> Path | None:
+    handoff_path = str(value or "")
+    relative = Path(handoff_path)
+    if (
+        not handoff_path.startswith("qualification/handoffs/")
+        or relative.suffix != ".json"
+        or relative.is_absolute()
+        or ".." in relative.parts
+        or "\\" in handoff_path
+    ):
+        return None
+    return relative
+
+
 def load_selection(environment: str, errors: list[str]) -> dict[str, dict]:
     path = ROOT / "deployments" / f"{environment}.yaml"
     try:
@@ -143,18 +158,28 @@ def load_selection(environment: str, errors: list[str]) -> dict[str, dict]:
     except Exception as exc:
         errors.append(f"{path.relative_to(ROOT)}: cannot parse: {exc}")
         return {}
-    # v3 retains the v2 application/release inventory and adds activation fields validated by
-    # its owning source revision. Accepting the envelope here lets pull_request_target provenance
-    # keep executing trusted default-branch application and digest validation during the staged
-    # contract rollout; it does not execute candidate tooling or relax application fields.
     if (
-        document.get("apiVersion") not in {"mindclade.dev/v2", "mindclade.dev/v3"}
+        document.get("apiVersion") != "mindclade.dev/v3"
         or document.get("kind") != "ArtifactDeploymentSet"
     ):
         errors.append(f"{path.relative_to(ROOT)}: invalid apiVersion/kind")
-    if (document.get("metadata") or {}).get("name") != environment:
+    metadata = document.get("metadata") or {}
+    if not isinstance(metadata, dict) or set(metadata) != {"name"}:
+        errors.append(f"{path.relative_to(ROOT)}: metadata must contain only name")
+    if metadata.get("name") != environment:
         errors.append(f"{path.relative_to(ROOT)}: metadata.name must be {environment}")
     spec = document.get("spec") or {}
+    if not isinstance(spec, dict) or set(spec) != {
+        "environment",
+        "qualificationState",
+        "qualificationHandoff",
+        "applications",
+    }:
+        errors.append(
+            f"{path.relative_to(ROOT)}: spec must contain environment, qualificationState, "
+            "qualificationHandoff, and applications"
+        )
+        return {}
     if spec.get("environment") != environment:
         errors.append(f"{path.relative_to(ROOT)}: spec.environment must be {environment}")
     raw_apps = spec.get("applications") or []
@@ -225,6 +250,49 @@ def load_selection(environment: str, errors: list[str]) -> dict[str, dict]:
         validate_selected_proposal(name, relative_text, record, label, errors)
     if observed_names != sorted(observed_names):
         errors.append(f"{path.relative_to(ROOT)}: applications must be sorted by name")
+
+    state = spec.get("qualificationState")
+    handoff = spec.get("qualificationHandoff")
+    if environment != "production":
+        if state is not None or handoff is not None:
+            errors.append(
+                f"{path.relative_to(ROOT)}: qualification fields must be null outside production"
+            )
+    elif not applications:
+        if state != "blocked-v1" or handoff is not None:
+            errors.append(
+                f"{path.relative_to(ROOT)}: empty production must be blocked-v1 with no handoff"
+            )
+    elif state == "staged-v1":
+        if handoff is not None:
+            errors.append(
+                f"{path.relative_to(ROOT)}: staged-v1 production must not name a handoff"
+            )
+    elif state == "qualified-v1":
+        relative = safe_handoff_path(handoff)
+        if relative is None:
+            errors.append(
+                f"{path.relative_to(ROOT)}: qualified-v1 production requires a safe "
+                "qualification/handoffs/*.json path"
+            )
+        else:
+            try:
+                value = json.loads((ROOT / relative).read_text(encoding="utf-8"))
+                if not isinstance(value, dict):
+                    raise ValueError("handoff must contain one JSON object")
+                validate_handoff(
+                    value,
+                    root=ROOT,
+                    selection_path=path,
+                    render_root=ROOT / "rendered/production",
+                    now=AS_OF,
+                )
+            except (OSError, ValueError, json.JSONDecodeError) as exc:
+                errors.append(f"{path.relative_to(ROOT)}: qualification handoff failed: {exc}")
+    else:
+        errors.append(
+            f"{path.relative_to(ROOT)}: nonempty production must be staged-v1 or qualified-v1"
+        )
     return applications
 
 
