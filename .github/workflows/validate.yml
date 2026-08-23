@@ -8,6 +8,7 @@ name: validate
 on:
   pull_request:
   merge_group:
+    types: [checks_requested]
   push:
     branches: [main]
 
@@ -322,36 +323,13 @@ jobs:
         run: nix develop .#ci --command python3 scripts/validate-deployment-selections.py
 
       - name: Prove changed selections came from the adjacent environment
-        if: github.event_name == 'pull_request'
+        if: github.event_name == 'pull_request' || github.event_name == 'merge_group'
         env:
-          BASE_SHA: ${{ github.event.pull_request.base.sha }}
-        run: |
-          set -euo pipefail
-          [[ "$BASE_SHA" =~ ^[0-9a-f]{40}$ ]] || {
-            echo "::error::invalid pull-request base SHA"
-            exit 1
-          }
-          stage="$(mktemp -d)"
-          trap 'rm -rf "$stage"' EXIT
-          checked=0
-          for pair in development:staging staging:production; do
-            source="${pair%%:*}"
-            target="${pair##*:}"
-            if git diff --quiet "$BASE_SHA...HEAD" -- "deployments/$target.yaml"; then
-              continue
-            fi
-            # The first rollout has no base file; an empty document correctly models an empty
-            # prior selection. Subsequent PRs must compare with the exact immutable base SHA.
-            if ! git show "$BASE_SHA:deployments/$target.yaml" > "$stage/$target.yaml" 2>/dev/null; then
-              : > "$stage/$target.yaml"
-            fi
-            nix develop .#ci --command python3 scripts/validate-promotion-change.py \
-              --source "deployments/$source.yaml" \
-              --target "deployments/$target.yaml" \
-              --base-target "$stage/$target.yaml"
-            checked=$((checked + 1))
-          done
-          echo "Checked $checked changed promotion target(s)."
+          BASE_SHA: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.event.merge_group.base_sha }}
+          HEAD_SHA: ${{ github.event_name == 'pull_request' && github.sha || github.event.merge_group.head_sha }}
+        run: >-
+          nix develop .#ci --command python3 scripts/validate-promotion-range.py
+          --repository . --base-sha "$BASE_SHA" --head-sha "$HEAD_SHA"
 
   pre-commit:
     name: pre-commit

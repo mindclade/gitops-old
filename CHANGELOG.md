@@ -31,6 +31,10 @@ not reconstructed or relabeled here.
 
 ### Fixed
 
+- Made promotion-integrity validation compare each pull-request merge or merge-group candidate
+  against the exact base revision, preventing skipped queue candidates and multi-environment
+  leapfrogging.
+
 ### Security
 
 - Clarified that security response times are non-contractual operational
