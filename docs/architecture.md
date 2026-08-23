@@ -89,10 +89,13 @@ artifact selections, unsafe output names, and unexpected generated drift.
 Development receives newly rendered output. Promotion copies only an approved application's
 immutable release-record selection to the adjacent environment; it never
 copies environment-specific replicas, quotas, configuration, or rendered bytes. Each environment
-then renders independently and CI verifies deterministic output. Argo CD reads this repository
-but cannot write it, and reconciles only its environment. The built-in `default` AppProject is
-deny-all; the bootstrap project is restricted to the resources needed to establish Argo
-composition.
+then renders independently and CI verifies deterministic output. Promotion integrity compares each
+candidate target against the adjacent source in the exact event base, using the pull-request merge
+commit or merge-group head as the candidate. One change therefore cannot leapfrog an unqualified
+selection across environments or validate a tree different from the one GitHub will merge. Argo CD
+reads this repository but cannot write it, and reconciles only its environment. The built-in
+`default` AppProject is deny-all; the bootstrap project is restricted to the resources needed to
+establish Argo composition.
 
 ## Trust and security boundaries
 
