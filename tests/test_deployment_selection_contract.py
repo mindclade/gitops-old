@@ -149,6 +149,18 @@ class DeploymentSelectionContractTest(unittest.TestCase):
         )
         self.assertEqual(errors, [])
 
+    def test_v3_transition_preserves_trusted_release_validation(self) -> None:
+        document = selection(
+            {
+                "name": "serving-api",
+                "releaseMetadata": RELEASE_PATH,
+            }
+        )
+        document["apiVersion"] = "mindclade.dev/v3"
+        document["spec"]["qualificationState"] = None
+        document["spec"]["qualificationHandoff"] = None
+        self.assertEqual(self.validate(document, record()), [])
+
     def test_inline_image_selection_is_rejected(self) -> None:
         errors = self.validate(
             selection(
