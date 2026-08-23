@@ -1,6 +1,6 @@
 .PHONY: license-headers license-headers-fix repository-invariants bootstrap-checks arc-render arc-runner-placement arc-ci-contract cert-manager-vendor \
         yaml-check project-rbac release-handoff release-metadata release-metadata-tests deployment-selections shell-check \
-        production-qualification-tests validate-production-contract validate-repository-home validate-core validate
+        workstation-image-readiness production-qualification-tests validate-production-contract validate-repository-home validate-core validate
 
 license-headers:
 	python3 scripts/license-header-check.py --check
@@ -45,6 +45,9 @@ release-metadata-tests:
 production-qualification-tests:
 	PYTHONDONTWRITEBYTECODE=1 python3 -m unittest tests.test_production_qualification tests.test_production_eligibility
 
+workstation-image-readiness:
+	python3 scripts/validate-workstation-image-readiness.py
+
 deployment-selections:
 	python3 scripts/validate-deployment-selections.py
 
@@ -59,4 +62,4 @@ validate-repository-home:
 
 validate: validate-core validate-repository-home
 
-validate-core: validate-production-contract repository-invariants bootstrap-checks arc-render arc-runner-placement arc-ci-contract cert-manager-vendor yaml-check project-rbac release-handoff release-metadata deployment-selections release-metadata-tests shell-check
+validate-core: validate-production-contract repository-invariants bootstrap-checks arc-render arc-runner-placement arc-ci-contract cert-manager-vendor yaml-check project-rbac workstation-image-readiness release-handoff release-metadata deployment-selections release-metadata-tests shell-check
