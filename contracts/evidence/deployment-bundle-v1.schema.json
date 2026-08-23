@@ -1,0 +1,35 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://mindclade.dev/contracts/evidence/deployment-bundle/v1",
+  "title": "Seven-repository production deployment bundle v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "bundle_digest", "change_reference", "environment", "repositories", "release_digests", "gitops_render_digest", "deployment_selection_digest", "infrastructure_handoff_digest", "governance_audit_digest", "workflow_release", "policy_bundle_digest"],
+  "properties": {
+    "schema_version": {"const": "mindclade.dev/deployment-bundle/v1"},
+    "bundle_digest": {"$ref": "common.schema.json#/$defs/digest"},
+    "change_reference": {"type": "string", "pattern": "^(CHG|SEC|DR)-[A-Za-z0-9._-]+$", "maxLength": 128},
+    "environment": {"const": "production"},
+    "repositories": {
+      "type": "array",
+      "minItems": 7,
+      "maxItems": 7,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["repository", "commit"],
+        "properties": {
+          "repository": {"enum": [".github", ".github-private", "bootstrap", "github-config", "gitops", "infrastructure-live", "mindclade-internal-monorepo"]},
+          "commit": {"type": "string", "pattern": "^[0-9a-f]{40}$"}
+        }
+      }
+    },
+    "release_digests": {"type": "array", "minItems": 1, "maxItems": 64, "items": {"$ref": "common.schema.json#/$defs/digest"}},
+    "gitops_render_digest": {"$ref": "common.schema.json#/$defs/digest"},
+    "deployment_selection_digest": {"$ref": "common.schema.json#/$defs/digest"},
+    "infrastructure_handoff_digest": {"$ref": "common.schema.json#/$defs/digest"},
+    "governance_audit_digest": {"$ref": "common.schema.json#/$defs/digest"},
+    "workflow_release": {"type": "string", "pattern": "^v[0-9]+\\.[0-9]+\\.[0-9]+$"},
+    "policy_bundle_digest": {"$ref": "common.schema.json#/$defs/digest"}
+  }
+}

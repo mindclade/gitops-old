@@ -1,8 +1,8 @@
 {
   "schemaVersion": 1,
   "bundleId": "mindclade-policy-bundle",
-  "version": "2026.08.22.1",
-  "effectiveDate": "2026-08-22",
+  "version": "2026.08.23.2",
+  "effectiveDate": "2026-08-23",
   "canonicalRepository": "mindclade/.github",
   "licenseExpression": "LicenseRef-Mindclade-Proprietary",
   "signature": {
@@ -70,7 +70,7 @@
     {
       "name": "repository-home-validator",
       "source": "actions/validate-repository-home/validate.py",
-      "sha256": "5ccfb1bdf85f978b0942bc797a960002b91b04ec705aec0138b5b581a61301e8",
+      "sha256": "6ea68b89098ca5fe73778ebc9b6b9ad5e17e105fe331ccf6f40b21709752dbed",
       "mediaType": "text/x-python",
       "distributions": [
         {"repository": ".github-private", "path": "scripts/validate-repository-home.py"},
@@ -97,7 +97,7 @@
     {
       "name": "pull-request-policy-validator",
       "source": "tools/validate_pr_policy.py",
-      "sha256": "129359d1e952343d3a0b3e1744d1ed70d9bd10299f9d86b241a80d4bddf2a2a6",
+      "sha256": "b01938ec48eb2daa77abf1fdbc9f7d2274a33f329376f37e6690df0fa8a0d78f",
       "mediaType": "text/x-python",
       "distributions": []
     },
@@ -153,7 +153,7 @@
     {
       "name": "policy-bundle-validator",
       "source": "tools/policy_bundle.py",
-      "sha256": "92404b50a6de9a56eaef4093565318f6669f75e72d1e24e44d7b8d285af3a6b3",
+      "sha256": "0bcbc5543e05b7198e0475ae54694cfea15b7c26eec40cc7a5a7ed472c855e30",
       "mediaType": "text/x-python",
       "distributions": []
     },
@@ -172,9 +172,23 @@
       ]
     },
     {
+      "name": "deployment-bundle-v1-schema",
+      "source": "contracts/evidence/deployment-bundle-v1.schema.json",
+      "sha256": "0c5b161cf9e87451b1ecf41c5b093237701b8f6b707e63d57f1db1c20766af9b",
+      "mediaType": "application/json",
+      "distributions": [
+        {"repository": ".github-private", "path": "contracts/evidence/deployment-bundle-v1.schema.json"},
+        {"repository": "bootstrap", "path": "contracts/evidence/deployment-bundle-v1.schema.json"},
+        {"repository": "github-config", "path": "contracts/evidence/deployment-bundle-v1.schema.json"},
+        {"repository": "gitops", "path": "contracts/evidence/deployment-bundle-v1.schema.json"},
+        {"repository": "infrastructure-live", "path": "contracts/evidence/deployment-bundle-v1.schema.json"},
+        {"repository": "mindclade-internal-monorepo", "path": "contracts/evidence/deployment-bundle-v1.schema.json"}
+      ]
+    },
+    {
       "name": "deployment-bundle-schema",
       "source": "contracts/evidence/deployment-bundle.schema.json",
-      "sha256": "3442dbe55be8535e46cddd2195997b0da20551ec81cc6acfdb672a462ed95260",
+      "sha256": "f5f40bfc84e8cb5e775749f7b9be34795a6e50b649fabe5f7efbe2710a30952a",
       "mediaType": "application/json",
       "distributions": [
         {"repository": ".github-private", "path": "contracts/evidence/deployment-bundle.schema.json"},
@@ -272,7 +286,7 @@
     {
       "name": "evidence-contract-validator",
       "source": "tools/validate_evidence_contracts.py",
-      "sha256": "d94062a2bbc5e5826dc627df9c6273c6b8508bc4ef1a816589601ebf8202dbff",
+      "sha256": "6d8cc1761dece1d6ec7e20ad4601c8a95489bfc561711cce21066d6edf89d1b9",
       "mediaType": "text/x-python",
       "distributions": []
     }

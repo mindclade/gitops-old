@@ -56,6 +56,14 @@ IDENTIFIER = re.compile(r"^[a-z0-9][a-z0-9-]{2,63}$")
 ARTIFACT_NAME = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{1,127}$")
 QUALIFICATION_ID = re.compile(r"^[a-z0-9][a-z0-9-]{5,63}$")
 CHANGE_REFERENCE = re.compile(r"^(?:CHG|SEC|DR)-[A-Za-z0-9._-]+$")
+LINEAGE_ARTIFACTS = {
+    "workflow-release-manifest",
+    "module-release-manifest",
+    "module-interface-manifest",
+    "bootstrap-applied-outputs",
+    "infrastructure-saved-plan",
+    "infrastructure-applied-outputs",
+}
 FORBIDDEN_PARTS = {
     ".git",
     ".terraform",
@@ -173,8 +181,11 @@ def load_request(path: Path) -> dict[str, Any]:
         if check["evidence_key"] not in artifact_keys:
             fail(f"check {name} references unknown evidence")
         used_evidence.add(check["evidence_key"])
-    if used_evidence != artifact_keys:
-        fail("every evidence artifact must support at least one named check")
+    if artifact_keys != used_evidence | LINEAGE_ARTIFACTS:
+        fail(
+            "evidence artifacts must contain exactly the governed controls and "
+            "release-lineage inventory"
+        )
     policy = production_eligibility.load_policy(
         ROOT / "contracts/evidence/production-controls.json"
     )
@@ -374,8 +385,17 @@ def assemble(
     evidence: Path,
     audit_path: Path,
     output: Path,
+    candidate_render_digest_path: Path,
 ) -> str:
     request = load_request(request_path)
+    try:
+        candidate_render_digest = candidate_render_digest_path.read_text(
+            encoding="utf-8"
+        ).strip()
+    except OSError as error:
+        fail(f"candidate production render digest is unreadable: {error}")
+    if production_eligibility.SHA256.fullmatch(candidate_render_digest) is None:
+        fail("candidate production render digest is invalid")
     repositories = validate_estate(request, estate)
     if output.exists() and any(output.iterdir()):
         fail("output directory must be absent or empty")
@@ -417,6 +437,7 @@ def assemble(
         estate,
         audit_target,
         ROOT / "contracts/evidence/production-controls.json",
+        candidate_render_digest,
     )
     bundle_target.write_text(
         json.dumps(bundle, indent=2, sort_keys=True) + "\n", encoding="utf-8"
@@ -556,6 +577,9 @@ def parse_args() -> argparse.Namespace:
     assemble_parser.add_argument("--evidence", required=True, type=Path)
     assemble_parser.add_argument("--audit", required=True, type=Path)
     assemble_parser.add_argument("--output", required=True, type=Path)
+    assemble_parser.add_argument(
+        "--candidate-render-digest-file", required=True, type=Path
+    )
     verify_parser = subparsers.add_parser("verify")
     verify_parser.add_argument("directory", type=Path)
     return parser.parse_args()
@@ -586,6 +610,7 @@ def main() -> int:
                     args.evidence,
                     args.audit,
                     args.output,
+                    args.candidate_render_digest_file,
                 )
             )
         else:

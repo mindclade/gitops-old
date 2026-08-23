@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import re
 import sys
 from pathlib import Path
@@ -62,16 +63,22 @@ def main() -> int:
     parser.add_argument("--selection", type=Path, required=True)
     parser.add_argument("--application", required=True)
     parser.add_argument("--root", type=Path, default=SCRIPT_ROOT)
+    parser.add_argument(
+        "--allow-staged-production",
+        action="store_true",
+        help="render a staged production candidate only inside protected qualification",
+    )
     args = parser.parse_args()
     text = sys.stdin.read()
     try:
         document = yaml.safe_load(args.selection.read_text(encoding="utf-8")) or {}
         if (
-            document.get("apiVersion") != "mindclade.dev/v2"
+            document.get("apiVersion") != "mindclade.dev/v3"
             or document.get("kind") != "ArtifactDeploymentSet"
         ):
-            raise ValueError("artifact selection must be mindclade.dev/v2 ArtifactDeploymentSet")
-        applications = (document.get("spec") or {}).get("applications") or []
+            raise ValueError("artifact selection must be mindclade.dev/v3 ArtifactDeploymentSet")
+        spec = document.get("spec") or {}
+        applications = spec.get("applications") or []
         selected = next(
             (item for item in applications if item.get("name") == args.application),
             None,
@@ -85,6 +92,21 @@ def main() -> int:
             raise ValueError(
                 f"rendered application {args.application} contains release-controlled references but has no release selection"
             )
+        if spec.get("environment") == "production":
+            qualified = (
+                spec.get("qualificationState") == "qualified-v1"
+                and isinstance(spec.get("qualificationHandoff"), str)
+            )
+            candidate = (
+                args.allow_staged_production
+                and spec.get("qualificationState") == "staged-v1"
+                and spec.get("qualificationHandoff") is None
+                and os.environ.get("MINDCLADE_PROTECTED_QUALIFICATION") == "true"
+            )
+            if not qualified and not candidate:
+                raise ValueError(
+                    "production selection is not qualified-v1; ordinary rendering is forbidden"
+                )
         record_path = safe_record(args.root.resolve(), selected.get("releaseMetadata"))
         record = json.loads(record_path.read_text(encoding="utf-8"))
         if not isinstance(record, dict) or record.get("contract_version") != "4.0.0":

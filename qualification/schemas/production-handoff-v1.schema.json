@@ -1,0 +1,102 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://mindclade.dev/schemas/production-handoff-v1.schema.json",
+  "title": "Signed production qualification handoff",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "handoff_digest",
+    "qualification_id",
+    "change_reference",
+    "artifact",
+    "bundle_digest",
+    "selection_digest",
+    "render_digest",
+    "repositories",
+    "signed_decision",
+    "revoked",
+    "public_key",
+    "rollback",
+    "issued_at",
+    "expires_at"
+  ],
+  "properties": {
+    "schema_version": {"const": "mindclade.dev/production-handoff/v1"},
+    "handoff_digest": {"$ref": "#/$defs/digest"},
+    "qualification_id": {"type": "string", "pattern": "^[a-z0-9][a-z0-9-]{5,63}$"},
+    "change_reference": {"type": "string", "pattern": "^(CHG|SEC|DR)-[A-Za-z0-9._-]+$"},
+    "artifact": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["uri", "generation", "digest"],
+      "properties": {
+        "uri": {"type": "string", "pattern": "^gs://[^\\r\\n]+$"},
+        "generation": {"type": "integer", "minimum": 1},
+        "digest": {"$ref": "#/$defs/digest"}
+      }
+    },
+    "bundle_digest": {"$ref": "#/$defs/digest"},
+    "selection_digest": {"$ref": "#/$defs/digest"},
+    "render_digest": {"$ref": "#/$defs/digest"},
+    "repositories": {
+      "type": "array",
+      "minItems": 7,
+      "maxItems": 7,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["repository", "commit"],
+        "properties": {
+          "repository": {
+            "enum": [
+              ".github",
+              ".github-private",
+              "bootstrap",
+              "github-config",
+              "gitops",
+              "infrastructure-live",
+              "mindclade-internal-monorepo"
+            ]
+          },
+          "commit": {"type": "string", "pattern": "^[0-9a-f]{40}$"}
+        }
+      }
+    },
+    "signed_decision": {"$ref": "../../contracts/evidence/eligibility-decision.schema.json"},
+    "revoked": {"const": false},
+    "public_key": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["key_id", "path", "sha256"],
+      "properties": {
+        "key_id": {"type": "string", "minLength": 1, "maxLength": 256},
+        "path": {
+          "type": "string",
+          "pattern": "^qualification/keys/[a-z0-9][a-z0-9._-]*[.]pem$"
+        },
+        "sha256": {"$ref": "#/$defs/digest"}
+      }
+    },
+    "rollback": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["strategy", "previous_bundle_digest", "target_selection_digest"],
+      "properties": {
+        "strategy": {"enum": ["bootstrap", "previous-bundle"]},
+        "previous_bundle_digest": {
+          "oneOf": [{"type": "null"}, {"$ref": "#/$defs/digest"}]
+        },
+        "target_selection_digest": {
+          "oneOf": [{"type": "null"}, {"$ref": "#/$defs/digest"}]
+        }
+      }
+    },
+    "issued_at": {"$ref": "#/$defs/timestamp"},
+    "expires_at": {"$ref": "#/$defs/timestamp"}
+  },
+  "$defs": {
+    "digest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "timestamp": {"type": "string", "format": "date-time"}
+  }
+}

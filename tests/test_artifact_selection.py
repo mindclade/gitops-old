@@ -30,15 +30,27 @@ HEADER = """# Copyright © 2026 Mindclade, LLC. All Rights Reserved.
 """
 
 
-def selection(environment: str, applications: str) -> str:
+def selection(
+    environment: str,
+    applications: str,
+    *,
+    qualification_state: str | None = None,
+    handoff: str | None = None,
+) -> str:
+    if environment == "production" and qualification_state is None:
+        qualification_state = "blocked-v1" if applications == " []" else "staged-v1"
+    state_value = "null" if qualification_state is None else qualification_state
+    handoff_value = "null" if handoff is None else handoff
     return (
         HEADER
-        + f"""apiVersion: mindclade.dev/v2
+        + f"""apiVersion: mindclade.dev/v3
 kind: ArtifactDeploymentSet
 metadata:
   name: {environment}
 spec:
   environment: {environment}
+  qualificationState: {state_value}
+  qualificationHandoff: {handoff_value}
   applications:{applications}
 """
     )
@@ -153,6 +165,30 @@ class ArtifactSelectionTest(unittest.TestCase):
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("has no release selection", result.stderr)
 
+    def test_staged_production_cannot_render_outside_protected_qualification(self) -> None:
+        rendered = f"image: {REPOSITORY}:candidate\n"
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            selected = write_release_root(root, "production", application())
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    str(APPLY),
+                    "--selection",
+                    str(selected),
+                    "--application",
+                    "serving-api",
+                    "--root",
+                    str(root),
+                ],
+                input=rendered,
+                capture_output=True,
+                check=False,
+                text=True,
+            )
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("not qualified-v1", result.stderr)
+
     def test_release_and_artifact_tokens_are_bound_from_the_same_record(self) -> None:
         rendered = (
             "apiVersion: v1\nkind: ConfigMap\ndata:\n"
@@ -215,6 +251,8 @@ class ArtifactSelectionTest(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertIn("name: production", promoted)
         self.assertIn("releaseMetadata: releases/release.json", promoted)
+        self.assertIn("qualificationState: staged-v1", promoted)
+        self.assertIn("qualificationHandoff: null", promoted)
 
     def test_promotion_is_read_only_without_apply(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

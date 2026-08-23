@@ -80,6 +80,20 @@ separate archive writer verify the Ed25519 signature against the immutable Cloud
 the writer then publishes the response create-only beneath the qualification bundle. A stale,
 revoked, incomplete, tampered, unsigned, or differently keyed decision is a hard failure.
 
+Before production desired state can merge, first merge a `staged-v1` selection. The protected
+workflow computes its candidate render without publishing it, assembles the v2 deployment bundle,
+and emits a sanitized `mindclade.dev/production-handoff/v1` claim plus its pinned public key. The
+activation pull request references that claim through the v3 deployment set, changes the state to
+`qualified-v1`, and commits the exact candidate render atomically. The
+claim contains no raw evidence or credential: it records the generation-pinned evidence URI,
+bundle/decision/selection/render digests, exact source commits, signature, public-key fingerprint,
+six-hour validity window, and rollback target. Credential-free validation verifies the committed
+signature; the protected `production-handoff-gate` check re-fetches the exact immutable object
+generation on pull requests and merge groups before merge. Activate that required context through
+GitHub governance before selecting production workloads.
+Expiry freezes a new promotion and requires reviewed operator disposition rather than deleting a
+healthy workload automatically.
+
 The disposition is `PASS` only when all source and connected gates pass. Use
 `PASS_WITH_DEPLOYMENT_PREFLIGHT` while a protected apply or drill remains, and `BLOCKED` when the
 required protected path or evidence cannot be obtained without weakening a control.

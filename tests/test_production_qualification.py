@@ -90,6 +90,48 @@ def request_payload() -> dict:
                 "artifact_name": "infrastructure-control-plane-handoff-23456",
                 "sha256": "d" * 64,
             },
+            {
+                "key": "workflow-release-manifest",
+                "repository": ".github",
+                "run_id": 30001,
+                "artifact_name": "workflow-release-manifest-30001",
+                "sha256": "f" * 64,
+            },
+            {
+                "key": "module-release-manifest",
+                "repository": "mindclade-internal-monorepo",
+                "run_id": 30002,
+                "artifact_name": "module-release-manifest-30002",
+                "sha256": "1" * 64,
+            },
+            {
+                "key": "module-interface-manifest",
+                "repository": "mindclade-internal-monorepo",
+                "run_id": 30003,
+                "artifact_name": "module-interface-manifest-30003",
+                "sha256": "2" * 64,
+            },
+            {
+                "key": "bootstrap-applied-outputs",
+                "repository": "bootstrap",
+                "run_id": 30004,
+                "artifact_name": "bootstrap-applied-outputs-30004",
+                "sha256": "3" * 64,
+            },
+            {
+                "key": "infrastructure-saved-plan",
+                "repository": "infrastructure-live",
+                "run_id": 30005,
+                "artifact_name": "infrastructure-saved-plan-30005",
+                "sha256": "4" * 64,
+            },
+            {
+                "key": "infrastructure-applied-outputs",
+                "repository": "infrastructure-live",
+                "run_id": 30006,
+                "artifact_name": "infrastructure-applied-outputs-30006",
+                "sha256": "5" * 64,
+            },
         ],
     }
 
@@ -210,10 +252,13 @@ class DeterministicAssemblyTest(unittest.TestCase):
                     deployments = checkout / "deployments"
                     deployments.mkdir()
                     (deployments / "production.yaml").write_text(
-                        "apiVersion: mindclade.dev/v2\n"
+                        "apiVersion: mindclade.dev/v3\n"
                         "kind: ArtifactDeploymentSet\n"
+                        "metadata: {name: production}\n"
                         "spec:\n"
                         "  environment: production\n"
+                        "  qualificationState: staged-v1\n"
+                        "  qualificationHandoff: null\n"
                         "  applications:\n"
                         "    - name: platform-fixture\n"
                         "      releaseMetadata: releases/platform-fixture/v1.json\n",
@@ -244,6 +289,79 @@ class DeterministicAssemblyTest(unittest.TestCase):
             payload["evidence_artifacts"][1]["sha256"] = QUALIFICATION.sha256(
                 handoff_zip
             )
+            for declaration in payload["evidence_artifacts"][2:]:
+                artifact = evidence / f"{declaration['key']}.zip"
+                write_zip(artifact, f"{declaration['key']}.json")
+                declaration["sha256"] = QUALIFICATION.sha256(artifact)
+
+            gitops = estate / "gitops"
+            release_chain = gitops / "qualification/release-chain"
+            release_chain.mkdir(parents=True)
+            artifact_digests = {
+                item["key"]: "sha256:" + item["sha256"]
+                for item in payload["evidence_artifacts"]
+            }
+            (release_chain / f"{payload['qualification_id']}.json").write_text(
+                json.dumps(
+                    {
+                        "schema_version": "mindclade.dev/production-release-chain/v1",
+                        "qualification_id": payload["qualification_id"],
+                        "workflow_release": {
+                            "version": "v5.0.0",
+                            "tag_object": "1" * 40,
+                            "peeled_commit": payload["repositories"][".github"],
+                            "release_manifest_digest": artifact_digests[
+                                "workflow-release-manifest"
+                            ],
+                        },
+                        "module_release": {
+                            "version": "v0.4.0",
+                            "tag_object": "2" * 40,
+                            "peeled_commit": payload["repositories"][
+                                "mindclade-internal-monorepo"
+                            ],
+                            "release_manifest_digest": artifact_digests[
+                                "module-release-manifest"
+                            ],
+                            "module_manifest_digest": artifact_digests[
+                                "module-interface-manifest"
+                            ],
+                        },
+                        "bootstrap_contract": {
+                            "version": "1.6.0",
+                            "applied_output_digest": artifact_digests[
+                                "bootstrap-applied-outputs"
+                            ],
+                        },
+                        "saved_plan_digest": artifact_digests[
+                            "infrastructure-saved-plan"
+                        ],
+                        "applied_outputs_digest": artifact_digests[
+                            "infrastructure-applied-outputs"
+                        ],
+                        "rollback": {
+                            "strategy": "bootstrap",
+                            "previous_bundle_digest": None,
+                            "target_selection_digest": None,
+                        },
+                    },
+                    sort_keys=True,
+                ),
+                encoding="utf-8",
+            )
+            self.git(gitops, "add", ".")
+            subprocess.run(
+                ["git", "-C", str(gitops), "commit", "-q", "-m", "release chain"],
+                check=True,
+                env={
+                    **__import__("os").environ,
+                    "GIT_AUTHOR_DATE": "2026-08-21T12:01:00Z",
+                    "GIT_COMMITTER_DATE": "2026-08-21T12:01:00Z",
+                },
+            )
+            gitops_commit = self.git(gitops, "rev-parse", "HEAD")
+            self.git(gitops, "update-ref", "refs/remotes/origin/main", gitops_commit)
+            payload["repositories"]["gitops"] = gitops_commit
             request = root / "request.json"
             request.write_text(json.dumps(payload), encoding="utf-8")
             audit = root / "audit.json"
@@ -258,6 +376,14 @@ class DeterministicAssemblyTest(unittest.TestCase):
             )
 
             digests = []
+            candidate_render_digest = root / "candidate-render.sha256"
+            candidate_render_digest.write_text(
+                QUALIFICATION.production_eligibility.tree_digest(
+                    estate / "gitops/rendered/production"
+                )
+                + "\n",
+                encoding="utf-8",
+            )
             with mock.patch.object(
                 QUALIFICATION.production_eligibility,
                 "build_bundle",
@@ -267,7 +393,13 @@ class DeterministicAssemblyTest(unittest.TestCase):
                     output = root / name
                     digests.append(
                         QUALIFICATION.assemble(
-                            request, estate, sources, evidence, audit, output
+                            request,
+                            estate,
+                            sources,
+                            evidence,
+                            audit,
+                            output,
+                            candidate_render_digest,
                         )
                     )
                     self.assertEqual(QUALIFICATION.verify(output), digests[-1])

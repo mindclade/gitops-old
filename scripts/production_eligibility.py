@@ -30,11 +30,13 @@ REPOSITORIES = (
     "infrastructure-live",
     "mindclade-internal-monorepo",
 )
-SCHEMA_BUNDLE = "mindclade.dev/deployment-bundle/v1"
+SCHEMA_BUNDLE = "mindclade.dev/deployment-bundle/v2"
 SCHEMA_CLAIM = "mindclade.dev/evidence-claim/v1"
 SCHEMA_VERIFICATION = "mindclade.dev/evidence-verification/v1"
 SCHEMA_DECISION = "mindclade.dev/production-eligibility/v1"
-WORKFLOW_RELEASE = "v1.0.0"
+WORKFLOW_RELEASE = "v5.0.0"
+MODULE_RELEASE = "v0.4.0"
+BOOTSTRAP_CONTRACT = "1.6.0"
 SHA256 = re.compile(r"sha256:[0-9a-f]{64}")
 SHA40 = re.compile(r"[0-9a-f]{40}")
 CHANGE_REFERENCE = re.compile(r"(?:CHG|SEC|DR)-[A-Za-z0-9._-]+")
@@ -57,6 +59,32 @@ def file_digest(path: Path) -> str:
         for chunk in iter(lambda: stream.read(1024 * 1024), b""):
             value.update(chunk)
     return "sha256:" + value.hexdigest()
+
+
+def selection_subject_digest(path: Path) -> str:
+    """Digest deployment intent without activation fields that reference its evidence."""
+
+    try:
+        document = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+    except (OSError, yaml.YAMLError) as error:
+        fail(f"deployment selection is unreadable: {error}")
+    spec = document.get("spec") if isinstance(document, dict) else None
+    if not isinstance(spec, dict):
+        fail("deployment selection has no spec")
+    subject = {
+        "apiVersion": document.get("apiVersion"),
+        "kind": document.get("kind"),
+        "metadata": document.get("metadata"),
+        "spec": {
+            "environment": spec.get("environment"),
+            "applications": spec.get("applications"),
+        },
+    }
+    return digest_bytes(
+        json.dumps(
+            subject, sort_keys=True, separators=(",", ":"), ensure_ascii=True
+        ).encode("utf-8")
+    )
 
 
 class CanonicalEncoder:
@@ -241,7 +269,7 @@ def release_digests(gitops: Path) -> list[str]:
 
 
 def canonical_bundle(bundle: dict[str, Any]) -> bytes:
-    encoder = CanonicalEncoder("deployment-bundle/v1")
+    encoder = CanonicalEncoder("deployment-bundle/v2")
     encoder.text("schema_version", bundle["schema_version"])
     encoder.text("change_reference", bundle["change_reference"])
     encoder.text("environment", bundle["environment"])
@@ -255,7 +283,26 @@ def canonical_bundle(bundle: dict[str, Any]) -> bytes:
     encoder.text("infrastructure_handoff_digest", bundle["infrastructure_handoff_digest"])
     encoder.text("governance_audit_digest", bundle["governance_audit_digest"])
     encoder.text("workflow_release", bundle["workflow_release"])
+    workflow = bundle["workflow_release_provenance"]
+    encoder.text("workflow_tag_object", workflow["tag_object"])
+    encoder.text("workflow_peeled_commit", workflow["peeled_commit"])
+    encoder.text("workflow_release_manifest_digest", workflow["release_manifest_digest"])
+    module = bundle["module_release"]
+    encoder.text("module_version", module["version"])
+    encoder.text("module_tag_object", module["tag_object"])
+    encoder.text("module_peeled_commit", module["peeled_commit"])
+    encoder.text("module_release_manifest_digest", module["release_manifest_digest"])
+    encoder.text("module_manifest_digest", module["module_manifest_digest"])
+    bootstrap = bundle["bootstrap_contract"]
+    encoder.text("bootstrap_version", bootstrap["version"])
+    encoder.text("bootstrap_applied_output_digest", bootstrap["applied_output_digest"])
+    encoder.text("saved_plan_digest", bundle["saved_plan_digest"])
+    encoder.text("applied_outputs_digest", bundle["applied_outputs_digest"])
     encoder.text("policy_bundle_digest", bundle["policy_bundle_digest"])
+    rollback = bundle["rollback"]
+    encoder.text("rollback_strategy", rollback["strategy"])
+    encoder.text("previous_bundle_digest", rollback["previous_bundle_digest"] or "")
+    encoder.text("target_selection_digest", rollback["target_selection_digest"] or "")
     return encoder.bytes()
 
 
@@ -272,7 +319,13 @@ def validate_bundle(bundle: dict[str, Any]) -> None:
         "infrastructure_handoff_digest",
         "governance_audit_digest",
         "workflow_release",
+        "workflow_release_provenance",
+        "module_release",
+        "bootstrap_contract",
+        "saved_plan_digest",
+        "applied_outputs_digest",
         "policy_bundle_digest",
+        "rollback",
     }
     digest_fields = (
         "bundle_digest",
@@ -280,6 +333,8 @@ def validate_bundle(bundle: dict[str, Any]) -> None:
         "deployment_selection_digest",
         "infrastructure_handoff_digest",
         "governance_audit_digest",
+        "saved_plan_digest",
+        "applied_outputs_digest",
         "policy_bundle_digest",
     )
     repositories = bundle.get("repositories")
@@ -307,6 +362,71 @@ def validate_bundle(bundle: dict[str, Any]) -> None:
             or SHA40.fullmatch(str(repository["commit"])) is None
         ):
             fail("deployment bundle repositories are not exact and immutable")
+    workflow = bundle.get("workflow_release_provenance")
+    module = bundle.get("module_release")
+    bootstrap = bundle.get("bootstrap_contract")
+    release_fields = {"version", "tag_object", "peeled_commit", "release_manifest_digest"}
+    module_fields = release_fields | {"module_manifest_digest"}
+    if (
+        not isinstance(workflow, dict)
+        or set(workflow) != release_fields
+        or workflow.get("version") != WORKFLOW_RELEASE
+        or bundle.get("workflow_release") != workflow.get("version")
+        or any(
+            SHA40.fullmatch(str(workflow.get(field, ""))) is None
+            for field in ("tag_object", "peeled_commit")
+        )
+        or SHA256.fullmatch(str(workflow.get("release_manifest_digest", ""))) is None
+    ):
+        fail("workflow release provenance is invalid")
+    if (
+        not isinstance(module, dict)
+        or set(module) != module_fields
+        or module.get("version") != MODULE_RELEASE
+        or any(
+            SHA40.fullmatch(str(module.get(field, ""))) is None
+            for field in ("tag_object", "peeled_commit")
+        )
+        or any(
+            SHA256.fullmatch(str(module.get(field, ""))) is None
+            for field in ("release_manifest_digest", "module_manifest_digest")
+        )
+    ):
+        fail("module release provenance is invalid")
+    repository_commits = {
+        item["repository"]: item["commit"] for item in repositories
+    }
+    if (
+        workflow["peeled_commit"] != repository_commits[".github"]
+        or module["peeled_commit"]
+        != repository_commits["mindclade-internal-monorepo"]
+    ):
+        fail("release provenance does not bind the bundled source commits")
+    if (
+        not isinstance(bootstrap, dict)
+        or set(bootstrap) != {"version", "applied_output_digest"}
+        or bootstrap.get("version") != BOOTSTRAP_CONTRACT
+        or SHA256.fullmatch(str(bootstrap.get("applied_output_digest", ""))) is None
+    ):
+        fail("bootstrap applied contract is invalid")
+    rollback = bundle.get("rollback")
+    if not isinstance(rollback, dict) or set(rollback) != {
+        "strategy",
+        "previous_bundle_digest",
+        "target_selection_digest",
+    }:
+        fail("deployment bundle rollback inventory is invalid")
+    if rollback.get("strategy") == "bootstrap":
+        if rollback.get("previous_bundle_digest") is not None or rollback.get("target_selection_digest") is not None:
+            fail("bootstrap rollback cannot name a previous bundle")
+    elif rollback.get("strategy") == "previous-bundle":
+        if any(
+            SHA256.fullmatch(str(rollback.get(field, ""))) is None
+            for field in ("previous_bundle_digest", "target_selection_digest")
+        ):
+            fail("previous-bundle rollback does not bind immutable targets")
+    else:
+        fail("deployment bundle rollback strategy is unsupported")
     if bundle["bundle_digest"] != digest_bytes(canonical_bundle(bundle)):
         fail("deployment bundle digest differs from canonical content")
 
@@ -325,8 +445,73 @@ def require_governed_policy(policy: Path, estate: Path) -> None:
         fail("qualification policy differs from the governed estate policy")
 
 
+def load_release_chain(
+    request: dict[str, Any], gitops: Path, artifacts: dict[str, dict[str, Any]]
+) -> dict[str, Any]:
+    qualification_id = str(request.get("qualification_id", ""))
+    if re.fullmatch(r"[a-z0-9][a-z0-9-]{5,63}", qualification_id) is None:
+        fail("qualification_id cannot select a release-chain contract")
+    chain = load_json(
+        gitops / "qualification/release-chain" / f"{qualification_id}.json",
+        "production release chain",
+    )
+    required = {
+        "schema_version",
+        "qualification_id",
+        "workflow_release",
+        "module_release",
+        "bootstrap_contract",
+        "saved_plan_digest",
+        "applied_outputs_digest",
+        "rollback",
+    }
+    if (
+        set(chain) != required
+        or chain.get("schema_version") != "mindclade.dev/production-release-chain/v1"
+        or chain.get("qualification_id") != qualification_id
+    ):
+        fail("production release-chain fields are not exact")
+    workflow = chain.get("workflow_release")
+    module = chain.get("module_release")
+    bootstrap = chain.get("bootstrap_contract")
+    release_fields = {
+        "version",
+        "tag_object",
+        "peeled_commit",
+        "release_manifest_digest",
+    }
+    if not isinstance(workflow, dict) or set(workflow) != release_fields:
+        fail("production workflow release-chain entry is invalid")
+    if not isinstance(module, dict) or set(module) != release_fields | {
+        "module_manifest_digest"
+    }:
+        fail("production module release-chain entry is invalid")
+    if not isinstance(bootstrap, dict) or set(bootstrap) != {
+        "version",
+        "applied_output_digest",
+    }:
+        fail("production bootstrap release-chain entry is invalid")
+    expected_artifacts = {
+        "workflow-release-manifest": workflow.get("release_manifest_digest"),
+        "module-release-manifest": module.get("release_manifest_digest"),
+        "module-interface-manifest": module.get("module_manifest_digest"),
+        "bootstrap-applied-outputs": bootstrap.get("applied_output_digest"),
+        "infrastructure-saved-plan": chain.get("saved_plan_digest"),
+        "infrastructure-applied-outputs": chain.get("applied_outputs_digest"),
+    }
+    for key, expected in expected_artifacts.items():
+        declaration = artifacts.get(key)
+        if declaration is None or "sha256:" + str(declaration.get("sha256", "")) != expected:
+            fail(f"production release chain does not bind evidence artifact: {key}")
+    return chain
+
+
 def build_bundle(
-    request: dict[str, Any], estate: Path, audit: Path, policy: Path
+    request: dict[str, Any],
+    estate: Path,
+    audit: Path,
+    policy: Path,
+    candidate_render_digest: str,
 ) -> dict[str, Any]:
     repositories = request.get("repositories")
     if not isinstance(repositories, dict) or set(repositories) != set(REPOSITORIES):
@@ -338,6 +523,11 @@ def build_bundle(
     if any(SHA40.fullmatch(str(item["commit"])) is None for item in revisions):
         fail("deployment bundle contains a mutable repository revision")
     artifacts = request.get("evidence_artifacts")
+    artifact_map = {
+        str(item.get("key")): item
+        for item in artifacts
+        if isinstance(item, dict)
+    } if isinstance(artifacts, list) else {}
     handoffs = [
         item
         for item in artifacts if isinstance(item, dict)
@@ -345,7 +535,29 @@ def build_bundle(
     ] if isinstance(artifacts, list) else []
     if len(handoffs) != 1:
         fail("production qualification requires one infrastructure control-plane handoff")
+    if SHA256.fullmatch(candidate_render_digest) is None:
+        fail("candidate production render digest is invalid")
     gitops = estate / "gitops"
+    selection_path = gitops / "deployments/production.yaml"
+    try:
+        selection = yaml.safe_load(selection_path.read_text(encoding="utf-8")) or {}
+    except (OSError, yaml.YAMLError) as error:
+        fail(f"production selection is unreadable: {error}")
+    selection_spec = selection.get("spec") if isinstance(selection, dict) else None
+    if (
+        selection.get("apiVersion") != "mindclade.dev/v3"
+        or selection.get("kind") != "ArtifactDeploymentSet"
+        or not isinstance(selection_spec, dict)
+        or selection_spec.get("environment") != "production"
+        or selection_spec.get("qualificationState") != "staged-v1"
+        or selection_spec.get("qualificationHandoff") is not None
+        or not isinstance(selection_spec.get("applications"), list)
+        or not selection_spec["applications"]
+    ):
+        fail(
+            "production qualification requires a nonempty staged-v1 selection with no handoff"
+        )
+    release_chain = load_release_chain(request, gitops, artifact_map)
     bundle = {
         "schema_version": SCHEMA_BUNDLE,
         "bundle_digest": "",
@@ -353,14 +565,20 @@ def build_bundle(
         "environment": "production",
         "repositories": revisions,
         "release_digests": release_digests(gitops),
-        "gitops_render_digest": tree_digest(gitops / "rendered/production"),
-        "deployment_selection_digest": file_digest(gitops / "deployments/production.yaml"),
+        "gitops_render_digest": candidate_render_digest,
+        "deployment_selection_digest": selection_subject_digest(selection_path),
         "infrastructure_handoff_digest": "sha256:" + handoffs[0]["sha256"],
         "governance_audit_digest": file_digest(audit),
         "workflow_release": WORKFLOW_RELEASE,
+        "workflow_release_provenance": release_chain["workflow_release"],
+        "module_release": release_chain["module_release"],
+        "bootstrap_contract": release_chain["bootstrap_contract"],
+        "saved_plan_digest": release_chain["saved_plan_digest"],
+        "applied_outputs_digest": release_chain["applied_outputs_digest"],
         "policy_bundle_digest": file_digest(
             estate / ".github/contracts/policy-bundle/manifest.json"
         ),
+        "rollback": release_chain["rollback"],
     }
     require_governed_policy(policy, estate)
     bundle["bundle_digest"] = digest_bytes(canonical_bundle(bundle))
@@ -613,6 +831,7 @@ def parse_args() -> argparse.Namespace:
     bundle.add_argument("--estate", required=True, type=Path)
     bundle.add_argument("--audit", required=True, type=Path)
     bundle.add_argument("--policy", required=True, type=Path)
+    bundle.add_argument("--candidate-render-digest", required=True)
     bundle.add_argument("--output", required=True, type=Path)
     records = commands.add_parser("records")
     records.add_argument("--request", required=True, type=Path)
@@ -640,6 +859,7 @@ def main() -> int:
                 args.estate,
                 args.audit,
                 args.policy,
+                args.candidate_render_digest,
             )
             args.output.write_text(json.dumps(value, indent=2, sort_keys=True) + "\n", encoding="utf-8")
             print(value["bundle_digest"])

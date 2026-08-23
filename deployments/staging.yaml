@@ -3,10 +3,12 @@
 # SPDX-License-Identifier: LicenseRef-Mindclade-Proprietary
 
 ---
-apiVersion: mindclade.dev/v2
+apiVersion: mindclade.dev/v3
 kind: ArtifactDeploymentSet
 metadata:
   name: staging
 spec:
   environment: staging
+  qualificationState: null
+  qualificationHandoff: null
   applications: []

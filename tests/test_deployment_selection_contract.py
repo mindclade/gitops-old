@@ -3,7 +3,7 @@
 # Mindclade Proprietary and Confidential.
 # SPDX-License-Identifier: LicenseRef-Mindclade-Proprietary
 
-"""Behavior tests for the v2 one-record-per-application selection contract."""
+"""Behavior tests for the v3 one-record-per-application selection contract."""
 
 from __future__ import annotations
 
@@ -65,12 +65,25 @@ def record(application: str = "serving-api") -> dict:
     }
 
 
-def selection(application: dict) -> dict:
+def selection(
+    application: dict,
+    *,
+    environment: str = "development",
+    handoff: str | None = None,
+    state: str | None = None,
+) -> dict:
+    if environment == "production" and state is None:
+        state = "staged-v1"
     return {
-        "apiVersion": "mindclade.dev/v2",
+        "apiVersion": "mindclade.dev/v3",
         "kind": "ArtifactDeploymentSet",
-        "metadata": {"name": "development"},
-        "spec": {"environment": "development", "applications": [application]},
+        "metadata": {"name": environment},
+        "spec": {
+            "environment": environment,
+            "qualificationState": state,
+            "qualificationHandoff": handoff,
+            "applications": [application],
+        },
     }
 
 
@@ -113,12 +126,18 @@ def proposal() -> dict:
 
 
 class DeploymentSelectionContractTest(unittest.TestCase):
-    def validate(self, document: dict, release: dict | None = None) -> list[str]:
+    def validate(
+        self,
+        document: dict,
+        release: dict | None = None,
+        *,
+        environment: str = "development",
+    ) -> list[str]:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             (root / "deployments").mkdir()
             (root / "releases").mkdir()
-            (root / "deployments/development.yaml").write_text(
+            (root / "deployments" / f"{environment}.yaml").write_text(
                 yaml.safe_dump(document, sort_keys=False), encoding="utf-8"
             )
             if release is not None:
@@ -134,7 +153,7 @@ class DeploymentSelectionContractTest(unittest.TestCase):
                 )
             errors: list[str] = []
             with mock.patch.object(SELECTIONS, "ROOT", root):
-                SELECTIONS.load_selection("development", errors)
+                SELECTIONS.load_selection(environment, errors)
             return errors
 
     def test_one_release_record_binds_the_application(self) -> None:
@@ -195,6 +214,48 @@ class DeploymentSelectionContractTest(unittest.TestCase):
             )
         )
         self.assertTrue(any("safe releases" in error for error in errors))
+
+    def test_nonproduction_selection_rejects_a_qualification_handoff(self) -> None:
+        errors = self.validate(
+            selection(
+                {
+                    "name": "serving-api",
+                    "releaseMetadata": RELEASE_PATH,
+                },
+                handoff="qualification/handoffs/qualification-one.json",
+            ),
+            record(),
+        )
+        self.assertTrue(any("must be null" in error for error in errors), errors)
+
+    def test_nonempty_production_can_be_staged_without_a_handoff(self) -> None:
+        errors = self.validate(
+            selection(
+                {
+                    "name": "serving-api",
+                    "releaseMetadata": RELEASE_PATH,
+                },
+                environment="production",
+            ),
+            record(),
+            environment="production",
+        )
+        self.assertEqual(errors, [])
+
+    def test_qualified_production_requires_a_qualification_handoff(self) -> None:
+        errors = self.validate(
+            selection(
+                {
+                    "name": "serving-api",
+                    "releaseMetadata": RELEASE_PATH,
+                },
+                environment="production",
+                state="qualified-v1",
+            ),
+            record(),
+            environment="production",
+        )
+        self.assertTrue(any("safe qualification/handoffs" in error for error in errors), errors)
 
     def validate_proposal(self, value: dict) -> list[str]:
         with tempfile.TemporaryDirectory() as directory:

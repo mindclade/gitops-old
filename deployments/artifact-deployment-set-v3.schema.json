@@ -1,0 +1,59 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://mindclade.dev/schemas/artifact-deployment-set-v3.schema.json",
+  "title": "Artifact deployment set v3",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["apiVersion", "kind", "metadata", "spec"],
+  "properties": {
+    "apiVersion": {"const": "mindclade.dev/v3"},
+    "kind": {"const": "ArtifactDeploymentSet"},
+    "metadata": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name"],
+      "properties": {
+        "name": {"enum": ["development", "staging", "production"]}
+      }
+    },
+    "spec": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "environment",
+        "qualificationState",
+        "qualificationHandoff",
+        "applications"
+      ],
+      "properties": {
+        "environment": {"enum": ["development", "staging", "production"]},
+        "qualificationState": {
+          "type": ["string", "null"],
+          "enum": [null, "blocked-v1", "staged-v1", "qualified-v1"]
+        },
+        "qualificationHandoff": {
+          "type": ["string", "null"],
+          "pattern": "^qualification/handoffs/[a-z0-9][a-z0-9-]{5,63}\\.json$"
+        },
+        "applications": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["name", "releaseMetadata"],
+            "properties": {
+              "name": {
+                "type": "string",
+                "pattern": "^(platform|serving|research|data|partner)-[a-z0-9][a-z0-9-]*$"
+              },
+              "releaseMetadata": {
+                "type": "string",
+                "pattern": "^releases/[a-z0-9][a-z0-9/-]*\\.json$"
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

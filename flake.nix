@@ -51,6 +51,7 @@
               gnumake
               shellcheck # actionlint shells out to it for `run:` blocks
               yamllint
+              openssl
               (python3.withPackages (pythonPackages: [
                 pythonPackages.jsonschema
                 pythonPackages.pyyaml
@@ -91,6 +92,7 @@
               jq
               yamllint
               actionlint
+              openssl
               (python3.withPackages (pythonPackages: [
                 pythonPackages.jsonschema
                 pythonPackages.pyyaml

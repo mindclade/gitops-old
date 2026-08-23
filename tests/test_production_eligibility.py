@@ -31,16 +31,16 @@ EXPECTED_POLICY_DIGEST = (
     "sha256:affcc099bf4e423232e9176d2f77c9d08e0d4fd4eac6d4fb926a9abe85aa5326"
 )
 EXPECTED_BUNDLE_DIGEST = (
-    "sha256:8790176a9a3f68f6830e4fea9a5132d4e2c1166a46e0e0d51f694a62657eac6e"
+    "sha256:43173fce12fcf07430f02748f0f6bf2a60476e31a0e2a39c38ebf6a174457215"
 )
 EXPECTED_SOURCE_CI_CLAIM = (
-    "sha256:d6d7560f3f24232414aa92831d0912be51b7dce7f2b6e5f0b6bda1248b79828c"
+    "sha256:a06f590254ac6315d293f7acdd954a4c6abda16c2e3730da7d4c4f13b5505d09"
 )
 EXPECTED_SOURCE_CI_VERIFICATION = (
-    "sha256:d68fe9f18b012170a6f4d62c3bb0047e95e4669959bd83d5f12f068f80c8d175"
+    "sha256:2158f54350093ae0725db61b403a221ce5722a135d32d93aae4e0fbf69d002dd"
 )
 EXPECTED_DECISION_DIGEST = (
-    "sha256:5f41137dc4380fbb543420c62a515397915fb4956e74cdc6fca1956434141fbd"
+    "sha256:37b310b9733d18bdbcdd36ac6e253a41d68c4196cd7afccb1fd0b8383355baed"
 )
 VALID_VERIFICATION_TIME = datetime(2026, 8, 22, 12, 30, tzinfo=timezone.utc)
 EXPIRED_VERIFICATION_TIME = datetime(2026, 8, 22, 13, 0, tzinfo=timezone.utc)
@@ -61,8 +61,32 @@ def bundle_fixture() -> dict:
         "deployment_selection_digest": "sha256:" + "c" * 64,
         "infrastructure_handoff_digest": "sha256:" + "d" * 64,
         "governance_audit_digest": "sha256:" + "e" * 64,
-        "workflow_release": "v1.0.0",
+        "workflow_release": "v5.0.0",
+        "workflow_release_provenance": {
+            "version": "v5.0.0",
+            "tag_object": "1" * 40,
+            "peeled_commit": "0" * 40,
+            "release_manifest_digest": "sha256:" + "6" * 64,
+        },
+        "module_release": {
+            "version": "v0.4.0",
+            "tag_object": "2" * 40,
+            "peeled_commit": "0" * 40,
+            "release_manifest_digest": "sha256:" + "7" * 64,
+            "module_manifest_digest": "sha256:" + "8" * 64,
+        },
+        "bootstrap_contract": {
+            "version": "1.6.0",
+            "applied_output_digest": "sha256:" + "9" * 64,
+        },
+        "saved_plan_digest": "sha256:" + "3" * 64,
+        "applied_outputs_digest": "sha256:" + "4" * 64,
         "policy_bundle_digest": "sha256:" + "f" * 64,
+        "rollback": {
+            "strategy": "bootstrap",
+            "previous_bundle_digest": None,
+            "target_selection_digest": None,
+        },
     }
     bundle["bundle_digest"] = ELIGIBILITY.digest_bytes(
         ELIGIBILITY.canonical_bundle(bundle)
