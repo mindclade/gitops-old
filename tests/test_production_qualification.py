@@ -328,7 +328,7 @@ class DeterministicAssemblyTest(unittest.TestCase):
                             ],
                         },
                         "bootstrap_contract": {
-                            "version": "1.6.0",
+                            "version": "2.0.0",
                             "applied_output_digest": artifact_digests[
                                 "bootstrap-applied-outputs"
                             ],

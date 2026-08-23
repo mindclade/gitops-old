@@ -31,16 +31,16 @@ EXPECTED_POLICY_DIGEST = (
     "sha256:affcc099bf4e423232e9176d2f77c9d08e0d4fd4eac6d4fb926a9abe85aa5326"
 )
 EXPECTED_BUNDLE_DIGEST = (
-    "sha256:43173fce12fcf07430f02748f0f6bf2a60476e31a0e2a39c38ebf6a174457215"
+    "sha256:056f89c8b4c44201a166a3400d4e104b0f523bbedb0415474e4f70390be4eca7"
 )
 EXPECTED_SOURCE_CI_CLAIM = (
-    "sha256:a06f590254ac6315d293f7acdd954a4c6abda16c2e3730da7d4c4f13b5505d09"
+    "sha256:b71a87f1ed83e695b278dcda5b0882318ba60b35683d9aef12bd1388483f08e3"
 )
 EXPECTED_SOURCE_CI_VERIFICATION = (
-    "sha256:2158f54350093ae0725db61b403a221ce5722a135d32d93aae4e0fbf69d002dd"
+    "sha256:e4f54d5eede4c1fb924bd10e70f0104f4491d4109e17b786c367f5e507698300"
 )
 EXPECTED_DECISION_DIGEST = (
-    "sha256:37b310b9733d18bdbcdd36ac6e253a41d68c4196cd7afccb1fd0b8383355baed"
+    "sha256:cbb4965690137d98718cfc9ea191c2d764536fbedc977ac0fc2b9be71a8a7353"
 )
 VALID_VERIFICATION_TIME = datetime(2026, 8, 22, 12, 30, tzinfo=timezone.utc)
 EXPIRED_VERIFICATION_TIME = datetime(2026, 8, 22, 13, 0, tzinfo=timezone.utc)
@@ -76,7 +76,7 @@ def bundle_fixture() -> dict:
             "module_manifest_digest": "sha256:" + "8" * 64,
         },
         "bootstrap_contract": {
-            "version": "1.6.0",
+            "version": "2.0.0",
             "applied_output_digest": "sha256:" + "9" * 64,
         },
         "saved_plan_digest": "sha256:" + "3" * 64,

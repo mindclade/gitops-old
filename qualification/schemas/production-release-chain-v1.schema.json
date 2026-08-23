@@ -24,7 +24,7 @@
       "additionalProperties": false,
       "required": ["version", "applied_output_digest"],
       "properties": {
-        "version": {"const": "1.6.0"},
+        "version": {"const": "2.0.0"},
         "applied_output_digest": {"$ref": "#/$defs/digest"}
       }
     },

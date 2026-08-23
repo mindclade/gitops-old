@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "bundleId": "mindclade-policy-bundle",
-  "version": "2026.08.23.2",
+  "version": "2026.08.23.3",
   "effectiveDate": "2026-08-23",
   "canonicalRepository": "mindclade/.github",
   "licenseExpression": "LicenseRef-Mindclade-Proprietary",
@@ -286,7 +286,7 @@
     {
       "name": "evidence-contract-validator",
       "source": "tools/validate_evidence_contracts.py",
-      "sha256": "6d8cc1761dece1d6ec7e20ad4601c8a95489bfc561711cce21066d6edf89d1b9",
+      "sha256": "6d7688eabc29730aea88e410e9a75495707554f980913851edc65b066468248f",
       "mediaType": "text/x-python",
       "distributions": []
     }

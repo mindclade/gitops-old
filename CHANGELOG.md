@@ -24,6 +24,8 @@ not reconstructed or relabeled here.
 
 ### Changed
 
+- Migrated production qualification and workstation readiness atomically to Bootstrap platform
+  contract `2.0.0`.
 - Updated the proprietary license with the protected-disclosure notice and
   recorded the Contributor Covenant 2.1 attribution and modifications.
 - Moved the reusable SPDX source-header template under `.github/` so `LICENSE`

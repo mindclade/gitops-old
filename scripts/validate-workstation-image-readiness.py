@@ -59,7 +59,7 @@ def errors(document: dict[str, Any]) -> list[str]:
     if authority != expected_authority:
         failures.append("workstation qualification authority boundary differs")
     if spec.get("releases") != {
-        "bootstrapContract": "1.6.0",
+        "bootstrapContract": "2.0.0",
         "workflowContract": "v5.0.0",
         "terraformModules": "v0.4.0",
     }:
