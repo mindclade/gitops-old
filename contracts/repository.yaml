@@ -38,6 +38,7 @@ required_paths:
   - LICENSE
   - NOTICE
   - .github/PULL_REQUEST_TEMPLATE.md
+  - .github/workflows/impact-report.yml
   - .github/MINDCLADE_PROPRIETARY_SOURCE_HEADER.txt
   - .kubernetes-version
   - bootstrap/argocd-install.yaml
@@ -64,6 +65,7 @@ required_paths:
   - deployments/artifact-deployment-set-v3.schema.json
   - contracts/evidence/deployment-bundle.schema.json
   - contracts/release-handoff-policy.json
+  - contracts/gitops-impact-report.schema.json
   - contracts/release-metadata.schema.json
   - contracts/evidence/deployment-bundle-v1.schema.json
   - contracts/fixtures/release-handoff/manifest.json
@@ -82,6 +84,7 @@ required_paths:
   - qualification/release-chain/README.md
   - qualification/workstation-image-readiness.yaml
   - scripts/audit-production-estate.py
+  - scripts/gitops-impact-report.py
   - scripts/apply-artifact-selection.py
   - scripts/create-release-promotion.py
   - scripts/deterministic-qualification-archive.py
@@ -96,6 +99,7 @@ required_paths:
   - scripts/validate-release-handoff.py
   - scripts/validate-release-metadata.py
   - tests/test_artifact_selection.py
+  - tests/test_gitops_impact_report.py
   - tests/test_create_release_promotion.py
   - tests/test_deployment_selection_contract.py
   - tests/test_release_handoff.py

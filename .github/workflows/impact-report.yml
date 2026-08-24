@@ -1,0 +1,82 @@
+---
+# Copyright © 2026 Mindclade, LLC. All Rights Reserved.
+# Mindclade Proprietary and Confidential.
+# SPDX-License-Identifier: LicenseRef-Mindclade-Proprietary
+
+name: GitOps impact report
+
+on:
+  # PR execution is loaded from the default branch. Candidate source is data only and is never
+  # executed, so a PR cannot teach its own impact reporter to omit the authority it expands.
+  pull_request_target:
+    types: [opened, synchronize, reopened, ready_for_review, edited]
+  merge_group:
+    types: [checks_requested]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: impact-report-${{ github.event_name == 'pull_request_target' && github.event.pull_request.number || github.event.merge_group.head_sha }}
+  cancel-in-progress: true
+
+jobs:
+  report:
+    name: desired-state blast radius
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      BASE_SHA: ${{ github.event_name == 'pull_request_target' && github.event.pull_request.base.sha || github.event.merge_group.base_sha }}
+      EXPECTED_HEAD_SHA: ${{ github.event_name == 'pull_request_target' && github.event.pull_request.merge_commit_sha || github.event.merge_group.head_sha }}
+    steps:
+      - name: Check out the trusted analyzer and schema
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          ref: ${{ github.event_name == 'pull_request_target' && github.event.pull_request.base.sha || github.event.merge_group.base_sha }}
+          fetch-depth: 0
+          persist-credentials: false
+          path: .trusted
+
+      - name: Check out the merge candidate as data
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          ref: ${{ github.event_name == 'pull_request_target' && format('refs/pull/{0}/merge', github.event.pull_request.number) || github.event.merge_group.head_sha }}
+          fetch-depth: 0
+          persist-credentials: false
+          path: .candidate
+
+      - uses: cachix/install-nix-action@630ae543ea3a38a9a4166f03376c02c50f408342  # v31.11.0
+        with:
+          extra_nix_config: |
+            experimental-features = nix-command flakes
+            accept-flake-config = false
+
+      - name: Analyze desired-state impact
+        run: |
+          set -euo pipefail
+          output="$RUNNER_TEMP/gitops-impact"
+          mkdir -p "$output"
+          head_sha="$(git -C .candidate rev-parse HEAD)"
+          test "$head_sha" = "$EXPECTED_HEAD_SHA" || {
+            echo "::error::checked merge candidate differs from the event SHA"
+            exit 1
+          }
+          git -C .candidate merge-base --is-ancestor "$BASE_SHA" "$head_sha" || {
+            echo "::error::base SHA is not an ancestor of the merge candidate"
+            exit 1
+          }
+          nix develop ./.trusted#ci --command python3 .trusted/scripts/gitops-impact-report.py \
+            --repository .candidate \
+            --contract-root .trusted \
+            --base-sha "$BASE_SHA" \
+            --head-sha "$head_sha" \
+            --json-out "$output/report.json" \
+            --markdown-out "$output/summary.md"
+          cat "$output/summary.md" >> "$GITHUB_STEP_SUMMARY"
+
+      - uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4  # v5
+        with:
+          name: gitops-impact-${{ github.event_name == 'pull_request_target' && github.event.pull_request.number || github.event.merge_group.head_sha }}
+          path: ${{ runner.temp }}/gitops-impact/
+          if-no-files-found: error
+          retention-days: 30
