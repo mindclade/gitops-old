@@ -38,6 +38,20 @@ class ArcRunnerPlacementTest(unittest.TestCase):
         errors = VALIDATE.validate_runner_spec(spec, "fixture")
         self.assertTrue(any("runner-pool toleration" in error for error in errors), errors)
 
+    def test_presubmit_requires_both_spot_tolerations(self) -> None:
+        spec = {
+            "nodeSelector": copy.deepcopy(VALIDATE.EXPECTED_SPOT_NODE_SELECTOR),
+            "tolerations": copy.deepcopy(VALIDATE.EXPECTED_SPOT_TOLERATIONS),
+        }
+        spec["tolerations"].pop()
+        errors = VALIDATE.validate_runner_spec(
+            spec,
+            "fixture",
+            node_selector=VALIDATE.EXPECTED_SPOT_NODE_SELECTOR,
+            tolerations=VALIDATE.EXPECTED_SPOT_TOLERATIONS,
+        )
+        self.assertTrue(any("runner-pool toleration" in error for error in errors), errors)
+
     def test_controller_cannot_follow_runners(self) -> None:
         spec = {
             "nodeSelector": copy.deepcopy(VALIDATE.EXPECTED_NODE_SELECTOR),

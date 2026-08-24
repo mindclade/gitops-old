@@ -6,14 +6,14 @@
 apiVersion: ci.mindclade.dev/v1alpha1
 kind: ArcPresubmitReadiness
 metadata:
-  name: mindclade-arc-presubmit-cpu
+  name: mindclade-arc-presubmit-spot
 spec:
   phase: blocked
   selected: false
   routing:
     githubConfigUrl: https://github.com/mindclade
     runnerGroup: mindclade-arc-ci
-    scaleSetName: mindclade-arc-presubmit-cpu
+    scaleSetName: mindclade-arc-presubmit-spot
     namespace: arc-presubmit
   capacity:
     configured:
@@ -22,6 +22,23 @@ spec:
     activatedTarget:
       minRunners: 2
       maxRunners: 24
+  placement:
+    infrastructureUnit: 5-workloads/ci/nodepools/runner-spot
+    capacityType: SPOT
+    maxNodes: 8
+    runnersPerNode: 3
+    nodeSelector:
+      iam.gke.io/gke-metadata-server-enabled: "true"
+      mindclade.dev/workload-class: arc-presubmit-spot
+    tolerations:
+      - key: scheduling.mindclade.dev/spot
+        operator: Equal
+        value: "true"
+        effect: NoSchedule
+      - key: scheduling.mindclade.dev/arc-presubmit
+        operator: Equal
+        value: "true"
+        effect: NoSchedule
   runnerImage:
     authorityRepository: mindclade/mindclade-internal-monorepo
     baseFlakePackage: .#remote-execution-base
@@ -45,3 +62,5 @@ spec:
     readOnlyCacheWif: {qualified: false, evidence: null}
     connectedCluster: {qualified: false, evidence: null}
     workflowRouting: {qualified: false, evidence: null}
+    spotInterruption: {qualified: false, evidence: null}
+    onDemandRollback: {qualified: false, evidence: null}

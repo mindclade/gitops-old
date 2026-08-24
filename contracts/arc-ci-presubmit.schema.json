@@ -18,7 +18,7 @@
       "required": ["name"],
       "properties": {
         "name": {
-          "const": "mindclade-arc-presubmit-cpu"
+          "const": "mindclade-arc-presubmit-spot"
         }
       }
     },
@@ -30,6 +30,7 @@
         "selected",
         "routing",
         "capacity",
+        "placement",
         "runnerImage",
         "security",
         "gates"
@@ -53,7 +54,7 @@
               "const": "mindclade-arc-ci"
             },
             "scaleSetName": {
-              "const": "mindclade-arc-presubmit-cpu"
+              "const": "mindclade-arc-presubmit-spot"
             },
             "namespace": {
               "const": "arc-presubmit"
@@ -70,6 +71,62 @@
             },
             "activatedTarget": {
               "$ref": "#/$defs/capacity"
+            }
+          }
+        },
+        "placement": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "infrastructureUnit",
+            "capacityType",
+            "maxNodes",
+            "runnersPerNode",
+            "nodeSelector",
+            "tolerations"
+          ],
+          "properties": {
+            "infrastructureUnit": {
+              "const": "5-workloads/ci/nodepools/runner-spot"
+            },
+            "capacityType": {
+              "const": "SPOT"
+            },
+            "maxNodes": {
+              "const": 8
+            },
+            "runnersPerNode": {
+              "const": 3
+            },
+            "nodeSelector": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "iam.gke.io/gke-metadata-server-enabled",
+                "mindclade.dev/workload-class"
+              ],
+              "properties": {
+                "iam.gke.io/gke-metadata-server-enabled": {
+                  "const": "true"
+                },
+                "mindclade.dev/workload-class": {
+                  "const": "arc-presubmit-spot"
+                }
+              }
+            },
+            "tolerations": {
+              "type": "array",
+              "prefixItems": [
+                {
+                  "$ref": "#/$defs/spotToleration"
+                },
+                {
+                  "$ref": "#/$defs/presubmitToleration"
+                }
+              ],
+              "items": false,
+              "minItems": 2,
+              "maxItems": 2
             }
           }
         },
@@ -160,7 +217,9 @@
             "runnerGroup",
             "readOnlyCacheWif",
             "connectedCluster",
-            "workflowRouting"
+            "workflowRouting",
+            "spotInterruption",
+            "onDemandRollback"
           ],
           "properties": {
             "nixBinaryCache": {
@@ -180,6 +239,12 @@
             },
             "workflowRouting": {
               "$ref": "#/$defs/gate"
+            },
+            "spotInterruption": {
+              "$ref": "#/$defs/gate"
+            },
+            "onDemandRollback": {
+              "$ref": "#/$defs/gate"
             }
           }
         }
@@ -187,6 +252,28 @@
     }
   },
   "$defs": {
+    "spotToleration": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["key", "operator", "value", "effect"],
+      "properties": {
+        "key": {"const": "scheduling.mindclade.dev/spot"},
+        "operator": {"const": "Equal"},
+        "value": {"const": "true"},
+        "effect": {"const": "NoSchedule"}
+      }
+    },
+    "presubmitToleration": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["key", "operator", "value", "effect"],
+      "properties": {
+        "key": {"const": "scheduling.mindclade.dev/arc-presubmit"},
+        "operator": {"const": "Equal"},
+        "value": {"const": "true"},
+        "effect": {"const": "NoSchedule"}
+      }
+    },
     "capacity": {
       "type": "object",
       "additionalProperties": false,

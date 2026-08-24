@@ -26,7 +26,7 @@ PROVENANCE_PATH = ROOT / "vendor/arc/provenance.yaml"
 EXPECTED_ROUTING = {
     "githubConfigUrl": "https://github.com/mindclade",
     "runnerGroup": "mindclade-arc-ci",
-    "scaleSetName": "mindclade-arc-presubmit-cpu",
+    "scaleSetName": "mindclade-arc-presubmit-spot",
     "namespace": "arc-presubmit",
 }
 EXPECTED_BASE_PACKAGE = ".#remote-execution-base"
@@ -34,6 +34,30 @@ EXPECTED_AUTHORITY_REPOSITORY = "mindclade/mindclade-internal-monorepo"
 EXPECTED_REGISTRATION_SECRET = "arc-github-app"
 EXPECTED_TARGET_CAPACITY = {"minRunners": 2, "maxRunners": 24}
 EXPECTED_CANARY_CAPACITY = {"minRunners": 0, "maxRunners": 1}
+EXPECTED_PLACEMENT = {
+    "infrastructureUnit": "5-workloads/ci/nodepools/runner-spot",
+    "capacityType": "SPOT",
+    "maxNodes": 8,
+    "runnersPerNode": 3,
+    "nodeSelector": {
+        "iam.gke.io/gke-metadata-server-enabled": "true",
+        "mindclade.dev/workload-class": "arc-presubmit-spot",
+    },
+    "tolerations": [
+        {
+            "key": "scheduling.mindclade.dev/spot",
+            "operator": "Equal",
+            "value": "true",
+            "effect": "NoSchedule",
+        },
+        {
+            "key": "scheduling.mindclade.dev/arc-presubmit",
+            "operator": "Equal",
+            "value": "true",
+            "effect": "NoSchedule",
+        },
+    ],
+}
 EXPECTED_GATE_NAMES = {
     "nixBinaryCache",
     "runnerImage",
@@ -41,6 +65,8 @@ EXPECTED_GATE_NAMES = {
     "readOnlyCacheWif",
     "connectedCluster",
     "workflowRouting",
+    "spotInterruption",
+    "onDemandRollback",
 }
 ACTIVATION_PATHS = (
     "applications/ci/arc.yaml",
@@ -100,6 +126,7 @@ def validate_readiness(
     selected = spec["selected"]
     routing = spec["routing"]
     capacity = spec["capacity"]
+    placement = spec["placement"]
     image = spec["runnerImage"]
     gates = spec["gates"]
 
@@ -111,6 +138,11 @@ def validate_readiness(
         errors.append("activated presubmit fanout must exceed the release-lane maximum")
     if capacity["configured"]["minRunners"] > capacity["configured"]["maxRunners"]:
         errors.append("configured minRunners exceeds maxRunners")
+    if placement != EXPECTED_PLACEMENT:
+        errors.append("presubmit placement differs from the dedicated Spot pool contract")
+    placement_ceiling = placement["maxNodes"] * placement["runnersPerNode"]
+    if capacity["activatedTarget"]["maxRunners"] != placement_ceiling:
+        errors.append("activated capacity must equal the reviewed Spot pool ceiling")
 
     if image["authorityRepository"] != EXPECTED_AUTHORITY_REPOSITORY:
         errors.append("runner image authority must remain in the internal monorepo")
@@ -197,6 +229,10 @@ def validate_readiness(
         errors.append("presubmit values do not identify the readiness contract")
 
     template_spec = ((values.get("template") or {}).get("spec") or {})
+    if template_spec.get("nodeSelector") != placement["nodeSelector"]:
+        errors.append("presubmit values differ from the Spot node selector")
+    if template_spec.get("tolerations") != placement["tolerations"]:
+        errors.append("presubmit values differ from the two-taint Spot contract")
     containers = template_spec.get("containers") or []
     if len(containers) != 1 or containers[0].get("name") != "runner":
         errors.append("presubmit values must define exactly one runner container")
@@ -257,6 +293,11 @@ def validate_rendered(
         errors.append("rendered presubmit maxRunners differs from authored values")
 
     pod_spec = ((rendered_spec.get("template") or {}).get("spec") or {})
+    placement = spec["placement"]
+    if pod_spec.get("nodeSelector") != placement["nodeSelector"]:
+        errors.append("rendered presubmit pod differs from the Spot node selector")
+    if pod_spec.get("tolerations") != placement["tolerations"]:
+        errors.append("rendered presubmit pod differs from the two-taint Spot contract")
     if pod_spec.get("restartPolicy") != "Never":
         errors.append("ARC presubmit runners must be ephemeral restartPolicy=Never pods")
     if pod_spec.get("automountServiceAccountToken") is not False:

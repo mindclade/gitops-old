@@ -3,16 +3,16 @@
 apiVersion: v1
 kind: ServiceAccount
 metadata:
-  name: mindclade-arc-presubmit-cpu-gha-rs-no-permission
+  name: mindclade-arc-presubmit-spot-gha-rs-no-permission
   namespace: arc-presubmit
   labels:
     helm.sh/chart: gha-rs-0.14.2
-    app.kubernetes.io/name: mindclade-arc-presubmit-cpu
-    app.kubernetes.io/instance: mindclade-arc-presubmit-cpu
+    app.kubernetes.io/name: mindclade-arc-presubmit-spot
+    app.kubernetes.io/instance: mindclade-arc-presubmit-spot
     app.kubernetes.io/version: "0.14.2"
     app.kubernetes.io/managed-by: Helm
     app.kubernetes.io/part-of: gha-rs
-    actions.github.com/scale-set-name: mindclade-arc-presubmit-cpu
+    actions.github.com/scale-set-name: mindclade-arc-presubmit-spot
     actions.github.com/scale-set-namespace: arc-presubmit
   annotations:
     mindclade.dev/activation-state: blocked
@@ -24,16 +24,16 @@ metadata:
 apiVersion: rbac.authorization.k8s.io/v1
 kind: Role
 metadata:
-  name: mindclade-arc-presubmit-cpu-gha-rs-manager
+  name: mindclade-arc-presubmit-spot-gha-rs-manager
   namespace: arc-presubmit
   labels:
     helm.sh/chart: gha-rs-0.14.2
-    app.kubernetes.io/name: mindclade-arc-presubmit-cpu
-    app.kubernetes.io/instance: mindclade-arc-presubmit-cpu
+    app.kubernetes.io/name: mindclade-arc-presubmit-spot
+    app.kubernetes.io/instance: mindclade-arc-presubmit-spot
     app.kubernetes.io/version: "0.14.2"
     app.kubernetes.io/managed-by: Helm
     app.kubernetes.io/part-of: gha-rs
-    actions.github.com/scale-set-name: mindclade-arc-presubmit-cpu
+    actions.github.com/scale-set-name: mindclade-arc-presubmit-spot
     actions.github.com/scale-set-namespace: arc-presubmit
     app.kubernetes.io/component: manager-role
   annotations:
@@ -103,16 +103,16 @@ rules:
 apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding
 metadata:
-  name: mindclade-arc-presubmit-cpu-gha-rs-manager
+  name: mindclade-arc-presubmit-spot-gha-rs-manager
   namespace: arc-presubmit
   labels:
     helm.sh/chart: gha-rs-0.14.2
-    app.kubernetes.io/name: mindclade-arc-presubmit-cpu
-    app.kubernetes.io/instance: mindclade-arc-presubmit-cpu
+    app.kubernetes.io/name: mindclade-arc-presubmit-spot
+    app.kubernetes.io/instance: mindclade-arc-presubmit-spot
     app.kubernetes.io/version: "0.14.2"
     app.kubernetes.io/managed-by: Helm
     app.kubernetes.io/part-of: gha-rs
-    actions.github.com/scale-set-name: mindclade-arc-presubmit-cpu
+    actions.github.com/scale-set-name: mindclade-arc-presubmit-spot
     actions.github.com/scale-set-namespace: arc-presubmit
     app.kubernetes.io/component: manager-role-binding
   annotations:
@@ -123,7 +123,7 @@ metadata:
 roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: Role
-  name: mindclade-arc-presubmit-cpu-gha-rs-manager
+  name: mindclade-arc-presubmit-spot-gha-rs-manager
 subjects:
 - kind: ServiceAccount
   name:
@@ -135,31 +135,31 @@ subjects:
 apiVersion: actions.github.com/v1alpha1
 kind: AutoscalingRunnerSet
 metadata:
-  name: mindclade-arc-presubmit-cpu
+  name: mindclade-arc-presubmit-spot
   namespace: arc-presubmit
   labels:
     app.kubernetes.io/component: "autoscaling-runner-set"
     helm.sh/chart: gha-rs-0.14.2
-    app.kubernetes.io/name: mindclade-arc-presubmit-cpu
-    app.kubernetes.io/instance: mindclade-arc-presubmit-cpu
+    app.kubernetes.io/name: mindclade-arc-presubmit-spot
+    app.kubernetes.io/instance: mindclade-arc-presubmit-spot
     app.kubernetes.io/version: "0.14.2"
     app.kubernetes.io/managed-by: Helm
     app.kubernetes.io/part-of: gha-rs
-    actions.github.com/scale-set-name: mindclade-arc-presubmit-cpu
+    actions.github.com/scale-set-name: mindclade-arc-presubmit-spot
     actions.github.com/scale-set-namespace: arc-presubmit
   annotations:
     mindclade.dev/activation-state: "blocked"
     mindclade.dev/readiness-contract: "arc/presubmit-readiness.yaml"
-    actions.github.com/values-hash: 368d229e3a5a43c9e714e2d1c5b514d02366d5ea30d3dd7ff4b1170d98072e1
-    actions.github.com/cleanup-manager-role-binding: mindclade-arc-presubmit-cpu-gha-rs-manager
-    actions.github.com/cleanup-manager-role-name: mindclade-arc-presubmit-cpu-gha-rs-manager
-    actions.github.com/cleanup-no-permission-service-account-name: mindclade-arc-presubmit-cpu-gha-rs-no-permission
+    actions.github.com/values-hash: eb489343f06e6bd6cbd9968b35be7fdb8f1d3f6e152e7c5f18ee230c088a7be
+    actions.github.com/cleanup-manager-role-binding: mindclade-arc-presubmit-spot-gha-rs-manager
+    actions.github.com/cleanup-manager-role-name: mindclade-arc-presubmit-spot-gha-rs-manager
+    actions.github.com/cleanup-no-permission-service-account-name: mindclade-arc-presubmit-spot-gha-rs-no-permission
 
 spec:
   githubConfigUrl: https://github.com/mindclade
   githubConfigSecret: arc-github-app
   runnerGroup: mindclade-arc-ci
-  runnerScaleSetName: mindclade-arc-presubmit-cpu
+  runnerScaleSetName: mindclade-arc-presubmit-spot
   maxRunners: 0
   minRunners: 0
 
@@ -175,7 +175,7 @@ spec:
         false
       nodeSelector:
         iam.gke.io/gke-metadata-server-enabled: "true"
-        mindclade.dev/workload-class: arc-runner
+        mindclade.dev/workload-class: arc-presubmit-spot
       securityContext:
         runAsNonRoot: true
         seccompProfile:
@@ -184,11 +184,15 @@ spec:
         120
       tolerations:
         - effect: NoSchedule
-          key: scheduling.mindclade.dev/arc-runner
+          key: scheduling.mindclade.dev/spot
+          operator: Equal
+          value: "true"
+        - effect: NoSchedule
+          key: scheduling.mindclade.dev/arc-presubmit
           operator: Equal
           value: "true"
       restartPolicy: Never
-      serviceAccountName: mindclade-arc-presubmit-cpu-gha-rs-no-permission
+      serviceAccountName: mindclade-arc-presubmit-spot-gha-rs-no-permission
       containers:
 
       - name: runner

@@ -15,7 +15,8 @@ import yaml
 
 
 ROOT = Path(__file__).resolve().parents[1]
-RUNNER_RELEASES = ("canary", "build", "qualify", "presubmit")
+ON_DEMAND_RELEASES = ("canary", "build", "qualify")
+RUNNER_RELEASES = (*ON_DEMAND_RELEASES, "presubmit")
 EXPECTED_NODE_SELECTOR = {
     "iam.gke.io/gke-metadata-server-enabled": "true",
     "mindclade.dev/workload-class": "arc-runner",
@@ -27,6 +28,24 @@ EXPECTED_TOLERATIONS = [
         "value": "true",
         "effect": "NoSchedule",
     }
+]
+EXPECTED_SPOT_NODE_SELECTOR = {
+    "iam.gke.io/gke-metadata-server-enabled": "true",
+    "mindclade.dev/workload-class": "arc-presubmit-spot",
+}
+EXPECTED_SPOT_TOLERATIONS = [
+    {
+        "key": "scheduling.mindclade.dev/spot",
+        "operator": "Equal",
+        "value": "true",
+        "effect": "NoSchedule",
+    },
+    {
+        "key": "scheduling.mindclade.dev/arc-presubmit",
+        "operator": "Equal",
+        "value": "true",
+        "effect": "NoSchedule",
+    },
 ]
 
 
@@ -47,13 +66,19 @@ def runner_pod_spec(values: dict[str, Any], label: str) -> dict[str, Any]:
     return spec
 
 
-def validate_runner_spec(spec: dict[str, Any], label: str) -> list[str]:
+def validate_runner_spec(
+    spec: dict[str, Any],
+    label: str,
+    *,
+    node_selector: dict[str, str] = EXPECTED_NODE_SELECTOR,
+    tolerations: list[dict[str, str]] = EXPECTED_TOLERATIONS,
+) -> list[str]:
     errors: list[str] = []
-    if spec.get("nodeSelector") != EXPECTED_NODE_SELECTOR:
+    if spec.get("nodeSelector") != node_selector:
         errors.append(
             f"{label} must select the dedicated ARC runner pool with the exact node selector"
         )
-    if spec.get("tolerations") != EXPECTED_TOLERATIONS:
+    if spec.get("tolerations") != tolerations:
         errors.append(
             f"{label} must carry only the dedicated ARC runner-pool toleration"
         )
@@ -90,13 +115,28 @@ def rendered_object(path: Path, kind: str, name: str) -> dict[str, Any]:
 def validate_all(root: Path = ROOT) -> list[str]:
     errors: list[str] = []
     for release in RUNNER_RELEASES:
+        node_selector = (
+            EXPECTED_SPOT_NODE_SELECTOR
+            if release == "presubmit"
+            else EXPECTED_NODE_SELECTOR
+        )
+        tolerations = (
+            EXPECTED_SPOT_TOLERATIONS
+            if release == "presubmit"
+            else EXPECTED_TOLERATIONS
+        )
         values_path = root / f"arc/values/{release}.yaml"
         rendered_path = root / f"arc/rendered/{release}.yaml"
         try:
             values = load_mapping(values_path)
             values_spec = runner_pod_spec(values, f"arc/values/{release}.yaml")
             errors.extend(
-                validate_runner_spec(values_spec, f"arc/values/{release}.yaml")
+                validate_runner_spec(
+                    values_spec,
+                    f"arc/values/{release}.yaml",
+                    node_selector=node_selector,
+                    tolerations=tolerations,
+                )
             )
             scale_set_name = values.get("runnerScaleSetName")
             if not isinstance(scale_set_name, str) or not scale_set_name:
@@ -112,7 +152,10 @@ def validate_all(root: Path = ROOT) -> list[str]:
             )
             errors.extend(
                 validate_runner_spec(
-                    rendered_spec, f"arc/rendered/{release}.yaml"
+                    rendered_spec,
+                    f"arc/rendered/{release}.yaml",
+                    node_selector=node_selector,
+                    tolerations=tolerations,
                 )
             )
         except (OSError, ValueError, yaml.YAMLError) as error:

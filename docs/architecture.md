@@ -110,9 +110,10 @@ requires an explicit environment confirmation and a verified Kubernetes context.
 
 ARC release runners and presubmit runners are distinct trust domains. The former retain the
 restricted `mindclade-arc-artifact-authority` route; the latter are staged under the separate
-`mindclade-arc-ci` contract with no signing, push, or cache-write authority. Presubmit source stays
-zero-capacity and outside every Argo root until its Nix image, cache, WIF, runner-group, cluster,
-and workflow-routing evidence are independently qualified. See
+`mindclade-arc-ci` contract on a separately labeled and doubly tainted Spot pool, with no signing,
+push, or cache-write authority. Presubmit source stays zero-capacity and outside every Argo root
+until its Nix image, cache, WIF, runner-group, cluster, workflow-routing, Spot-interruption, and
+on-demand rollback evidence are independently qualified. See
 [ARC CI activation](arc-ci-activation.md).
 
 ApplicationSet-generated Applications do not carry cascading resource-deletion finalizers, and
